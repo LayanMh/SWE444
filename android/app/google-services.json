@@ -1,0 +1,90 @@
+{
+  "project_info": {
+    "project_number": "803675195198",
+    "project_id": "absherk-e89ba",
+    "storage_bucket": "absherk-e89ba.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:803675195198:android:6453848139369bc9ce4e6f",
+        "android_client_info": {
+          "package_name": "com.example.absherk"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "803675195198-ru93ffcjj5pk6cktg17lf57edo8rf3i6.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.absherk",
+            "certificate_hash": "7aaf61c165cef63a8b1a52234e990aaf0159375c"
+          }
+        },
+        {
+          "client_id": "803675195198-3sa58j6g6cuilg9r6ubf9jlu7qfia87i.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBsYh6MKhrmDBy4VA9wC_3ri6XGeksjRP4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "803675195198-3sa58j6g6cuilg9r6ubf9jlu7qfia87i.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "803675195198-pqhpoecd4ehtdgqioalhat7jb3odphh1.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.absherk"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:803675195198:android:b0903ae14bd8c862ce4e6f",
+        "android_client_info": {
+          "package_name": "com.example.flutter_application_1"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "803675195198-3sa58j6g6cuilg9r6ubf9jlu7qfia87i.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBsYh6MKhrmDBy4VA9wC_3ri6XGeksjRP4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "803675195198-3sa58j6g6cuilg9r6ubf9jlu7qfia87i.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "803675195198-pqhpoecd4ehtdgqioalhat7jb3odphh1.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.absherk"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
