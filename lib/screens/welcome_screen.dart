@@ -222,34 +222,10 @@ class _WelcomeTextSection extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
-        // Subtitle with glassmorphism container
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          decoration: BoxDecoration(
-            color: WelcomeScreen._pureWhite.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: WelcomeScreen._pureWhite.withOpacity(0.2),
-            ),
-          ),
-          child: Text(
-            'Your academic companion for success',
-            style: TextStyle(
-              fontSize: 16,
-              color: WelcomeScreen._pureWhite.withOpacity(0.9),
-              fontWeight: FontWeight.w400,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ),
       ],
     );
   }
 }
-
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-/// Action buttons section with enhanced styling
 class _ActionButtonsSection extends StatelessWidget {
   const _ActionButtonsSection({super.key});
   
@@ -257,12 +233,10 @@ class _ActionButtonsSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        _PrimaryButton(
+        _SecondaryButton(
           onPressed: () => _navigateToSignIn(context),
           icon: Icons.login_rounded,
           label: 'Sign In',
-          backgroundColor: WelcomeScreen._softWhite,
-          foregroundColor: WelcomeScreen._oceanTeal,
         ),
         const SizedBox(height: 18),
         _SecondaryButton(
@@ -318,9 +292,6 @@ class _ActionButtonsSection extends StatelessWidget {
     );
   }
 }
-
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
 /// Primary button with glassmorphism effect
 class _PrimaryButton extends StatelessWidget {
   final VoidCallback onPressed;

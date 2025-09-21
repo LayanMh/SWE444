@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'signin_screen.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -898,8 +899,6 @@ class _SignUpButton extends StatelessWidget {
     );
   }
 }
-
-/// Sign in prompt
 class _SignInPrompt extends StatelessWidget {
   const _SignInPrompt();
   @override
@@ -915,7 +914,27 @@ class _SignInPrompt extends StatelessWidget {
           ),
         ),
         TextButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            Navigator.pushReplacement(
+              context,
+              PageRouteBuilder(
+                pageBuilder: (context, animation, _) => const SignInScreen(),
+                transitionsBuilder: (context, animation, _, child) {
+                  return SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(1.0, 0.0),
+                      end: Offset.zero,
+                    ).animate(CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic,
+                    )),
+                    child: child,
+                  );
+                },
+                transitionDuration: const Duration(milliseconds: 400),
+              ),
+            );
+          },
           style: TextButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 8),
             minimumSize: Size.zero,
@@ -933,7 +952,6 @@ class _SignInPrompt extends StatelessWidget {
     );
   }
 }
-
 /// Form controllers manager
 class _FormControllers {
   final firstName = TextEditingController();
@@ -970,13 +988,14 @@ class _Validators {
       return null;
     };
   }
-
   static String? email(String? value) {
     if (value == null || value.trim().isEmpty) {
       return 'Please enter your university email';
     }
-    if (!value.contains('@student.ksu.edu.sa')) {
-      return 'Please use your KSU university email (@student.ksu.edu.sa)';
+    // Match exactly 8 digits before @student.ksu.edu.sa
+    final emailPattern = RegExp(r'^\d{8}@student\.ksu\.edu\.sa$');
+    if (!emailPattern.hasMatch(value.trim())) {
+      return 'Email must be 8 digits followed by @student.ksu.edu.sa';
     }
     return null;
   }
@@ -1018,18 +1037,13 @@ class _Validators {
     return null;
   }
 }
-
 /// App constants
 class _Constants {
   static const List<String> majors = [
     'Computer Science',
-    'Information Technology',
     'Software Engineering',
-    'Computer Engineering',
-    'Data Science',
-    'Cybersecurity',
+    'Information Technology',
     'Information Systems',
-    'Other'
   ];
 
   static const List<String> levels = [
@@ -1043,7 +1057,6 @@ class _Constants {
 
   static const List<String> genders = ['Male', 'Female'];
 }
-
 /// App theme constants
 class _AppTheme {
   static const gradientBackground = BoxDecoration(

@@ -7,14 +7,18 @@ plugins {
 
 android {
     namespace = "com.example.absherk"
-    compileSdk = 34 // or flutter.compileSdkVersion if using Flutter DSL
+    compileSdk = 35 // or flutter.compileSdkVersion if using Flutter DSL
 
     defaultConfig {
         applicationId = "com.example.absherk"
         minSdk = flutter.minSdkVersion
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
+      manifestPlaceholders += mapOf(
+            "appAuthRedirectScheme" to "msauth.com.example.absherk" )
+
+        
     }
 
     compileOptions {

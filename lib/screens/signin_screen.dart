@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'signup_screen.dart';
+import 'package:flutter_appauth/flutter_appauth.dart';
+
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -9,13 +12,48 @@ class SignInScreen extends StatefulWidget {
 }
 
 class _SignInScreenState extends State<SignInScreen> {
+// Microsoft OAuth2 constants
+final String _msClientId = 'adba7fb2-f6d3-4fef-950d-e0743a720212';
+final String _msTenantId = '19df06c3-3fcd-4947-809f-064684abf608';
+final String _msRedirectUri = 'msauth://com.example.absherk/redirect';
+final FlutterAppAuth _appAuth = FlutterAppAuth();
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _rememberMe = false;
   bool _obscurePassword = true;
+Future<void> _handleMicrosoftSignIn() async {
+  setState(() => _isLoading = true);
 
+  try {
+    final AuthorizationTokenResponse? result = await _appAuth.authorizeAndExchangeCode(
+      AuthorizationTokenRequest(
+        _msClientId,
+        _msRedirectUri,
+        serviceConfiguration: AuthorizationServiceConfiguration(
+          authorizationEndpoint: 'https://login.microsoftonline.com/$_msTenantId/oauth2/v2.0/authorize',
+          tokenEndpoint: 'https://login.microsoftonline.com/$_msTenantId/oauth2/v2.0/token',
+        ),
+        scopes: ['openid', 'profile', 'email', 'User.Read'],
+      ),
+    );
+
+    if (result != null) {
+      final accessToken = result.accessToken;
+      print('Microsoft Access Token: $accessToken');
+
+      _showSuccessMessage('Signed in with Microsoft successfully!');
+      // TODO: Connect with Firebase or your backend
+    } else {
+      _showErrorMessage('Microsoft sign-in canceled.');
+    }
+  } catch (e) {
+    _showErrorMessage('Microsoft Sign-In failed: $e');
+  } finally {
+    if (mounted) setState(() => _isLoading = false);
+  }
+}
   @override
   void dispose() {
     _emailController.dispose();
@@ -46,6 +84,7 @@ class _SignInScreenState extends State<SignInScreen> {
                     onRememberMeChanged: (value) => setState(() => _rememberMe = value ?? false),
                     onSignIn: _handleSignIn,
                     onForgotPassword: _handleForgotPassword,
+                    onMicrosoftSignIn: _handleMicrosoftSignIn,
                   ),
                 ),
               ),
@@ -76,11 +115,13 @@ class _SignInScreenState extends State<SignInScreen> {
       if (mounted) {
         _showErrorMessage(_getErrorMessage(e.code));
       }
-    } catch (e) {
-      if (mounted) {
-        _showErrorMessage('An unexpected error occurred. Please try again.');
-      }
-    } finally {
+    } catch (e, s) {
+  print('Sign in error: $e');
+  print('Stack trace: $s');
+  if (mounted) {
+    _showErrorMessage('An unexpected error occurred. Please try again.');
+  }
+} finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -193,6 +234,7 @@ class _SignInCard extends StatelessWidget {
   final ValueChanged<bool?> onRememberMeChanged;
   final VoidCallback onSignIn;
   final VoidCallback onForgotPassword;
+  final VoidCallback onMicrosoftSignIn;
 
   const _SignInCard({
     required this.formKey,
@@ -205,6 +247,7 @@ class _SignInCard extends StatelessWidget {
     required this.onRememberMeChanged,
     required this.onSignIn,
     required this.onForgotPassword,
+    required this.onMicrosoftSignIn,
   });
 
   @override
@@ -437,35 +480,18 @@ class _SignInCard extends StatelessWidget {
       ],
     );
   }
-
-  Widget _buildSocialSignIn() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: [
-        _SocialButton(
-          icon: Icons.g_mobiledata,
-          color: Colors.red,
-          onPressed: () {
-            // TODO: Implement Google sign in
-          },
-        ),
-        _SocialButton(
-          icon: Icons.apple,
-          color: Colors.black,
-          onPressed: () {
-            // TODO: Implement Apple sign in
-          },
-        ),
-        _SocialButton(
-          icon: Icons.facebook,
-          color: const Color(0xFF1877F2),
-          onPressed: () {
-            // TODO: Implement Facebook sign in
-          },
-        ),
-      ],
-    );
-  }
+Widget _buildSocialSignIn() {
+  return Row(
+    mainAxisAlignment: MainAxisAlignment.center,
+    children: [
+      _SocialButton(
+        icon: Icons.mail_outline, 
+        color: const Color(0xFF0078D4),
+        onPressed: onMicrosoftSignIn,
+      ),
+    ],
+  );
+}
 }
 class _Header extends StatelessWidget {
   const _Header();
@@ -570,8 +596,6 @@ class _SocialButton extends StatelessWidget {
     );
   }
 }
-
-/// Sign up prompt
 class _SignUpPrompt extends StatelessWidget {
   const _SignUpPrompt();
 
@@ -588,7 +612,27 @@ class _SignUpPrompt extends StatelessWidget {
           ),
         ),
         TextButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            Navigator.pushReplacement(
+              context,
+              PageRouteBuilder(
+                pageBuilder: (context, animation, _) => const SignUpScreen(),
+                transitionsBuilder: (context, animation, _, child) {
+                  return SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(1.0, 0.0),
+                      end: Offset.zero,
+                    ).animate(CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic,
+                    )),
+                    child: child,
+                  );
+                },
+                transitionDuration: const Duration(milliseconds: 400),
+              ),
+            );
+          },
           style: TextButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 8),
             minimumSize: Size.zero,
@@ -606,7 +650,6 @@ class _SignUpPrompt extends StatelessWidget {
     );
   }
 }
-
 /// Forgot password dialog
 class _ForgotPasswordDialog extends StatefulWidget {
   final String email;
