@@ -15,10 +15,7 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
-      manifestPlaceholders += mapOf(
-            "appAuthRedirectScheme" to "msauth.com.example.absherk" )
-
-        
+        manifestPlaceholders["appAuthRedirectScheme"] = "msauth"
     }
 
     compileOptions {

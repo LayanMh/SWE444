@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'signup_screen.dart';
 import 'package:flutter_appauth/flutter_appauth.dart';
+import 'package:flutter/services.dart';
 
 
 class SignInScreen extends StatefulWidget {
@@ -25,28 +26,31 @@ final FlutterAppAuth _appAuth = FlutterAppAuth();
   bool _obscurePassword = true;
 Future<void> _handleMicrosoftSignIn() async {
   setState(() => _isLoading = true);
-
   try {
-    final AuthorizationTokenResponse? result = await _appAuth.authorizeAndExchangeCode(
-      AuthorizationTokenRequest(
-        _msClientId,
-        _msRedirectUri,
-        serviceConfiguration: AuthorizationServiceConfiguration(
-          authorizationEndpoint: 'https://login.microsoftonline.com/$_msTenantId/oauth2/v2.0/authorize',
-          tokenEndpoint: 'https://login.microsoftonline.com/$_msTenantId/oauth2/v2.0/token',
-        ),
-        scopes: ['openid', 'profile', 'email', 'User.Read'],
-      ),
-    );
+   final AuthorizationTokenResponse? result = await _appAuth.authorizeAndExchangeCode(
+  AuthorizationTokenRequest(
+    _msClientId,
+    _msRedirectUri,
+    serviceConfiguration: AuthorizationServiceConfiguration(
+      authorizationEndpoint:
+          'https://login.microsoftonline.com/$_msTenantId/oauth2/v2.0/authorize',
+      tokenEndpoint: 'https://login.microsoftonline.com/$_msTenantId/oauth2/v2.0/token',
+    ),
+    scopes: ['openid', 'profile', 'email', 'User.Read'],
+    // If rememberMe is false, force login prompt
+    promptValues: _rememberMe ? null : ['login'],
+  ),
+);
 
     if (result != null) {
       final accessToken = result.accessToken;
-      print('Microsoft Access Token: $accessToken');
-
       _showSuccessMessage('Signed in with Microsoft successfully!');
-      // TODO: Connect with Firebase or your backend
-    } else {
-      _showErrorMessage('Microsoft sign-in canceled.');
+    }
+    // If result is null, user canceled — do nothing.
+  } on PlatformException catch (e) {
+    // Ignore cancellation errors completely
+    if (e.code == 'access_denied' || e.code == 'authorize_and_exchange_code_cancelled') {
+      return; // do nothing
     }
   } catch (e) {
     _showErrorMessage('Microsoft Sign-In failed: $e');
@@ -82,7 +86,7 @@ Future<void> _handleMicrosoftSignIn() async {
                     isLoading: _isLoading,
                     onTogglePassword: () => setState(() => _obscurePassword = !_obscurePassword),
                     onRememberMeChanged: (value) => setState(() => _rememberMe = value ?? false),
-                    onSignIn: _handleSignIn,
+                     onSignIn: () => _handleSignIn(),
                     onForgotPassword: _handleForgotPassword,
                     onMicrosoftSignIn: _handleMicrosoftSignIn,
                   ),
@@ -485,10 +489,10 @@ Widget _buildSocialSignIn() {
     mainAxisAlignment: MainAxisAlignment.center,
     children: [
       _SocialButton(
-        icon: Icons.mail_outline, 
-        color: const Color(0xFF0078D4),
-        onPressed: onMicrosoftSignIn,
-      ),
+  imagePath: 'assets/images/Microsoft.png', // 👈 use the asset
+  onPressed: onMicrosoftSignIn,
+),
+
     ],
   );
 }
@@ -566,16 +570,16 @@ class _FieldLabel extends StatelessWidget {
     );
   }
 }
-
-/// Social login button
 class _SocialButton extends StatelessWidget {
-  final IconData icon;
-  final Color color;
+  final String? imagePath;
+  final IconData? icon;
+  final Color? color;
   final VoidCallback onPressed;
 
   const _SocialButton({
-    required this.icon,
-    required this.color,
+    this.imagePath,
+    this.icon,
+    this.color,
     required this.onPressed,
   });
 
@@ -591,7 +595,9 @@ class _SocialButton extends StatelessWidget {
       ),
       child: IconButton(
         onPressed: onPressed,
-        icon: Icon(icon, color: color, size: 24),
+        icon: imagePath != null
+            ? Image.asset(imagePath!, width: 24, height: 24) // 👈 use your PNG
+            : Icon(icon, color: color, size: 24),
       ),
     );
   }
