@@ -10,8 +10,6 @@ class WelcomeScreen extends StatelessWidget {
   static const _deepNavy = Color(0xFF0e0259);
   static const _oceanTeal = Color(0xFF006B7A);
   static const _brightTeal = Color(0xFF0097b2);
-  static const _mintTeal = Color(0xFF4ECDC4);
-  static const _lightMint = Color(0xFF95E1D3);
   static const _pureWhite = Color(0xFFFFFFFF);
   static const _softWhite = Color(0xFFF8FDFF);
 
@@ -145,7 +143,7 @@ class _FloatingShape extends StatelessWidget {
           borderRadius: shape == null && borderRadius != null
               ? BorderRadius.circular(borderRadius!)
               : null,
-          color: WelcomeScreen._pureWhite.withOpacity(opacity),
+          color: WelcomeScreen._pureWhite.withValues(alpha: opacity),
         ),
       ),
     );
@@ -169,29 +167,29 @@ class _LogoSection extends StatelessWidget {
         boxShadow: [
           // Main shadow
           BoxShadow(
-            color: WelcomeScreen._deepNavy.withOpacity(0.25),
+            color: WelcomeScreen._deepNavy.withValues(alpha: 0.25),
             blurRadius: 40,
             offset: const Offset(0, 20),
           ),
           // Highlight shadow
           BoxShadow(
-            color: WelcomeScreen._pureWhite.withOpacity(0.1),
+            color: WelcomeScreen._pureWhite.withValues(alpha: 0.1),
             blurRadius: 15,
             offset: const Offset(0, -8),
           ),
         ],
         // Subtle border for glass effect
         border: Border.all(
-          color: WelcomeScreen._pureWhite.withOpacity(0.2),
+          color: WelcomeScreen._pureWhite.withValues(alpha: 0.2),
           width: 1.5,
         ),
       ),
-        child: Center(
-          child: Image.asset(
-    'assets/images/logo.png', // path to your logo
-    fit: BoxFit.contain,
-  ),
-),
+      child: Center(
+        child: Image.asset(
+          'assets/images/logo.png', // path to your logo
+          fit: BoxFit.contain,
+        ),
+      ),
     );
   }
 }
@@ -226,9 +224,10 @@ class _WelcomeTextSection extends StatelessWidget {
     );
   }
 }
+
 class _ActionButtonsSection extends StatelessWidget {
-  const _ActionButtonsSection({super.key});
-  
+  const _ActionButtonsSection();
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -255,13 +254,16 @@ class _ActionButtonsSection extends StatelessWidget {
         pageBuilder: (context, animation, _) => const SignInScreen(),
         transitionsBuilder: (context, animation, _, child) {
           return SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(1.0, 0.0),
-              end: Offset.zero,
-            ).animate(CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeOutCubic,
-            )),
+            position:
+                Tween<Offset>(
+                  begin: const Offset(1.0, 0.0),
+                  end: Offset.zero,
+                ).animate(
+                  CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                  ),
+                ),
             child: child,
           );
         },
@@ -277,69 +279,20 @@ class _ActionButtonsSection extends StatelessWidget {
         pageBuilder: (context, animation, _) => const SignUpScreen(),
         transitionsBuilder: (context, animation, _, child) {
           return SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(1.0, 0.0),
-              end: Offset.zero,
-            ).animate(CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeOutCubic,
-            )),
+            position:
+                Tween<Offset>(
+                  begin: const Offset(1.0, 0.0),
+                  end: Offset.zero,
+                ).animate(
+                  CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                  ),
+                ),
             child: child,
           );
         },
         transitionDuration: const Duration(milliseconds: 400),
-      ),
-    );
-  }
-}
-/// Primary button with glassmorphism effect
-class _PrimaryButton extends StatelessWidget {
-  final VoidCallback onPressed;
-  final IconData icon;
-  final String label;
-  final Color backgroundColor;
-  final Color foregroundColor;
-
-  const _PrimaryButton({
-    super.key,
-    required this.onPressed,
-    required this.icon,
-    required this.label,
-    required this.backgroundColor,
-    required this.foregroundColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: 60,
-      child: ElevatedButton(
-        onPressed: onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: backgroundColor,
-          foregroundColor: foregroundColor,
-          elevation: 0,
-          shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(22),
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 22),
-            const SizedBox(width: 12),
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.3,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -354,7 +307,6 @@ class _SecondaryButton extends StatelessWidget {
   final String label;
 
   const _SecondaryButton({
-    super.key,
     required this.onPressed,
     required this.icon,
     required this.label,
@@ -369,19 +321,19 @@ class _SecondaryButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(22),
         gradient: LinearGradient(
           colors: [
-            WelcomeScreen._pureWhite.withOpacity(0.12),
-            WelcomeScreen._pureWhite.withOpacity(0.06),
+            WelcomeScreen._pureWhite.withValues(alpha: 0.12),
+            WelcomeScreen._pureWhite.withValues(alpha: 0.06),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         border: Border.all(
-          color: WelcomeScreen._pureWhite.withOpacity(0.3),
+          color: WelcomeScreen._pureWhite.withValues(alpha: 0.3),
           width: 1.5,
         ),
         boxShadow: [
           BoxShadow(
-            color: WelcomeScreen._deepNavy.withOpacity(0.1),
+            color: WelcomeScreen._deepNavy.withValues(alpha: 0.1),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -398,7 +350,7 @@ class _SecondaryButton extends StatelessWidget {
               Icon(
                 icon,
                 size: 22,
-                color: WelcomeScreen._pureWhite.withOpacity(0.95),
+                color: WelcomeScreen._pureWhite.withValues(alpha: 0.95),
               ),
               const SizedBox(width: 12),
               Text(
@@ -406,7 +358,7 @@ class _SecondaryButton extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.w600,
-                  color: WelcomeScreen._pureWhite.withOpacity(0.95),
+                  color: WelcomeScreen._pureWhite.withValues(alpha: 0.95),
                   letterSpacing: 0.3,
                 ),
               ),

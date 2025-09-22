@@ -40,7 +40,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
               const _AppBar(),
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 8.0,
+                  ),
                   child: _SignUpCard(
                     formKey: _formKey,
                     controllers: _controllers,
@@ -59,7 +62,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   Future<void> _handleSignUp() async {
     if (!_formKey.currentState!.validate()) {
-      print("Form validation failed");
+      debugPrint("Form validation failed");
       return;
     }
 
@@ -74,7 +77,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     setState(() => _isLoading = true);
 
     try {
-      print("Creating user with email: ${_controllers.email.text.trim()}");
+      debugPrint("Creating user with email: ${_controllers.email.text.trim()}");
 
       // Create user account
       final userCredential = await _auth.createUserWithEmailAndPassword(
@@ -82,25 +85,25 @@ class _SignUpScreenState extends State<SignUpScreen> {
         password: _controllers.password.text.trim(),
       );
 
-      print("User created successfully: ${userCredential.user?.uid}");
+      debugPrint("User created successfully: ${userCredential.user?.uid}");
 
       // Save user data to Firestore
       await _saveUserData(userCredential.user!.uid);
 
-      print("User data saved to Firestore");
+      debugPrint("User data saved to Firestore");
 
       // Send verification email
       await userCredential.user!.sendEmailVerification();
-      
+
       if (mounted) {
         _showSuccessMessage();
         Navigator.pop(context);
       }
     } on FirebaseAuthException catch (e) {
-      print("FirebaseAuthException: ${e.code} - ${e.message}");
+      debugPrint("FirebaseAuthException: ${e.code} - ${e.message}");
       if (mounted) _showErrorMessage(_getAuthErrorMessage(e.code));
     } catch (e) {
-      print("General error during signup: $e");
+      debugPrint("General error during signup: $e");
       // Even if Firestore fails, the user account was created
       if (mounted) {
         _showSuccessMessage();
@@ -113,7 +116,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   Future<void> _saveUserData(String uid) async {
     try {
-      print("Saving user data for UID: $uid");
+      debugPrint("Saving user data for UID: $uid");
 
       // Get values safely
       final firstName = _controllers.firstName.text.trim();
@@ -122,7 +125,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       final major = _formState.selectedMajor ?? '';
       final level = _getLevelNumber(_formState.selectedLevel ?? '');
       final gender = _formState.selectedGender ?? '';
-      
+
       // Parse GPA safely
       double gpaValue = 0.0;
       final gpaText = _controllers.gpa.text.trim();
@@ -130,15 +133,17 @@ class _SignUpScreenState extends State<SignUpScreen> {
         try {
           gpaValue = double.parse(gpaText);
         } catch (e) {
-          print("GPA parsing error: $e");
+          debugPrint("GPA parsing error: $e");
         }
       }
 
-      print("Data to save - Name: $firstName $lastName, Email: $email, Major: $major, Level: $level, Gender: $gender, GPA: $gpaValue");
+      debugPrint(
+        "Data to save - Name: $firstName $lastName, Email: $email, Major: $major, Level: $level, Gender: $gender, GPA: $gpaValue",
+      );
 
       // Use the collection reference directly
-      final userDoc = FirebaseFirestore.instance.collection('users').doc(uid);
-      
+      final userDoc = _firestore.collection('users').doc(uid);
+
       await userDoc.set({
         'FName': firstName,
         'LName': lastName,
@@ -150,11 +155,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
         'createdAt': FieldValue.serverTimestamp(),
         'emailVerified': false,
       });
-      
-      print("User data saved successfully to Firestore");
 
+      debugPrint("User data saved successfully to Firestore");
     } catch (e) {
-      print("Firestore save error: $e");
+      debugPrint("Firestore save error: $e");
       // Don't rethrow - let the signup complete even if Firestore fails
       // The user account is already created in Firebase Auth
     }
@@ -163,13 +167,20 @@ class _SignUpScreenState extends State<SignUpScreen> {
   // Add this helper method to convert level string to number
   int _getLevelNumber(String level) {
     switch (level) {
-      case 'Level 3': return 3;
-      case 'Level 4': return 4;
-      case 'Level 5': return 5;
-      case 'Level 6': return 6;
-      case 'Level 7': return 7;
-      case 'Level 8': return 8;
-      default: return 0;
+      case 'Level 3':
+        return 3;
+      case 'Level 4':
+        return 4;
+      case 'Level 5':
+        return 5;
+      case 'Level 6':
+        return 6;
+      case 'Level 7':
+        return 7;
+      case 'Level 8':
+        return 8;
+      default:
+        return 0;
     }
   }
 
@@ -193,7 +204,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
   void _showSuccessMessage() {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Account created successfully! Please check your email to verify your account.'),
+        content: Text(
+          'Account created successfully! Please check your email to verify your account.',
+        ),
         backgroundColor: Color(0xFF4ECDC4),
         duration: Duration(seconds: 4),
       ),
@@ -202,10 +215,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   void _showErrorMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red[400],
-      ),
+      SnackBar(content: Text(message), backgroundColor: Colors.red[400]),
     );
   }
 }
@@ -221,13 +231,17 @@ class _AppBar extends StatelessWidget {
         children: [
           Container(
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.15),
+              color: Colors.white.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white.withOpacity(0.2)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
             ),
             child: IconButton(
               onPressed: () => Navigator.pop(context),
-              icon: const Icon(Icons.arrow_back_ios_rounded, color: Colors.white, size: 20),
+              icon: const Icon(
+                Icons.arrow_back_ios_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
             ),
           ),
           const Expanded(
@@ -271,12 +285,12 @@ class _SignUpCard extends StatelessWidget {
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.95),
+        color: Colors.white.withValues(alpha: 0.95),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.2)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0e0259).withOpacity(0.1),
+            color: const Color(0xFF0e0259).withValues(alpha: 0.1),
             blurRadius: 30,
             offset: const Offset(0, 15),
           ),
@@ -310,6 +324,7 @@ class _SignUpCard extends StatelessWidget {
     );
   }
 }
+
 class _Header extends StatelessWidget {
   const _Header();
   @override
@@ -326,7 +341,7 @@ class _Header extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF0097b2).withOpacity(0.3),
+                color: const Color(0xFF0097b2).withValues(alpha: 0.3),
                 blurRadius: 20,
                 offset: const Offset(0, 8),
               ),
@@ -357,7 +372,7 @@ class _Header extends StatelessWidget {
           'Create your academic companion account',
           style: TextStyle(
             fontSize: 14,
-            color: const Color(0xFF0e0259).withOpacity(0.7),
+            color: const Color(0xFF0e0259).withValues(alpha: 0.7),
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -365,6 +380,7 @@ class _Header extends StatelessWidget {
     );
   }
 }
+
 /// Personal information input section
 class _PersonalInfoSection extends StatelessWidget {
   final _FormControllers controllers;
@@ -376,7 +392,10 @@ class _PersonalInfoSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionTitle(title: 'Personal Information', icon: Icons.person_outline_rounded),
+        const _SectionTitle(
+          title: 'Personal Information',
+          icon: Icons.person_outline_rounded,
+        ),
         const SizedBox(height: 12),
         Row(
           children: [
@@ -415,7 +434,10 @@ class _AccountInfoSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionTitle(title: 'Account Information', icon: Icons.security_rounded),
+        const _SectionTitle(
+          title: 'Account Information',
+          icon: Icons.security_rounded,
+        ),
         const SizedBox(height: 12),
         _CustomTextField(
           controller: controllers.email,
@@ -434,7 +456,8 @@ class _AccountInfoSection extends StatelessWidget {
         _PasswordField(
           controller: controllers.confirmPassword,
           label: 'Confirm Password',
-          validator: (value) => _Validators.confirmPassword(value, controllers.password.text),
+          validator: (value) =>
+              _Validators.confirmPassword(value, controllers.password.text),
         ),
       ],
     );
@@ -456,7 +479,10 @@ class _AcademicInfoSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionTitle(title: 'Academic Information', icon: Icons.school_rounded),
+        const _SectionTitle(
+          title: 'Academic Information',
+          icon: Icons.school_rounded,
+        ),
         const SizedBox(height: 12),
         _CustomDropdown<String>(
           value: formState.selectedMajor,
@@ -517,10 +543,12 @@ class _PasswordFieldWithRequirements extends StatefulWidget {
   });
 
   @override
-  State<_PasswordFieldWithRequirements> createState() => _PasswordFieldWithRequirementsState();
+  State<_PasswordFieldWithRequirements> createState() =>
+      _PasswordFieldWithRequirementsState();
 }
 
-class _PasswordFieldWithRequirementsState extends State<_PasswordFieldWithRequirements> {
+class _PasswordFieldWithRequirementsState
+    extends State<_PasswordFieldWithRequirements> {
   bool _obscureText = true;
   String _currentPassword = '';
 
@@ -547,10 +575,16 @@ class _PasswordFieldWithRequirementsState extends State<_PasswordFieldWithRequir
           validator: _Validators.password,
           decoration: InputDecoration(
             labelText: widget.label,
-            prefixIcon: const Icon(Icons.lock_outline_rounded, color: Color(0xFF006B7A), size: 20),
+            prefixIcon: const Icon(
+              Icons.lock_outline_rounded,
+              color: Color(0xFF006B7A),
+              size: 20,
+            ),
             suffixIcon: IconButton(
               icon: Icon(
-                _obscureText ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                _obscureText
+                    ? Icons.visibility_off_rounded
+                    : Icons.visibility_rounded,
                 color: const Color(0xFF006B7A),
                 size: 20,
               ),
@@ -558,24 +592,30 @@ class _PasswordFieldWithRequirementsState extends State<_PasswordFieldWithRequir
             ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: const Color(0xFF4ECDC4).withOpacity(0.5)),
+              borderSide: BorderSide(
+                color: const Color(0xFF4ECDC4).withValues(alpha: 0.5),
+              ),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: Color(0xFF0097b2), width: 2),
             ),
             filled: true,
-            fillColor: const Color(0xFF95E1D3).withOpacity(0.1),
-            labelStyle: TextStyle(color: const Color(0xFF006B7A).withOpacity(0.8)),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            fillColor: const Color(0xFF95E1D3).withValues(alpha: 0.1),
+            labelStyle: TextStyle(
+              color: const Color(0xFF006B7A).withValues(alpha: 0.8),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 12,
+            ),
           ),
         ),
         if (_currentPassword.isNotEmpty) ...[
           const SizedBox(height: 8),
-          ...requirements.map((req) => _PasswordRequirement(
-            text: req.text,
-            isValid: req.isValid,
-          )),
+          ...requirements.map(
+            (req) => _PasswordRequirement(text: req.text, isValid: req.isValid),
+          ),
         ],
       ],
     );
@@ -612,10 +652,7 @@ class _PasswordRequirement extends StatelessWidget {
   final String text;
   final bool isValid;
 
-  const _PasswordRequirement({
-    required this.text,
-    required this.isValid,
-  });
+  const _PasswordRequirement({required this.text, required this.isValid});
 
   @override
   Widget build(BuildContext context) {
@@ -682,16 +719,23 @@ class _CustomTextField extends StatelessWidget {
         prefixIcon: Icon(icon, color: const Color(0xFF006B7A), size: 20),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: const Color(0xFF4ECDC4).withOpacity(0.5)),
+          borderSide: BorderSide(
+            color: const Color(0xFF4ECDC4).withValues(alpha: 0.5),
+          ),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFF0097b2), width: 2),
         ),
         filled: true,
-        fillColor: const Color(0xFF95E1D3).withOpacity(0.1),
-        labelStyle: TextStyle(color: const Color(0xFF006B7A).withOpacity(0.8)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        fillColor: const Color(0xFF95E1D3).withValues(alpha: 0.1),
+        labelStyle: TextStyle(
+          color: const Color(0xFF006B7A).withValues(alpha: 0.8),
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
       ),
     );
   }
@@ -724,10 +768,16 @@ class _PasswordFieldState extends State<_PasswordField> {
       validator: widget.validator,
       decoration: InputDecoration(
         labelText: widget.label,
-        prefixIcon: const Icon(Icons.lock_outline_rounded, color: Color(0xFF006B7A), size: 20),
+        prefixIcon: const Icon(
+          Icons.lock_outline_rounded,
+          color: Color(0xFF006B7A),
+          size: 20,
+        ),
         suffixIcon: IconButton(
           icon: Icon(
-            _obscureText ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+            _obscureText
+                ? Icons.visibility_off_rounded
+                : Icons.visibility_rounded,
             color: const Color(0xFF006B7A),
             size: 20,
           ),
@@ -735,16 +785,23 @@ class _PasswordFieldState extends State<_PasswordField> {
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: const Color(0xFF4ECDC4).withOpacity(0.5)),
+          borderSide: BorderSide(
+            color: const Color(0xFF4ECDC4).withValues(alpha: 0.5),
+          ),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFF0097b2), width: 2),
         ),
         filled: true,
-        fillColor: const Color(0xFF95E1D3).withOpacity(0.1),
-        labelStyle: TextStyle(color: const Color(0xFF006B7A).withOpacity(0.8)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        fillColor: const Color(0xFF95E1D3).withValues(alpha: 0.1),
+        labelStyle: TextStyle(
+          color: const Color(0xFF006B7A).withValues(alpha: 0.8),
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
       ),
     );
   }
@@ -788,24 +845,28 @@ class _CustomDropdownState<T> extends State<_CustomDropdown<T>> {
         prefixIcon: Icon(widget.icon, color: const Color(0xFF006B7A), size: 20),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: const Color(0xFF4ECDC4).withOpacity(0.5)),
+          borderSide: BorderSide(
+            color: const Color(0xFF4ECDC4).withValues(alpha: 0.5),
+          ),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFF0097b2), width: 2),
         ),
         filled: true,
-        fillColor: const Color(0xFF95E1D3).withOpacity(0.1),
-        labelStyle: TextStyle(color: const Color(0xFF006B7A).withOpacity(0.8)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        fillColor: const Color(0xFF95E1D3).withValues(alpha: 0.1),
+        labelStyle: TextStyle(
+          color: const Color(0xFF006B7A).withValues(alpha: 0.8),
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
       ),
       items: widget.items.map((T item) {
         return DropdownMenuItem<T>(
           value: item,
-          child: Text(
-            item.toString(),
-            style: const TextStyle(fontSize: 14),
-          ),
+          child: Text(item.toString(), style: const TextStyle(fontSize: 14)),
         );
       }).toList(),
     );
@@ -857,7 +918,7 @@ class _SignUpButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0097b2).withOpacity(0.3),
+            color: const Color(0xFF0097b2).withValues(alpha: 0.3),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -868,7 +929,9 @@ class _SignUpButton extends StatelessWidget {
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.transparent,
           shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
         child: isLoading
             ? const SizedBox(
@@ -899,6 +962,7 @@ class _SignUpButton extends StatelessWidget {
     );
   }
 }
+
 class _SignInPrompt extends StatelessWidget {
   const _SignInPrompt();
   @override
@@ -909,7 +973,7 @@ class _SignInPrompt extends StatelessWidget {
         Text(
           'Already have an account? ',
           style: TextStyle(
-            color: const Color(0xFF0e0259).withOpacity(0.7),
+            color: const Color(0xFF0e0259).withValues(alpha: 0.7),
             fontSize: 14,
           ),
         ),
@@ -921,13 +985,16 @@ class _SignInPrompt extends StatelessWidget {
                 pageBuilder: (context, animation, _) => const SignInScreen(),
                 transitionsBuilder: (context, animation, _, child) {
                   return SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(1.0, 0.0),
-                      end: Offset.zero,
-                    ).animate(CurvedAnimation(
-                      parent: animation,
-                      curve: Curves.easeOutCubic,
-                    )),
+                    position:
+                        Tween<Offset>(
+                          begin: const Offset(1.0, 0.0),
+                          end: Offset.zero,
+                        ).animate(
+                          CurvedAnimation(
+                            parent: animation,
+                            curve: Curves.easeOutCubic,
+                          ),
+                        ),
                     child: child,
                   );
                 },
@@ -952,6 +1019,7 @@ class _SignInPrompt extends StatelessWidget {
     );
   }
 }
+
 /// Form controllers manager
 class _FormControllers {
   final firstName = TextEditingController();
@@ -988,6 +1056,7 @@ class _Validators {
       return null;
     };
   }
+
   static String? email(String? value) {
     if (value == null || value.trim().isEmpty) {
       return 'Please enter your university email';
@@ -1007,7 +1076,9 @@ class _Validators {
     if (value.length < 8) {
       return 'Password must be at least 8 characters long';
     }
-    if (!RegExp(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>])[A-Za-z\d!@#$%^&*(),.?":{}|<>]').hasMatch(value)) {
+    if (!RegExp(
+      r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>])[A-Za-z\d!@#$%^&*(),.?":{}|<>]',
+    ).hasMatch(value)) {
       return 'Password must meet all requirements above';
     }
     return null;
@@ -1037,6 +1108,7 @@ class _Validators {
     return null;
   }
 }
+
 /// App constants
 class _Constants {
   static const List<String> majors = [
@@ -1052,11 +1124,12 @@ class _Constants {
     'Level 5',
     'Level 6',
     'Level 7',
-    'Level 8'
+    'Level 8',
   ];
 
   static const List<String> genders = ['Male', 'Female'];
 }
+
 /// App theme constants
 class _AppTheme {
   static const gradientBackground = BoxDecoration(

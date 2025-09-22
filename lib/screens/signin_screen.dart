@@ -4,7 +4,6 @@ import 'signup_screen.dart';
 import 'package:flutter_appauth/flutter_appauth.dart';
 import 'package:flutter/services.dart';
 
-
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
 
@@ -13,51 +12,51 @@ class SignInScreen extends StatefulWidget {
 }
 
 class _SignInScreenState extends State<SignInScreen> {
-// Microsoft OAuth2 constants
-final String _msClientId = 'adba7fb2-f6d3-4fef-950d-e0743a720212';
-final String _msTenantId = '19df06c3-3fcd-4947-809f-064684abf608';
-final String _msRedirectUri = 'msauth://com.example.absherk/redirect';
-final FlutterAppAuth _appAuth = FlutterAppAuth();
+  // Microsoft OAuth2 constants
+  final String _msClientId = 'adba7fb2-f6d3-4fef-950d-e0743a720212';
+  final String _msTenantId = '19df06c3-3fcd-4947-809f-064684abf608';
+  final String _msRedirectUri = 'msauth://com.example.absherk/redirect';
+  final FlutterAppAuth _appAuth = FlutterAppAuth();
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _rememberMe = false;
   bool _obscurePassword = true;
-Future<void> _handleMicrosoftSignIn() async {
-  setState(() => _isLoading = true);
-  try {
-   final AuthorizationTokenResponse? result = await _appAuth.authorizeAndExchangeCode(
-  AuthorizationTokenRequest(
-    _msClientId,
-    _msRedirectUri,
-    serviceConfiguration: AuthorizationServiceConfiguration(
-      authorizationEndpoint:
-          'https://login.microsoftonline.com/$_msTenantId/oauth2/v2.0/authorize',
-      tokenEndpoint: 'https://login.microsoftonline.com/$_msTenantId/oauth2/v2.0/token',
-    ),
-    scopes: ['openid', 'profile', 'email', 'User.Read'],
-    // If rememberMe is false, force login prompt
-    promptValues: _rememberMe ? null : ['login'],
-  ),
-);
+  Future<void> _handleMicrosoftSignIn() async {
+    setState(() => _isLoading = true);
+    try {
+      await _appAuth.authorizeAndExchangeCode(
+        AuthorizationTokenRequest(
+          _msClientId,
+          _msRedirectUri,
+          serviceConfiguration: AuthorizationServiceConfiguration(
+            authorizationEndpoint:
+                'https://login.microsoftonline.com/$_msTenantId/oauth2/v2.0/authorize',
+            tokenEndpoint:
+                'https://login.microsoftonline.com/$_msTenantId/oauth2/v2.0/token',
+          ),
+          scopes: ['openid', 'profile', 'email', 'User.Read'],
+          promptValues: _rememberMe ? null : ['login'],
+        ),
+      );
 
-    if (result != null) {
-      final accessToken = result.accessToken;
       _showSuccessMessage('Signed in with Microsoft successfully!');
+      _goToCalendar();
+    } on PlatformException catch (e) {
+      if (e.code == 'access_denied' ||
+          e.code == 'authorize_and_exchange_code_cancelled') {
+        return;
+      }
+    } catch (e, stackTrace) {
+      debugPrint('Microsoft Sign-In failed: $e');
+      debugPrintStack(stackTrace: stackTrace);
+      _showErrorMessage('Microsoft Sign-In failed. Please try again.');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-    // If result is null, user canceled — do nothing.
-  } on PlatformException catch (e) {
-    // Ignore cancellation errors completely
-    if (e.code == 'access_denied' || e.code == 'authorize_and_exchange_code_cancelled') {
-      return; // do nothing
-    }
-  } catch (e) {
-    _showErrorMessage('Microsoft Sign-In failed: $e');
-  } finally {
-    if (mounted) setState(() => _isLoading = false);
   }
-}
+
   @override
   void dispose() {
     _emailController.dispose();
@@ -76,7 +75,10 @@ Future<void> _handleMicrosoftSignIn() async {
               const _AppBar(),
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 8.0,
+                  ),
                   child: _SignInCard(
                     formKey: _formKey,
                     emailController: _emailController,
@@ -84,9 +86,11 @@ Future<void> _handleMicrosoftSignIn() async {
                     obscurePassword: _obscurePassword,
                     rememberMe: _rememberMe,
                     isLoading: _isLoading,
-                    onTogglePassword: () => setState(() => _obscurePassword = !_obscurePassword),
-                    onRememberMeChanged: (value) => setState(() => _rememberMe = value ?? false),
-                     onSignIn: () => _handleSignIn(),
+                    onTogglePassword: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
+                    onRememberMeChanged: (value) =>
+                        setState(() => _rememberMe = value ?? false),
+                    onSignIn: _handleSignIn,
                     onForgotPassword: _handleForgotPassword,
                     onMicrosoftSignIn: _handleMicrosoftSignIn,
                   ),
@@ -112,22 +116,28 @@ Future<void> _handleMicrosoftSignIn() async {
 
       if (mounted) {
         _showSuccessMessage('Welcome back to ABSHERK!');
-        // TODO: Navigate to home screen
-        // Navigator.pushReplacementNamed(context, '/home');
+        _goToCalendar();
       }
     } on FirebaseAuthException catch (e) {
       if (mounted) {
         _showErrorMessage(_getErrorMessage(e.code));
       }
-    } catch (e, s) {
-  print('Sign in error: $e');
-  print('Stack trace: $s');
-  if (mounted) {
-    _showErrorMessage('An unexpected error occurred. Please try again.');
-  }
-} finally {
+    } catch (e, stackTrace) {
+      debugPrint('Sign in error: $e');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) {
+        _showErrorMessage('An unexpected error occurred. Please try again.');
+      }
+    } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _goToCalendar() {
+    if (!mounted) {
+      return;
+    }
+    Navigator.pushReplacementNamed(context, '/calendar');
   }
 
   void _handleForgotPassword() {
@@ -138,9 +148,8 @@ Future<void> _handleMicrosoftSignIn() async {
 
     showDialog(
       context: context,
-      builder: (context) => _ForgotPasswordDialog(
-        email: _emailController.text.trim(),
-      ),
+      builder: (context) =>
+          _ForgotPasswordDialog(email: _emailController.text.trim()),
     );
   }
 
@@ -198,13 +207,17 @@ class _AppBar extends StatelessWidget {
         children: [
           Container(
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.15),
+              color: Colors.white.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white.withOpacity(0.2)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
             ),
             child: IconButton(
               onPressed: () => Navigator.pop(context),
-              icon: const Icon(Icons.arrow_back_ios_rounded, color: Colors.white, size: 20),
+              icon: const Icon(
+                Icons.arrow_back_ios_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
             ),
           ),
           const Expanded(
@@ -260,12 +273,12 @@ class _SignInCard extends StatelessWidget {
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.95),
+        color: Colors.white.withValues(alpha: 0.95),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.2)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0e0259).withOpacity(0.1),
+            color: const Color(0xFF0e0259).withValues(alpha: 0.1),
             blurRadius: 30,
             offset: const Offset(0, 15),
           ),
@@ -312,18 +325,27 @@ class _SignInCard extends StatelessWidget {
           validator: _Validators.email,
           decoration: InputDecoration(
             hintText: 'student@student.ksu.edu.sa',
-            prefixIcon: const Icon(Icons.alternate_email_rounded, color: Color(0xFF006B7A), size: 20),
+            prefixIcon: const Icon(
+              Icons.alternate_email_rounded,
+              color: Color(0xFF006B7A),
+              size: 20,
+            ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: const Color(0xFF4ECDC4).withOpacity(0.5)),
+              borderSide: BorderSide(
+                color: const Color(0xFF4ECDC4).withValues(alpha: 0.5),
+              ),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: Color(0xFF0097b2), width: 2),
             ),
             filled: true,
-            fillColor: const Color(0xFF95E1D3).withOpacity(0.1),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            fillColor: const Color(0xFF95E1D3).withValues(alpha: 0.1),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 12,
+            ),
           ),
         ),
       ],
@@ -342,10 +364,16 @@ class _SignInCard extends StatelessWidget {
           validator: _Validators.password,
           decoration: InputDecoration(
             hintText: '••••••••••',
-            prefixIcon: const Icon(Icons.lock_outline_rounded, color: Color(0xFF006B7A), size: 20),
+            prefixIcon: const Icon(
+              Icons.lock_outline_rounded,
+              color: Color(0xFF006B7A),
+              size: 20,
+            ),
             suffixIcon: IconButton(
               icon: Icon(
-                obscurePassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                obscurePassword
+                    ? Icons.visibility_off_rounded
+                    : Icons.visibility_rounded,
                 color: const Color(0xFF006B7A),
                 size: 20,
               ),
@@ -353,15 +381,20 @@ class _SignInCard extends StatelessWidget {
             ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: const Color(0xFF4ECDC4).withOpacity(0.5)),
+              borderSide: BorderSide(
+                color: const Color(0xFF4ECDC4).withValues(alpha: 0.5),
+              ),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: Color(0xFF0097b2), width: 2),
             ),
             filled: true,
-            fillColor: const Color(0xFF95E1D3).withOpacity(0.1),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            fillColor: const Color(0xFF95E1D3).withValues(alpha: 0.1),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 12,
+            ),
           ),
         ),
       ],
@@ -380,7 +413,9 @@ class _SignInCard extends StatelessWidget {
                 value: rememberMe,
                 onChanged: onRememberMeChanged,
                 activeColor: const Color(0xFF4ECDC4),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4),
+                ),
               ),
             ),
             const Text(
@@ -423,7 +458,7 @@ class _SignInCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0097b2).withOpacity(0.3),
+            color: const Color(0xFF0097b2).withValues(alpha: 0.3),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -434,7 +469,9 @@ class _SignInCard extends StatelessWidget {
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.transparent,
           shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
         child: isLoading
             ? const SizedBox(
@@ -475,7 +512,7 @@ class _SignInCard extends StatelessWidget {
             'or continue with',
             style: TextStyle(
               fontSize: 12,
-              color: const Color(0xFF0e0259).withOpacity(0.6),
+              color: const Color(0xFF0e0259).withValues(alpha: 0.6),
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -484,19 +521,20 @@ class _SignInCard extends StatelessWidget {
       ],
     );
   }
-Widget _buildSocialSignIn() {
-  return Row(
-    mainAxisAlignment: MainAxisAlignment.center,
-    children: [
-      _SocialButton(
-  imagePath: 'assets/images/Microsoft.png', // 👈 use the asset
-  onPressed: onMicrosoftSignIn,
-),
 
-    ],
-  );
+  Widget _buildSocialSignIn() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _SocialButton(
+          imagePath: 'assets/images/Microsoft.png', // 👈 use the asset
+          onPressed: onMicrosoftSignIn,
+        ),
+      ],
+    );
+  }
 }
-}
+
 class _Header extends StatelessWidget {
   const _Header();
 
@@ -514,7 +552,7 @@ class _Header extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF0097b2).withOpacity(0.3),
+                color: const Color(0xFF0097b2).withValues(alpha: 0.3),
                 blurRadius: 20,
                 offset: const Offset(0, 8),
               ),
@@ -545,7 +583,7 @@ class _Header extends StatelessWidget {
           'Sign in to continue your academic journey',
           style: TextStyle(
             fontSize: 14,
-            color: const Color(0xFF0e0259).withOpacity(0.7),
+            color: const Color(0xFF0e0259).withValues(alpha: 0.7),
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -553,6 +591,7 @@ class _Header extends StatelessWidget {
     );
   }
 }
+
 class _FieldLabel extends StatelessWidget {
   final String text;
 
@@ -570,18 +609,12 @@ class _FieldLabel extends StatelessWidget {
     );
   }
 }
+
 class _SocialButton extends StatelessWidget {
   final String? imagePath;
-  final IconData? icon;
-  final Color? color;
   final VoidCallback onPressed;
 
-  const _SocialButton({
-    this.imagePath,
-    this.icon,
-    this.color,
-    required this.onPressed,
-  });
+  const _SocialButton({this.imagePath, required this.onPressed});
 
   @override
   Widget build(BuildContext context) {
@@ -589,19 +622,26 @@ class _SocialButton extends StatelessWidget {
       width: 56,
       height: 56,
       decoration: BoxDecoration(
-        color: const Color(0xFF95E1D3).withOpacity(0.1),
+        color: const Color(0xFF95E1D3).withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF4ECDC4).withOpacity(0.3)),
+        border: Border.all(
+          color: const Color(0xFF4ECDC4).withValues(alpha: 0.3),
+        ),
       ),
       child: IconButton(
         onPressed: onPressed,
         icon: imagePath != null
-            ? Image.asset(imagePath!, width: 24, height: 24) // 👈 use your PNG
-            : Icon(icon, color: color, size: 24),
+            ? Image.asset(imagePath!, width: 24, height: 24)
+            : const Icon(
+                Icons.handshake_rounded,
+                color: Color(0xFF006B7A),
+                size: 24,
+              ),
       ),
     );
   }
 }
+
 class _SignUpPrompt extends StatelessWidget {
   const _SignUpPrompt();
 
@@ -613,7 +653,7 @@ class _SignUpPrompt extends StatelessWidget {
         Text(
           "Don't have an account? ",
           style: TextStyle(
-            color: const Color(0xFF0e0259).withOpacity(0.7),
+            color: const Color(0xFF0e0259).withValues(alpha: 0.7),
             fontSize: 14,
           ),
         ),
@@ -625,13 +665,16 @@ class _SignUpPrompt extends StatelessWidget {
                 pageBuilder: (context, animation, _) => const SignUpScreen(),
                 transitionsBuilder: (context, animation, _, child) {
                   return SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(1.0, 0.0),
-                      end: Offset.zero,
-                    ).animate(CurvedAnimation(
-                      parent: animation,
-                      curve: Curves.easeOutCubic,
-                    )),
+                    position:
+                        Tween<Offset>(
+                          begin: const Offset(1.0, 0.0),
+                          end: Offset.zero,
+                        ).animate(
+                          CurvedAnimation(
+                            parent: animation,
+                            curve: Curves.easeOutCubic,
+                          ),
+                        ),
                     child: child,
                   );
                 },
@@ -656,6 +699,7 @@ class _SignUpPrompt extends StatelessWidget {
     );
   }
 }
+
 /// Forgot password dialog
 class _ForgotPasswordDialog extends StatefulWidget {
   final String email;
@@ -688,24 +732,21 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
       ),
       content: Text(
         'Send a password reset link to:\n${widget.email}',
-        style: TextStyle(
-          color: const Color(0xFF0e0259).withOpacity(0.8),
-        ),
+        style: TextStyle(color: const Color(0xFF0e0259).withValues(alpha: 0.8)),
       ),
       actions: [
         TextButton(
           onPressed: _isLoading ? null : () => Navigator.pop(context),
-          child: const Text(
-            'Cancel',
-            style: TextStyle(color: Colors.grey),
-          ),
+          child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
         ),
         ElevatedButton(
           onPressed: _isLoading ? null : _sendResetEmail,
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF0097b2),
             foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
           ),
           child: _isLoading
               ? const SizedBox(
@@ -727,7 +768,7 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
 
     try {
       await FirebaseAuth.instance.sendPasswordResetEmail(email: widget.email);
-      
+
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(

@@ -11,7 +11,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.absherk"
-        minSdk = flutter.minSdkVersion
+        minSdk = maxOf(flutter.minSdkVersion, 23)
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"

@@ -4,7 +4,7 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.9.2
+  sdk: ">=3.8.0 <4.0.0"
 
 dependencies:
   flutter:
@@ -15,6 +15,11 @@ dependencies:
   firebase_auth: ^6.0.2
   cloud_firestore: ^6.0.1
   flutter_appauth: ^10.0.0
+  google_sign_in: ^6.2.1
+  googleapis: ^13.1.0
+  intl: ^0.19.0
+  provider: ^6.1.5+1
+  uuid: ^4.5.1
   
 
 dev_dependencies:
@@ -27,3 +32,4 @@ flutter:
   assets:
     - assets/images/
   
+

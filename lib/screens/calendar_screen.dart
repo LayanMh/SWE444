@@ -1,0 +1,330 @@
+import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:googleapis/calendar/v3.dart' as calendar;
+import 'package:intl/intl.dart';
+
+import '../services/google_auth_service.dart';
+import '../services/google_calendar_service.dart';
+import 'add_lecture_screen.dart';
+
+class CalendarScreen extends StatefulWidget {
+  const CalendarScreen({super.key});
+
+  @override
+  State<CalendarScreen> createState() => _CalendarScreenState();
+}
+
+class _CalendarScreenState extends State<CalendarScreen> {
+  GoogleSignInAccount? _account;
+  List<calendar.Event> _events = <calendar.Event>[];
+  bool _isLoading = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCalendar(interactive: false);
+  }
+
+  Future<void> _loadCalendar({
+    bool interactive = false,
+    bool showSpinner = true,
+  }) async {
+    if (showSpinner) {
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
+    } else {
+      setState(() {
+        _error = null;
+      });
+    }
+
+    try {
+      final account = await GoogleAuthService.ensureSignedIn(
+        interactive: interactive,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      if (account == null) {
+        setState(() {
+          _account = null;
+          _events = <calendar.Event>[];
+          _isLoading = false;
+        });
+        return;
+      }
+
+      final events = await GoogleCalendarService.fetchUpcomingEvents(account);
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _account = account;
+        _events = events;
+        _isLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _error = error.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _handleRefresh() {
+    return _loadCalendar(interactive: false, showSpinner: false);
+  }
+
+  Future<void> _handleSignOut() async {
+    await GoogleAuthService.signOut();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _account = null;
+      _events = <calendar.Event>[];
+    });
+  }
+
+  Future<void> _openAddLecture() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AddLectureScreen()),
+    );
+    if (!mounted) {
+      return;
+    }
+    await _loadCalendar(interactive: false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Google Calendar'),
+        actions: [
+          if (_account != null && !_isLoading)
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: () => _loadCalendar(interactive: false),
+              tooltip: 'Refresh events',
+            ),
+          if (_account != null)
+            IconButton(
+              icon: const Icon(Icons.logout),
+              onPressed: _handleSignOut,
+              tooltip: 'Sign out',
+            ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _openAddLecture,
+        icon: const Icon(Icons.school),
+        label: const Text('Add Section'),
+      ),
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_error != null) {
+      return _ErrorView(
+        message: _error!,
+        onRetry: () => _loadCalendar(interactive: false),
+      );
+    }
+
+    if (_account == null) {
+      return _SignInPrompt(onPressed: () => _loadCalendar(interactive: true));
+    }
+
+    if (_events.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: _handleRefresh,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: const [
+            SizedBox(height: 120),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              child: Text(
+                'No upcoming events on your Google Calendar. Tap "Add Section" to add your class section.',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _handleRefresh,
+      child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        itemCount: _events.length,
+        itemBuilder: (context, index) {
+          final event = _events[index];
+          final start = _eventDate(event.start);
+          final previousStart = index > 0
+              ? _eventDate(_events[index - 1].start)
+              : null;
+          final showHeader = !_isSameDay(start, previousStart);
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (showHeader)
+                Padding(
+                  padding: const EdgeInsets.only(top: 16, bottom: 8),
+                  child: Text(
+                    _formatHeader(start),
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+              Card(
+                child: ListTile(
+                  title: Text(event.summary ?? 'Untitled event'),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(_formatEventTime(event)),
+                      if ((event.location ?? '').trim().isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(event.location!.trim()),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  DateTime? _eventDate(calendar.EventDateTime? value) {
+    if (value == null) {
+      return null;
+    }
+
+    if (value.dateTime != null) {
+      return value.dateTime!.toLocal();
+    }
+
+    if (value.date != null) {
+      return value.date!.toLocal();
+    }
+
+    return null;
+  }
+
+  bool _isSameDay(DateTime? a, DateTime? b) {
+    if (a == null || b == null) {
+      return false;
+    }
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  String _formatHeader(DateTime? date) {
+    if (date == null) {
+      return 'Unknown date';
+    }
+    return DateFormat('EEEE, MMM d').format(date);
+  }
+
+  String _formatEventTime(calendar.Event event) {
+    if (_isAllDay(event)) {
+      return 'All day';
+    }
+
+    final start = _eventDate(event.start);
+    final end = _eventDate(event.end);
+
+    if (start == null) {
+      return 'Time not specified';
+    }
+
+    final formatter = DateFormat('hh:mm a');
+    final startLabel = formatter.format(start);
+
+    if (end == null || start.isAtSameMomentAs(end)) {
+      return startLabel;
+    }
+
+    return '$startLabel - ${formatter.format(end)}';
+  }
+
+  bool _isAllDay(calendar.Event event) {
+    final start = event.start;
+    return start != null && start.dateTime == null && start.date != null;
+  }
+}
+
+class _SignInPrompt extends StatelessWidget {
+  const _SignInPrompt({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'Sign in with your Google account to view your calendar.',
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: onPressed,
+            child: const Text('Sign in with Google'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ErrorView extends StatelessWidget {
+  const _ErrorView({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Something went wrong:\n$message',
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(onPressed: onRetry, child: const Text('Try again')),
+          ],
+        ),
+      ),
+    );
+  }
+}
