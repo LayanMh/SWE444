@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'signin_screen.dart';
+import 'email_verification_screen.dart';
+import 'welcome_screen.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -61,12 +63,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }
 
   Future<void> _handleSignUp() async {
-    if (!_formKey.currentState!.validate()) {
-      debugPrint("Form validation failed");
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
-    // Check if all required fields are selected
     if (_formState.selectedMajor == null ||
         _formState.selectedLevel == null ||
         _formState.selectedGender == null) {
@@ -77,91 +75,84 @@ class _SignUpScreenState extends State<SignUpScreen> {
     setState(() => _isLoading = true);
 
     try {
-      debugPrint("Creating user with email: ${_controllers.email.text.trim()}");
-
-      // Create user account
+      // 1️⃣ Create temporary user account with email/password
       final userCredential = await _auth.createUserWithEmailAndPassword(
         email: _controllers.email.text.trim(),
         password: _controllers.password.text.trim(),
       );
+      final user = userCredential.user!;
 
-      debugPrint("User created successfully: ${userCredential.user?.uid}");
-
-      // Save user data to Firestore
-      await _saveUserData(userCredential.user!.uid);
-
-      debugPrint("User data saved to Firestore");
-
-      // Send verification email
-      await userCredential.user!.sendEmailVerification();
-
-      if (mounted) {
-        _showSuccessMessage();
-        Navigator.pop(context);
+      debugPrint('Temporary account created for verification: ${user.email}');
+      
+      // 2️⃣ Send verification email immediately (no Firestore storage yet)
+      bool emailSent = await _sendEmailVerification(user);
+      if (!emailSent) {
+        // If email fails, delete the created account to prevent orphaned accounts
+        await user.delete();
+        _showErrorMessage('Could not send verification email. Please try again.');
+        return;
       }
+
+      // 3️⃣ Store form data temporarily in local storage or pass to verification screen
+      // Data will only be saved to Firestore after email verification
+
+      // 4️⃣ Show success message
+      _showSuccessMessage('Verification email sent! Please check your email to complete registration.');
+
+      // 5️⃣ Navigate to email verification screen with userData
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => EmailVerificationScreen(
+            userData: _buildUserData(),
+          ),
+        ),
+      );
+
     } on FirebaseAuthException catch (e) {
-      debugPrint("FirebaseAuthException: ${e.code} - ${e.message}");
-      if (mounted) _showErrorMessage(_getAuthErrorMessage(e.code));
+      _showErrorMessage(_getAuthErrorMessage(e.code));
     } catch (e) {
-      debugPrint("General error during signup: $e");
-      // Even if Firestore fails, the user account was created
-      if (mounted) {
-        _showSuccessMessage();
-        Navigator.pop(context);
-      }
+      debugPrint('Signup error: $e');
+      _showErrorMessage('Something went wrong. Please try again.');
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _saveUserData(String uid) async {
+  Future<bool> _sendEmailVerification(User user) async {
     try {
-      debugPrint("Saving user data for UID: $uid");
-
-      // Get values safely
-      final firstName = _controllers.firstName.text.trim();
-      final lastName = _controllers.lastName.text.trim();
-      final email = _controllers.email.text.trim();
-      final major = _formState.selectedMajor ?? '';
-      final level = _getLevelNumber(_formState.selectedLevel ?? '');
-      final gender = _formState.selectedGender ?? '';
-
-      // Parse GPA safely
-      double gpaValue = 0.0;
-      final gpaText = _controllers.gpa.text.trim();
-      if (gpaText.isNotEmpty) {
-        try {
-          gpaValue = double.parse(gpaText);
-        } catch (e) {
-          debugPrint("GPA parsing error: $e");
-        }
-      }
-
-      debugPrint(
-        "Data to save - Name: $firstName $lastName, Email: $email, Major: $major, Level: $level, Gender: $gender, GPA: $gpaValue",
-      );
-
-      // Use the collection reference directly
-      final userDoc = _firestore.collection('users').doc(uid);
-
-      await userDoc.set({
-        'FName': firstName,
-        'LName': lastName,
-        'email': email,
-        'major': major,
-        'level': level,
-        'gender': gender,
-        'GPA': gpaValue,
-        'createdAt': FieldValue.serverTimestamp(),
-        'emailVerified': false,
-      });
-
-      debugPrint("User data saved successfully to Firestore");
+      debugPrint('Sending verification email to: ${user.email}');
+      await user.sendEmailVerification();
+      debugPrint('Verification email sent successfully');
+      return true;
     } catch (e) {
-      debugPrint("Firestore save error: $e");
-      // Don't rethrow - let the signup complete even if Firestore fails
-      // The user account is already created in Firebase Auth
+      debugPrint('Failed to send verification email: $e');
+      return false;
     }
+  }
+
+  // Helper method to build user data object for passing to verification screen
+  Map<String, dynamic> _buildUserData() {
+    // Parse GPA safely
+    double gpaValue = 0.0;
+    final gpaText = _controllers.gpa.text.trim();
+    if (gpaText.isNotEmpty) {
+      try {
+        gpaValue = double.parse(gpaText);
+      } catch (e) {
+        debugPrint("GPA parsing error: $e");
+      }
+    }
+
+    return {
+      'FName': _controllers.firstName.text.trim(),
+      'LName': _controllers.lastName.text.trim(),
+      'email': _controllers.email.text.trim(),
+      'major': _formState.selectedMajor ?? '',
+      'level': _getLevelNumber(_formState.selectedLevel ?? ''),
+      'gender': _formState.selectedGender ?? '',
+      'GPA': gpaValue,
+    };
   }
 
   // Add this helper method to convert level string to number
@@ -201,14 +192,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
     }
   }
 
-  void _showSuccessMessage() {
+  void _showSuccessMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Account created successfully! Please check your email to verify your account.',
-        ),
-        backgroundColor: Color(0xFF4ECDC4),
-        duration: Duration(seconds: 4),
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFF4ECDC4),
+        duration: const Duration(seconds: 4),
       ),
     );
   }
@@ -231,12 +220,18 @@ class _AppBar extends StatelessWidget {
         children: [
           Container(
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.15),
+              color: const Color(0xFFE0E0E0).withOpacity(0.15),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+              border: Border.all(color: Colors.white.withOpacity(0.2)),
             ),
             child: IconButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (context) => const WelcomeScreen()),
+                  (route) => false,
+                );
+              },
               icon: const Icon(
                 Icons.arrow_back_ios_rounded,
                 color: Colors.white,
@@ -285,12 +280,12 @@ class _SignUpCard extends StatelessWidget {
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.95),
+        color: Colors.white.withOpacity(0.95),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+        border: Border.all(color: Colors.white.withOpacity(0.2)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0e0259).withValues(alpha: 0.1),
+            color: const Color(0xFF0e0259).withOpacity(0.1),
             blurRadius: 30,
             offset: const Offset(0, 15),
           ),
@@ -341,7 +336,7 @@ class _Header extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF0097b2).withValues(alpha: 0.3),
+                color: const Color(0xFF0097b2).withOpacity(0.3),
                 blurRadius: 20,
                 offset: const Offset(0, 8),
               ),
@@ -369,10 +364,10 @@ class _Header extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          'Create your academic companion account',
+          'Email verification required to complete registration',
           style: TextStyle(
             fontSize: 14,
-            color: const Color(0xFF0e0259).withValues(alpha: 0.7),
+            color: const Color(0xFF0e0259).withOpacity(0.7),
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -394,7 +389,7 @@ class _PersonalInfoSection extends StatelessWidget {
       children: [
         const _SectionTitle(
           title: 'Personal Information',
-          icon: Icons.person_outline_rounded,
+         icon: Icons.security_rounded,
         ),
         const SizedBox(height: 12),
         Row(
@@ -593,7 +588,7 @@ class _PasswordFieldWithRequirementsState
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(
-                color: const Color(0xFF4ECDC4).withValues(alpha: 0.5),
+                color: const Color(0xFF4ECDC4).withOpacity(0.5),
               ),
             ),
             focusedBorder: OutlineInputBorder(
@@ -601,9 +596,9 @@ class _PasswordFieldWithRequirementsState
               borderSide: const BorderSide(color: Color(0xFF0097b2), width: 2),
             ),
             filled: true,
-            fillColor: const Color(0xFF95E1D3).withValues(alpha: 0.1),
+            fillColor: const Color(0xFF95E1D3).withOpacity(0.1),
             labelStyle: TextStyle(
-              color: const Color(0xFF006B7A).withValues(alpha: 0.8),
+              color: const Color(0xFF006B7A).withOpacity(0.8),
             ),
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
@@ -720,7 +715,7 @@ class _CustomTextField extends StatelessWidget {
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(
-            color: const Color(0xFF4ECDC4).withValues(alpha: 0.5),
+            color: const Color(0xFF4ECDC4).withOpacity(0.5),
           ),
         ),
         focusedBorder: OutlineInputBorder(
@@ -728,9 +723,9 @@ class _CustomTextField extends StatelessWidget {
           borderSide: const BorderSide(color: Color(0xFF0097b2), width: 2),
         ),
         filled: true,
-        fillColor: const Color(0xFF95E1D3).withValues(alpha: 0.1),
+        fillColor: const Color(0xFF95E1D3).withOpacity(0.1),
         labelStyle: TextStyle(
-          color: const Color(0xFF006B7A).withValues(alpha: 0.8),
+          color: const Color(0xFF006B7A).withOpacity(0.8),
         ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
@@ -786,7 +781,7 @@ class _PasswordFieldState extends State<_PasswordField> {
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(
-            color: const Color(0xFF4ECDC4).withValues(alpha: 0.5),
+            color: const Color(0xFF4ECDC4).withOpacity(0.5),
           ),
         ),
         focusedBorder: OutlineInputBorder(
@@ -794,9 +789,9 @@ class _PasswordFieldState extends State<_PasswordField> {
           borderSide: const BorderSide(color: Color(0xFF0097b2), width: 2),
         ),
         filled: true,
-        fillColor: const Color(0xFF95E1D3).withValues(alpha: 0.1),
+        fillColor: const Color(0xFF95E1D3).withOpacity(0.1),
         labelStyle: TextStyle(
-          color: const Color(0xFF006B7A).withValues(alpha: 0.8),
+          color: const Color(0xFF006B7A).withOpacity(0.8),
         ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
@@ -846,7 +841,7 @@ class _CustomDropdownState<T> extends State<_CustomDropdown<T>> {
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(
-            color: const Color(0xFF4ECDC4).withValues(alpha: 0.5),
+            color: const Color(0xFF4ECDC4).withOpacity(0.5),
           ),
         ),
         focusedBorder: OutlineInputBorder(
@@ -854,9 +849,9 @@ class _CustomDropdownState<T> extends State<_CustomDropdown<T>> {
           borderSide: const BorderSide(color: Color(0xFF0097b2), width: 2),
         ),
         filled: true,
-        fillColor: const Color(0xFF95E1D3).withValues(alpha: 0.1),
+        fillColor: const Color(0xFF95E1D3).withOpacity(0.1),
         labelStyle: TextStyle(
-          color: const Color(0xFF006B7A).withValues(alpha: 0.8),
+          color: const Color(0xFF006B7A).withOpacity(0.8),
         ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
@@ -918,7 +913,7 @@ class _SignUpButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0097b2).withValues(alpha: 0.3),
+            color: const Color(0xFF0097b2).withOpacity(0.3),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -945,7 +940,6 @@ class _SignUpButton extends StatelessWidget {
             : const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.person_add_rounded, size: 18, color: Colors.white),
                   SizedBox(width: 8),
                   Text(
                     'Create Account',
@@ -973,7 +967,7 @@ class _SignInPrompt extends StatelessWidget {
         Text(
           'Already have an account? ',
           style: TextStyle(
-            color: const Color(0xFF0e0259).withValues(alpha: 0.7),
+            color: const Color(0xFF0e0259).withOpacity(0.7),
             fontSize: 14,
           ),
         ),
@@ -1061,10 +1055,12 @@ class _Validators {
     if (value == null || value.trim().isEmpty) {
       return 'Please enter your university email';
     }
-    // Match exactly 8 digits before @student.ksu.edu.sa
-    final emailPattern = RegExp(r'^\d{8}@student\.ksu\.edu\.sa$');
+    // Match exactly 9 digits before @student.ksu.edu.sa
+   final emailPattern = RegExp(r'^\d{9}@student\.ksu\.edu\.sa$');
+
+                
     if (!emailPattern.hasMatch(value.trim())) {
-      return 'Email must be 8 digits followed by @student.ksu.edu.sa';
+      return 'Email must be 9 digits followed by @student.ksu.edu.sa';
     }
     return null;
   }
@@ -1099,35 +1095,17 @@ class _Validators {
       return 'Please enter your current GPA';
     }
     final gpaValue = double.tryParse(value.trim());
-    if (gpaValue == null) {
-      return 'Please enter a valid GPA';
-    }
-    if (gpaValue < 0 || gpaValue > 5) {
+    if (gpaValue == null || gpaValue < 0 || gpaValue > 5) {
       return 'GPA must be between 0.00 and 5.00';
     }
     return null;
   }
 }
 
-/// App constants
 class _Constants {
-  static const List<String> majors = [
-    'Computer Science',
-    'Software Engineering',
-    'Information Technology',
-    'Information Systems',
-  ];
-
-  static const List<String> levels = [
-    'Level 3',
-    'Level 4',
-    'Level 5',
-    'Level 6',
-    'Level 7',
-    'Level 8',
-  ];
-
-  static const List<String> genders = ['Male', 'Female'];
+  static const majors = ['Computer Science', 'Information Systems', 'Software Engineering','Information Technology'];
+  static const levels = ['Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'];
+  static const genders = ['Male', 'Female'];
 }
 
 /// App theme constants

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'signup_screen.dart';
 import 'package:flutter_appauth/flutter_appauth.dart';
 import 'package:flutter/services.dart';
@@ -18,16 +19,19 @@ class _SignInScreenState extends State<SignInScreen> {
   final String _msTenantId = '19df06c3-3fcd-4947-809f-064684abf608';
   final String _msRedirectUri = 'msauth://com.example.absherk/redirect';
   final FlutterAppAuth _appAuth = FlutterAppAuth();
+
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _rememberMe = false;
   bool _obscurePassword = true;
+
   Future<void> _handleMicrosoftSignIn() async {
     setState(() => _isLoading = true);
+
     try {
-      await _appAuth.authorizeAndExchangeCode(
+      final result = await _appAuth.authorizeAndExchangeCode(
         AuthorizationTokenRequest(
           _msClientId,
           _msRedirectUri,
@@ -42,8 +46,33 @@ class _SignInScreenState extends State<SignInScreen> {
         ),
       );
 
-      _showSuccessMessage('Signed in with Microsoft successfully!');
-      _goToCalendar();
+      if (result != null) {
+        // Get user info from Microsoft (you'll need to implement this)
+        final userInfo = await _getUserInfoFromMicrosoft(result.accessToken!);
+        
+        // Check if this is a first-time Microsoft user
+        final isFirstTime = await _checkIfFirstTimeUser(userInfo['email']);
+        
+        if (isFirstTime) {
+          // First time Microsoft user - redirect to profile completion
+          if (mounted) {
+            _showSuccessMessage('Welcome! Please complete your profile to continue.');
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => MicrosoftUserProfileForm(
+                  microsoftUserInfo: userInfo,
+                  accessToken: result.accessToken!,
+                ),
+              ),
+            );
+          }
+        } else {
+          // Existing user - proceed to calendar
+          _showSuccessMessage('Signed in with Microsoft successfully!');
+          _goToCalendar();
+        }
+      }
     } on PlatformException catch (e) {
       if (e.code == 'access_denied' ||
           e.code == 'authorize_and_exchange_code_cancelled') {
@@ -55,6 +84,33 @@ class _SignInScreenState extends State<SignInScreen> {
       _showErrorMessage('Microsoft Sign-In failed. Please try again.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<Map<String, dynamic>> _getUserInfoFromMicrosoft(String accessToken) async {
+    // TODO: Implement Microsoft Graph API call
+    // For now returning placeholder - you need to make HTTP request to:
+    // GET https://graph.microsoft.com/v1.0/me
+    return {
+      'email': 'user@student.ksu.edu.sa',
+      'firstName': 'John',
+      'lastName': 'Doe',
+      'microsoftId': 'ms_user_id',
+    };
+  }
+
+  Future<bool> _checkIfFirstTimeUser(String email) async {
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .where('email', isEqualTo: email)
+          .limit(1)
+          .get();
+      
+      return userDoc.docs.isEmpty; // True if no user found (first time)
+    } catch (e) {
+      debugPrint('Error checking user existence: $e');
+      return true; // Assume first time if error occurs
     }
   }
 
@@ -140,27 +196,29 @@ class _SignInScreenState extends State<SignInScreen> {
     }
     Navigator.pushReplacementNamed(context, '/calendar');
   }
-void _handleForgotPassword() {
-      Navigator.push(
-        context,
-        PageRouteBuilder(
-          pageBuilder: (context, animation, _) => const ResetPasswordScreen(),
-          transitionsBuilder: (context, animation, _, child) {
-            return SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(1.0, 0.0),
-                end: Offset.zero,
-              ).animate(CurvedAnimation(
-                parent: animation,
-                curve: Curves.easeOutCubic,
-              )),
-              child: child,
-            );
-          },
-          transitionDuration: const Duration(milliseconds: 400),
-        ),
-      );
-    }
+
+  void _handleForgotPassword() {
+    Navigator.push(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (context, animation, _) => const ResetPasswordScreen(),
+        transitionsBuilder: (context, animation, _, child) {
+          return SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(1.0, 0.0),
+              end: Offset.zero,
+            ).animate(CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+            )),
+            child: child,
+          );
+        },
+        transitionDuration: const Duration(milliseconds: 400),
+      ),
+    );
+  }
+
   String _getErrorMessage(String code) {
     switch (code) {
       case 'user-not-found':
@@ -203,7 +261,465 @@ void _handleForgotPassword() {
   }
 }
 
-/// Custom App Bar with Deep Sea theme
+/// Microsoft User Profile Completion Form
+class MicrosoftUserProfileForm extends StatefulWidget {
+  final Map<String, dynamic> microsoftUserInfo;
+  final String accessToken;
+
+  const MicrosoftUserProfileForm({
+    super.key,
+    required this.microsoftUserInfo,
+    required this.accessToken,
+  });
+
+  @override
+  State<MicrosoftUserProfileForm> createState() => _MicrosoftUserProfileFormState();
+}
+
+class _MicrosoftUserProfileFormState extends State<MicrosoftUserProfileForm> {
+  final _formKey = GlobalKey<FormState>();
+  final _firstNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
+  final _gpaController = TextEditingController();
+  
+  String? _selectedMajor;
+  String? _selectedLevel;
+  String? _selectedGender;
+  bool _isLoading = false;
+
+  static const _majors = [
+    'Computer Science',
+    'Information Systems', 
+    'Software Engineering',
+    'Information Technology'
+  ];
+  
+  static const _levels = [
+    'Level 3', 'Level 4', 'Level 5', 
+    'Level 6', 'Level 7', 'Level 8'
+  ];
+  
+  static const _genders = ['Male', 'Female'];
+
+  @override
+  void initState() {
+    super.initState();
+    // Pre-populate name fields if available from Microsoft
+    _firstNameController.text = widget.microsoftUserInfo['firstName'] ?? '';
+    _lastNameController.text = widget.microsoftUserInfo['lastName'] ?? '';
+  }
+
+  @override
+  void dispose() {
+    _firstNameController.dispose();
+    _lastNameController.dispose();
+    _gpaController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveUserProfile() async {
+    if (!_formKey.currentState!.validate()) return;
+    
+    if (_selectedMajor == null || _selectedLevel == null || _selectedGender == null) {
+      _showErrorMessage('Please fill all required fields');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      // Parse GPA safely
+      double gpaValue = 0.0;
+      final gpaText = _gpaController.text.trim();
+      if (gpaText.isNotEmpty) {
+        gpaValue = double.parse(gpaText);
+      }
+
+      // Save to Firestore
+      await FirebaseFirestore.instance.collection('users').add({
+        'FName': _firstNameController.text.trim(),
+        'LName': _lastNameController.text.trim(),
+        'email': widget.microsoftUserInfo['email'],
+        'major': _selectedMajor,
+        'level': _getLevelNumber(_selectedLevel!),
+        'gender': _selectedGender,
+        'GPA': gpaValue,
+        'microsoftId': widget.microsoftUserInfo['microsoftId'],
+        'authProvider': 'microsoft',
+        'createdAt': FieldValue.serverTimestamp(),
+        'emailVerified': true, // Microsoft emails are pre-verified
+        'accountStatus': 'active',
+      });
+
+      if (mounted) {
+        _showSuccessMessage('Profile completed successfully!');
+        Navigator.pushReplacementNamed(context, '/calendar');
+      }
+    } catch (e) {
+      debugPrint('Error saving profile: $e');
+      _showErrorMessage('Failed to save profile. Please try again.');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  int _getLevelNumber(String level) {
+    switch (level) {
+      case 'Level 3': return 3;
+      case 'Level 4': return 4;
+      case 'Level 5': return 5;
+      case 'Level 6': return 6;
+      case 'Level 7': return 7;
+      case 'Level 8': return 8;
+      default: return 0;
+    }
+  }
+
+  void _showSuccessMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFF4ECDC4),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  void _showErrorMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red[400],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF006B7A),
+              Color(0xFF0097b2),
+              Color(0xFF0e0259),
+            ],
+            stops: [0.0, 0.6, 1.0],
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              _buildAppBar(),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16.0),
+                  child: _buildProfileForm(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAppBar() {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Row(
+        children: [
+          const Expanded(
+            child: Text(
+              'Complete Your Profile',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+                letterSpacing: 0.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfileForm() {
+    return Container(
+      padding: const EdgeInsets.all(24.0),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.95),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0e0259).withOpacity(0.1),
+            blurRadius: 30,
+            offset: const Offset(0, 15),
+          ),
+        ],
+      ),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          children: [
+            _buildHeader(),
+            const SizedBox(height: 24),
+            _buildWelcomeText(),
+            const SizedBox(height: 24),
+            _buildNameFields(),
+            const SizedBox(height: 16),
+            _buildMajorDropdown(),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(child: _buildLevelDropdown()),
+                const SizedBox(width: 12),
+                Expanded(child: _buildGenderDropdown()),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _buildGPAField(),
+            const SizedBox(height: 32),
+            _buildCompleteButton(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Column(
+      children: [
+        Container(
+          width: 64,
+          height: 64,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF0097b2), Color(0xFF006B7A), Color(0xFF0e0259)],
+            ),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF0097b2).withOpacity(0.3),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Image.asset(
+              'assets/images/logo.png',
+              width: 64,
+              height: 64,
+              fit: BoxFit.cover,
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          'Welcome to ABSHERK',
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w800,
+            color: Color(0xFF0e0259),
+            letterSpacing: -0.5,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWelcomeText() {
+    return Column(
+      children: [
+        const SizedBox(height: 8),
+        Text(
+          'Please complete your academic profile to get started.',
+          style: TextStyle(
+            fontSize: 14,
+            color: const Color(0xFF0e0259).withOpacity(0.7),
+            fontWeight: FontWeight.w500,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNameFields() {
+    return Row(
+      children: [
+        Expanded(
+          child: TextFormField(
+            controller: _firstNameController,
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Please enter your first name';
+              }
+              return null;
+            },
+            decoration: _inputDecoration('First Name'),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: TextFormField(
+            controller: _lastNameController,
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Please enter your last name';
+              }
+              return null;
+            },
+            decoration: _inputDecoration('Last Name'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMajorDropdown() {
+    return DropdownButtonFormField<String>(
+      value: _selectedMajor,
+      validator: (value) => value == null ? 'Please select your major' : null,
+      onChanged: (value) => setState(() => _selectedMajor = value),
+      decoration: _inputDecoration('Major'),
+      items: _majors.map((major) {
+        return DropdownMenuItem<String>(
+          value: major,
+          child: Text(major, style: const TextStyle(fontSize: 14)),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildLevelDropdown() {
+    return DropdownButtonFormField<String>(
+      value: _selectedLevel,
+      validator: (value) => value == null ? 'Please select your level' : null,
+      onChanged: (value) => setState(() => _selectedLevel = value),
+      decoration: _inputDecoration('Level'),
+      items: _levels.map((level) {
+        return DropdownMenuItem<String>(
+          value: level,
+          child: Text(level, style: const TextStyle(fontSize: 14)),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildGenderDropdown() {
+    return DropdownButtonFormField<String>(
+      value: _selectedGender,
+      validator: (value) => value == null ? 'Please select gender' : null,
+      onChanged: (value) => setState(() => _selectedGender = value),
+      decoration: _inputDecoration('Gender'),
+      items: _genders.map((gender) {
+        return DropdownMenuItem<String>(
+          value: gender,
+          child: Text(gender, style: const TextStyle(fontSize: 14)),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildGPAField() {
+    return TextFormField(
+      controller: _gpaController,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      validator: (value) {
+        if (value == null || value.trim().isEmpty) {
+          return 'Please enter your current GPA';
+        }
+        final gpa = double.tryParse(value.trim());
+        if (gpa == null || gpa < 0 || gpa > 5) {
+          return 'GPA must be between 0.00 and 5.00';
+        }
+        return null;
+      },
+      decoration: _inputDecoration('Current GPA', hint: 'e.g., 3.75'),
+    );
+  }
+
+  InputDecoration _inputDecoration(String label, {String? hint}) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(
+          color: const Color(0xFF4ECDC4).withOpacity(0.5),
+        ),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFF0097b2), width: 2),
+      ),
+      filled: true,
+      fillColor: const Color(0xFF95E1D3).withOpacity(0.1),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    );
+  }
+
+  Widget _buildCompleteButton() {
+    return Container(
+      width: double.infinity,
+      height: 48,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF0097b2), Color(0xFF006B7A)],
+        ),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0097b2).withOpacity(0.3),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ElevatedButton(
+        onPressed: _isLoading ? null : _saveUserProfile,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        child: _isLoading
+            ? const SizedBox(
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            : const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.check_circle_outline, size: 18, color: Colors.white),
+                  SizedBox(width: 8),
+                  Text(
+                    'Complete Profile',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+}
 class _AppBar extends StatelessWidget {
   const _AppBar();
 
