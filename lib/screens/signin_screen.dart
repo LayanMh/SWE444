@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'signup_screen.dart';
 import 'package:flutter_appauth/flutter_appauth.dart';
 import 'package:flutter/services.dart';
+import 'reset_password.dart';
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -139,20 +140,27 @@ class _SignInScreenState extends State<SignInScreen> {
     }
     Navigator.pushReplacementNamed(context, '/calendar');
   }
-
-  void _handleForgotPassword() {
-    if (_emailController.text.trim().isEmpty) {
-      _showErrorMessage('Please enter your email address first');
-      return;
+void _handleForgotPassword() {
+      Navigator.push(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (context, animation, _) => const ResetPasswordScreen(),
+          transitionsBuilder: (context, animation, _, child) {
+            return SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(1.0, 0.0),
+                end: Offset.zero,
+              ).animate(CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              )),
+              child: child,
+            );
+          },
+          transitionDuration: const Duration(milliseconds: 400),
+        ),
+      );
     }
-
-    showDialog(
-      context: context,
-      builder: (context) =>
-          _ForgotPasswordDialog(email: _emailController.text.trim()),
-    );
-  }
-
   String _getErrorMessage(String code) {
     switch (code) {
       case 'user-not-found':
