@@ -10,6 +10,40 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+Future<void> linkMicrosoftAccount({
+  required String microsoftAccessToken,
+  required String microsoftIdToken,
+}) async {
+  try {
+    // Get the currently signed-in Firebase user
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      print("No user is currently signed in.");
+      return;
+    }
+
+    // Create Microsoft credential
+    final microsoftCredential = OAuthProvider("microsoft.com").credential(
+      accessToken: microsoftAccessToken,
+      idToken: microsoftIdToken,
+    );
+
+    // Link Microsoft account to existing Firebase user
+    final userCredential = await user.linkWithCredential(microsoftCredential);
+    print("Microsoft account linked successfully: ${userCredential.user?.uid}");
+  } on FirebaseAuthException catch (e) {
+    if (e.code == 'provider-already-linked') {
+      print('The user already has a Microsoft account linked.');
+    } else if (e.code == 'credential-already-in-use') {
+      print('This Microsoft account is already linked with another user.');
+    } else {
+      print('Error linking Microsoft account: ${e.message}');
+    }
+  } catch (e) {
+    print('Unexpected error: $e');
+  }
+}
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
 

@@ -5,7 +5,6 @@ import 'signin_screen.dart';
 import 'email_verification_screen.dart';
 import 'welcome_screen.dart';
 
-
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
 
@@ -31,32 +30,52 @@ class _SignUpScreenState extends State<SignUpScreen> {
     _controllers.dispose();
     super.dispose();
   }
+
   Future<List<String>> getArrayFromFirebase(String fieldName) async {
-  try {
-    final doc = await _firestore.collection('users').doc("1AceMLnpzHNptVsj5gakR4qcYX12").get();
-    if (doc.exists && doc.data()?[fieldName] != null) {
-      return List<String>.from(doc.data()![fieldName]);
+    try {
+      final doc = await _firestore.collection('users').doc("1AceMLnpzHNptVsj5gakR4qcYX12").get();
+      if (doc.exists && doc.data()?[fieldName] != null) {
+        return List<String>.from(doc.data()![fieldName]);
+      }
+    } catch (e) {
+      debugPrint('Error fetching $fieldName: $e');
     }
-  } catch (e) {
-    debugPrint('Error fetching $fieldName: $e');
+    return []; // fallback empty list
   }
-  return []; // fallback empty list
-}
-Future<List<int>> getArrayFromFirebaseInt(String fieldName) async {
-  try {
-    final doc = await _firestore
-        .collection('users')
-        .doc("1AceMLnpzHNptVsj5gakR4qcYX12")
-        .get();
-    if (doc.exists && doc.data()?[fieldName] != null) {
-      // Convert dynamic list to int list
-      return List<int>.from(doc.data()![fieldName]);
+
+  Future<List<int>> getArrayFromFirebaseInt(String fieldName) async {
+    try {
+      final doc = await _firestore
+          .collection('users')
+          .doc("1AceMLnpzHNptVsj5gakR4qcYX12")
+          .get();
+      if (doc.exists && doc.data()?[fieldName] != null) {
+        // Convert dynamic list to int list
+        return List<int>.from(doc.data()![fieldName]);
+      }
+    } catch (e) {
+      debugPrint('Error fetching $fieldName: $e');
     }
-  } catch (e) {
-    debugPrint('Error fetching $fieldName: $e');
+    return [];
   }
-  return [];
-}
+
+  // **NEW METHOD: Check if email already exists with Microsoft auth**
+  Future<bool> _checkIfEmailExistsWithMicrosoft(String email) async {
+    try {
+      final querySnapshot = await _firestore
+          .collection('users')
+          .where('email', isEqualTo: email)
+          .where('authProvider', isEqualTo: 'microsoft')
+          .limit(1)
+          .get();
+      
+      return querySnapshot.docs.isNotEmpty;
+    } catch (e) {
+      debugPrint('Error checking Microsoft email existence: $e');
+      return false;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -101,7 +120,15 @@ Future<List<int>> getArrayFromFirebaseInt(String fieldName) async {
     setState(() => _isLoading = true);
 
     try {
-      // 1️⃣ Create temporary user account with email/password
+      // **NEW: Check if email already exists with Microsoft authentication**
+      final emailExistsWithMicrosoft = await _checkIfEmailExistsWithMicrosoft(_controllers.email.text.trim());
+      
+      if (emailExistsWithMicrosoft) {
+        _showErrorMessage('This email is already registered with Microsoft. Please sign in using Microsoft instead.');
+        return;
+      }
+      
+      // Create temporary user account with email/password
       final userCredential = await _auth.createUserWithEmailAndPassword(
         email: _controllers.email.text.trim(),
         password: _controllers.password.text.trim(),
@@ -110,7 +137,7 @@ Future<List<int>> getArrayFromFirebaseInt(String fieldName) async {
 
       debugPrint('Temporary account created for verification: ${user.email}');
       
-      // 2️⃣ Send verification email immediately (no Firestore storage yet)
+      // Send verification email immediately (no Firestore storage yet)
       bool emailSent = await _sendEmailVerification(user);
       if (!emailSent) {
         // If email fails, delete the created account to prevent orphaned accounts
@@ -119,13 +146,10 @@ Future<List<int>> getArrayFromFirebaseInt(String fieldName) async {
         return;
       }
 
-      // 3️⃣ Store form data temporarily in local storage or pass to verification screen
-      // Data will only be saved to Firestore after email verification
-
-      // 4️⃣ Show success message
+      // Show success message
       _showSuccessMessage('Verification email sent! Please check your email to complete registration.');
 
-      // 5️⃣ Navigate to email verification screen with userData
+      // Navigate to email verification screen with userData
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -156,34 +180,36 @@ Future<List<int>> getArrayFromFirebaseInt(String fieldName) async {
       return false;
     }
   }
-Map<String, dynamic> _buildUserData() {
-  double gpaValue = 0.0;
-  final gpaText = _controllers.gpa.text.trim();
-  if (gpaText.isNotEmpty) {
-    try {
-      gpaValue = double.parse(gpaText);
-    } catch (e) {
-      debugPrint("GPA parsing error: $e");
-    }
-  }
 
-  return {
-    'FName': _controllers.firstName.text.trim(),
-    'LName': _controllers.lastName.text.trim(),
-    'email': _controllers.email.text.trim(),
-    'major': [_formState.selectedMajor ?? ''], // still array
-    'level': [_formState.selectedLevel ?? 0],  // <-- store int directly
-    'gender': [_formState.selectedGender ?? ''],
-    'GPA': gpaValue,
-    'createdAt': FieldValue.serverTimestamp(),
-    'emailVerified': false,
-  };
-}
+  Map<String, dynamic> _buildUserData() {
+    double gpaValue = 0.0;
+    final gpaText = _controllers.gpa.text.trim();
+    if (gpaText.isNotEmpty) {
+      try {
+        gpaValue = double.parse(gpaText);
+      } catch (e) {
+        debugPrint("GPA parsing error: $e");
+      }
+    }
+
+    return {
+      'FName': _controllers.firstName.text.trim(),
+      'LName': _controllers.lastName.text.trim(),
+      'email': _controllers.email.text.trim(),
+      'major': [_formState.selectedMajor ?? ''],
+      'level': [_formState.selectedLevel ?? 0],
+      'gender': [_formState.selectedGender ?? ''],
+      'GPA': gpaValue,
+      'authProvider': 'email', // **ADDED: Mark as email auth**
+      'createdAt': FieldValue.serverTimestamp(),
+      'emailVerified': false,
+    };
+  }
 
   String _getAuthErrorMessage(String code) {
     switch (code) {
       case 'email-already-in-use':
-        return 'This email is already registered.';
+        return 'This email is already registered with a regular account.';
       case 'weak-password':
         return 'Password is too weak.';
       case 'invalid-email':
@@ -394,7 +420,7 @@ class _PersonalInfoSection extends StatelessWidget {
       children: [
         const _SectionTitle(
           title: 'Personal Information',
-         icon: Icons.security_rounded,
+         icon: Icons.person_outline_rounded,
         ),
         const SizedBox(height: 12),
         Row(
@@ -444,7 +470,7 @@ class _AccountInfoSection extends StatelessWidget {
           label: 'University Email',
           icon: Icons.alternate_email_rounded,
           keyboardType: TextInputType.emailAddress,
-          hint: 'student@student.ksu.edu.sa',
+          hint: '123456789@student.ksu.edu.sa',
           validator: _Validators.email,
         ),
         const SizedBox(height: 12),
@@ -463,6 +489,7 @@ class _AccountInfoSection extends StatelessWidget {
     );
   }
 }
+
 class _AcademicInfoSection extends StatelessWidget {
   final _FormControllers controllers;
   final _FormState formState;
@@ -496,9 +523,9 @@ class _AcademicInfoSection extends StatelessWidget {
               icon: Icons.science_outlined,
               items: snapshot.data!,
               onChanged: (value) {
-  formState.selectedMajor = value;
-  state.setState(() {}); // rebuild to reflect change
-},
+                formState.selectedMajor = value;
+                state.setState(() {}); // rebuild to reflect change
+              },
               validator: _Validators.required('major'),
             );
           },
@@ -510,26 +537,24 @@ class _AcademicInfoSection extends StatelessWidget {
           children: [
             // Level Dropdown
             Expanded(
-              child: // In _AcademicInfoSection
-FutureBuilder<List<int>>(
-  future: state.getArrayFromFirebaseInt('level'), // new method
-  builder: (context, snapshot) {
-    if (!snapshot.hasData) return const CircularProgressIndicator();
-    return _CustomDropdown<int>(
-      value: formState.selectedLevel,
-      label: 'Level',
-      icon: Icons.trending_up_rounded,
-      items: snapshot.data!,
-      onChanged: (value) {
-        formState.selectedLevel = value;
-        state.setState(() {});
-      },
-      validator: (value) =>
-          value == null ? 'Please select your level' : null,
-    );
-  },
-),
-
+              child: FutureBuilder<List<int>>(
+                future: state.getArrayFromFirebaseInt('level'), // new method
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) return const CircularProgressIndicator();
+                  return _CustomDropdown<int>(
+                    value: formState.selectedLevel,
+                    label: 'Level',
+                    icon: Icons.trending_up_rounded,
+                    items: snapshot.data!,
+                    onChanged: (value) {
+                      formState.selectedLevel = value;
+                      state.setState(() {});
+                    },
+                    validator: (value) =>
+                        value == null ? 'Please select your level' : null,
+                  );
+                },
+              ),
             ),
             const SizedBox(width: 12),
             // Gender Dropdown
@@ -544,9 +569,9 @@ FutureBuilder<List<int>>(
                     icon: Icons.person_pin_rounded,
                     items: snapshot.data!,
                     onChanged: (value) {
-  formState.selectedGender = value;
-  state.setState(() {});
-},
+                      formState.selectedGender = value;
+                      state.setState(() {});
+                    },
                     validator: _Validators.required('gender'),
                   );
                 },
@@ -569,6 +594,7 @@ FutureBuilder<List<int>>(
     );
   }
 }
+
 /// Password field with detailed requirements feedback
 class _PasswordFieldWithRequirements extends StatefulWidget {
   final TextEditingController controller;
@@ -1098,9 +1124,9 @@ class _Validators {
       return 'Please enter your university email';
     }
     // Match exactly 9 digits before @student.ksu.edu.sa
-   final emailPattern = RegExp(r'^\d{9}@student\.ksu\.edu\.sa$');
+final emailPattern = RegExp(r'^\d{9}@student\.ksu\.edu\.sa$');
 
-                
+
     if (!emailPattern.hasMatch(value.trim())) {
       return 'Email must be 9 digits followed by @student.ksu.edu.sa';
     }
@@ -1143,6 +1169,7 @@ class _Validators {
     return null;
   }
 }
+
 class _AppTheme {
   static const gradientBackground = BoxDecoration(
     gradient: LinearGradient(
