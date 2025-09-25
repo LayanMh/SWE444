@@ -1,26 +1,35 @@
+import 'package:firebase_auth/firebase_auth.dart';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 
 import 'firebase_options.dart';
 import 'providers/schedule_provider.dart';
+
+// New
+import 'screens/home_page.dart';
+import 'screens/gpa_calc.dart';
+import 'screens/swapping_main.dart';
+import 'screens/experience.dart';
+import 'screens/community.dart';
+
+// Existing
 import 'screens/welcome_screen.dart';
-import 'screens/calendar_screen.dart';
+import 'screens/calendar_screen.dart'; // ✅ your CalendarScreen file
 import 'screens/add_lecture_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
     debugPrint('Firebase initialized successfully');
-  } catch (e, stackTrace) {
+  } catch (e, st) {
     debugPrint('Firebase initialization failed: $e');
-    debugPrintStack(stackTrace: stackTrace);
+    debugPrintStack(stackTrace: st);
   }
-
   runApp(const MyApp());
 }
 
@@ -81,9 +90,7 @@ class MyApp extends StatelessWidget {
             ),
           ),
           textButtonTheme: TextButtonThemeData(
-            style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFF0097b2),
-            ),
+            style: TextButton.styleFrom(foregroundColor: const Color(0xFF0097b2)),
           ),
           inputDecorationTheme: InputDecorationTheme(
             border: OutlineInputBorder(
@@ -97,12 +104,34 @@ class MyApp extends StatelessWidget {
             floatingLabelStyle: const TextStyle(color: Color(0xFF0097b2)),
           ),
         ),
+
+        // ✅ Start at Welcome before sign in
         home: const WelcomeScreen(),
+
         routes: {
-          '/calendar': (_) => const CalendarScreen(),
+          // Existing
+          '/calendar': (_) => const CalendarScreen(), // ✅ fixed constructor
           '/add-lecture': (_) => const AddLectureScreen(),
+
+          // New
+          '/home': (_) => const HomePage(), // navigate here after sign in
+          '/swapping': (_) => const SwapRequestPage(),
+  '/calculator': (_) => const GpaCalculator(),
+
+
+          '/experience': (_) => const ExperiencePage(),
+          '/community': (_) => const CommunityPage(),
+          '/absence': (_) => const AbsencePage(),
         },
       ),
     );
   }
+}
+
+// ✅ Minimal Absence placeholder
+class AbsencePage extends StatelessWidget {
+  const AbsencePage({super.key});
+  @override
+  Widget build(BuildContext context) =>
+      const Scaffold(body: Center(child: Text("Absence Page")));
 }

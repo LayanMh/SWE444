@@ -70,7 +70,7 @@ class _SignInScreenState extends State<SignInScreen> {
         } else {
           // Existing user - proceed to calendar
           _showSuccessMessage('Signed in with Microsoft successfully!');
-          _goToCalendar();
+          _goToHome();
         }
       }
     } on PlatformException catch (e) {
@@ -173,7 +173,7 @@ class _SignInScreenState extends State<SignInScreen> {
 
       if (mounted) {
         _showSuccessMessage('Welcome back to ABSHERK!');
-        _goToCalendar();
+        _goToHome();
       }
     } on FirebaseAuthException catch (e) {
       if (mounted) {
@@ -190,11 +190,12 @@ class _SignInScreenState extends State<SignInScreen> {
     }
   }
 
-  void _goToCalendar() {
+  void _goToHome() {
     if (!mounted) {
       return;
     }
-    Navigator.pushReplacementNamed(context, '/calendar');
+   Navigator.pushReplacementNamed(context, '/home');
+
   }
 
   void _handleForgotPassword() {
