@@ -16,7 +16,7 @@ import 'screens/community.dart';
 
 // Existing
 import 'screens/welcome_screen.dart';
-import 'screens/calendar_screen.dart'; // ✅ your CalendarScreen file
+import 'screens/calendar_screen.dart'; 
 import 'screens/add_lecture_screen.dart';
 
 Future<void> main() async {
@@ -105,16 +105,16 @@ class MyApp extends StatelessWidget {
           ),
         ),
 
-        // ✅ Start at Welcome before sign in
+        //  Welcome before sign in
         home: const WelcomeScreen(),
 
         routes: {
-          // Existing
-          '/calendar': (_) => const CalendarScreen(), // ✅ fixed constructor
+      
+          '/calendar': (_) => const CalendarScreen(), 
           '/add-lecture': (_) => const AddLectureScreen(),
 
-          // New
-          '/home': (_) => const HomePage(), // navigate here after sign in
+        
+          '/home': (_) => const HomePage(), 
           '/swapping': (_) => const SwapRequestPage(),
   '/calculator': (_) => const GpaCalculator(),
 
@@ -128,7 +128,7 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// ✅ Minimal Absence placeholder
+//  Absence placeholder
 class AbsencePage extends StatelessWidget {
   const AbsencePage({super.key});
   @override

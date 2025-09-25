@@ -14,12 +14,12 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  int _selectedIndex = 2; // Default to Home tab
+  int _selectedIndex = 2; 
 
   late final List<Widget> _tabs = <Widget>[
     const _ProfileTab(),
     const CalendarScreen(),
-    const _HomeTab(), // dashboard
+    const _HomeTab(), 
     const ExperiencePage(),
     const CommunityPage(),
   ];
@@ -61,7 +61,7 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-/// ---------- HOME TAB ----------
+
 class _HomeTab extends StatefulWidget {
   const _HomeTab();
 
@@ -84,7 +84,7 @@ class _HomeTabState extends State<_HomeTab> {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         final doc = await FirebaseFirestore.instance
-            .collection('users') // make sure it's correct in Firestore
+            .collection('users') 
             .doc(user.uid)
             .get();
 
@@ -122,7 +122,7 @@ class _HomeTabState extends State<_HomeTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header with greeting + logo
+            // Header 
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
               child: Row(
@@ -161,7 +161,7 @@ class _HomeTabState extends State<_HomeTab> {
               ),
             ),
 
-            // Quick Actions label
+            // Quick Actions 
             const Padding(
               padding: EdgeInsets.fromLTRB(20, 16, 20, 8),
               child: Text(
@@ -214,7 +214,7 @@ class _HomeTabState extends State<_HomeTab> {
   }
 }
 
-/// ---------- SIMPLE PROFILE PLACEHOLDER ----------
+// profile placeholderr
 class _ProfileTab extends StatelessWidget {
   const _ProfileTab();
 
@@ -229,7 +229,6 @@ class _ProfileTab extends StatelessWidget {
   }
 }
 
-/// ---------- CARD WIDGET ----------
 class _FeatureCard extends StatelessWidget {
   final String title;
   final String subtitle;

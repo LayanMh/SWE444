@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 class CommunityPage extends StatelessWidget {
   const CommunityPage({super.key});
-
+//page
   @override
   Widget build(BuildContext context) {
     return Scaffold(

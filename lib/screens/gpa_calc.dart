@@ -14,7 +14,7 @@ class _GpaCalculatorState extends State<GpaCalculator> {
   final creditsController = TextEditingController();
   final List<CourseInput> courses = [];
   double? expectedGpa;
-  double? currentGpa; // ← will come from Firestore
+  double? currentGpa; 
 
   final Map<String, double> gradeValues = const {
     "A+": 5.0, "A": 4.75, "B+": 4.5, "B": 4.0,
@@ -41,7 +41,7 @@ class _GpaCalculatorState extends State<GpaCalculator> {
         });
       } else {
         setState(() {
-          currentGpa = 0.0; // fallback if not found
+          currentGpa = 0.0; 
         });
       }
     } catch (e) {

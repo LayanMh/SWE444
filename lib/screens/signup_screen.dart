@@ -5,6 +5,7 @@ import 'signin_screen.dart';
 import 'email_verification_screen.dart';
 import 'welcome_screen.dart';
 
+
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
 
@@ -30,7 +31,32 @@ class _SignUpScreenState extends State<SignUpScreen> {
     _controllers.dispose();
     super.dispose();
   }
-
+  Future<List<String>> getArrayFromFirebase(String fieldName) async {
+  try {
+    final doc = await _firestore.collection('users').doc("1AceMLnpzHNptVsj5gakR4qcYX12").get();
+    if (doc.exists && doc.data()?[fieldName] != null) {
+      return List<String>.from(doc.data()![fieldName]);
+    }
+  } catch (e) {
+    debugPrint('Error fetching $fieldName: $e');
+  }
+  return []; // fallback empty list
+}
+Future<List<int>> getArrayFromFirebaseInt(String fieldName) async {
+  try {
+    final doc = await _firestore
+        .collection('users')
+        .doc("1AceMLnpzHNptVsj5gakR4qcYX12")
+        .get();
+    if (doc.exists && doc.data()?[fieldName] != null) {
+      // Convert dynamic list to int list
+      return List<int>.from(doc.data()![fieldName]);
+    }
+  } catch (e) {
+    debugPrint('Error fetching $fieldName: $e');
+  }
+  return [];
+}
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -130,50 +156,29 @@ class _SignUpScreenState extends State<SignUpScreen> {
       return false;
     }
   }
-
-  // Helper method to build user data object for passing to verification screen
-  Map<String, dynamic> _buildUserData() {
-    // Parse GPA safely
-    double gpaValue = 0.0;
-    final gpaText = _controllers.gpa.text.trim();
-    if (gpaText.isNotEmpty) {
-      try {
-        gpaValue = double.parse(gpaText);
-      } catch (e) {
-        debugPrint("GPA parsing error: $e");
-      }
-    }
-
-    return {
-      'FName': _controllers.firstName.text.trim(),
-      'LName': _controllers.lastName.text.trim(),
-      'email': _controllers.email.text.trim(),
-      'major': _formState.selectedMajor ?? '',
-      'level': _getLevelNumber(_formState.selectedLevel ?? ''),
-      'gender': _formState.selectedGender ?? '',
-      'GPA': gpaValue,
-    };
-  }
-
-  // Add this helper method to convert level string to number
-  int _getLevelNumber(String level) {
-    switch (level) {
-      case 'Level 3':
-        return 3;
-      case 'Level 4':
-        return 4;
-      case 'Level 5':
-        return 5;
-      case 'Level 6':
-        return 6;
-      case 'Level 7':
-        return 7;
-      case 'Level 8':
-        return 8;
-      default:
-        return 0;
+Map<String, dynamic> _buildUserData() {
+  double gpaValue = 0.0;
+  final gpaText = _controllers.gpa.text.trim();
+  if (gpaText.isNotEmpty) {
+    try {
+      gpaValue = double.parse(gpaText);
+    } catch (e) {
+      debugPrint("GPA parsing error: $e");
     }
   }
+
+  return {
+    'FName': _controllers.firstName.text.trim(),
+    'LName': _controllers.lastName.text.trim(),
+    'email': _controllers.email.text.trim(),
+    'major': [_formState.selectedMajor ?? ''], // still array
+    'level': [_formState.selectedLevel ?? 0],  // <-- store int directly
+    'gender': [_formState.selectedGender ?? ''],
+    'GPA': gpaValue,
+    'createdAt': FieldValue.serverTimestamp(),
+    'emailVerified': false,
+  };
+}
 
   String _getAuthErrorMessage(String code) {
     switch (code) {
@@ -458,8 +463,6 @@ class _AccountInfoSection extends StatelessWidget {
     );
   }
 }
-
-/// Academic information section
 class _AcademicInfoSection extends StatelessWidget {
   final _FormControllers controllers;
   final _FormState formState;
@@ -471,6 +474,8 @@ class _AcademicInfoSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final state = context.findAncestorStateOfType<_SignUpScreenState>()!;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -479,41 +484,79 @@ class _AcademicInfoSection extends StatelessWidget {
           icon: Icons.school_rounded,
         ),
         const SizedBox(height: 12),
-        _CustomDropdown<String>(
-          value: formState.selectedMajor,
-          label: 'Major',
-          icon: Icons.science_outlined,
-          items: _Constants.majors,
-          onChanged: (value) => formState.selectedMajor = value,
-          validator: _Validators.required('major'),
+
+        // Major Dropdown
+        FutureBuilder<List<String>>(
+          future: state.getArrayFromFirebase('major'),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) return const CircularProgressIndicator();
+            return _CustomDropdown<String>(
+              value: formState.selectedMajor,
+              label: 'Major',
+              icon: Icons.science_outlined,
+              items: snapshot.data!,
+              onChanged: (value) {
+  formState.selectedMajor = value;
+  state.setState(() {}); // rebuild to reflect change
+},
+              validator: _Validators.required('major'),
+            );
+          },
         ),
+
         const SizedBox(height: 12),
+
         Row(
           children: [
+            // Level Dropdown
             Expanded(
-              child: _CustomDropdown<String>(
-                value: formState.selectedLevel,
-                label: 'Level',
-                icon: Icons.trending_up_rounded,
-                items: _Constants.levels,
-                onChanged: (value) => formState.selectedLevel = value,
-                validator: _Validators.required('level'),
-              ),
+              child: // In _AcademicInfoSection
+FutureBuilder<List<int>>(
+  future: state.getArrayFromFirebaseInt('level'), // new method
+  builder: (context, snapshot) {
+    if (!snapshot.hasData) return const CircularProgressIndicator();
+    return _CustomDropdown<int>(
+      value: formState.selectedLevel,
+      label: 'Level',
+      icon: Icons.trending_up_rounded,
+      items: snapshot.data!,
+      onChanged: (value) {
+        formState.selectedLevel = value;
+        state.setState(() {});
+      },
+      validator: (value) =>
+          value == null ? 'Please select your level' : null,
+    );
+  },
+),
+
             ),
             const SizedBox(width: 12),
+            // Gender Dropdown
             Expanded(
-              child: _CustomDropdown<String>(
-                value: formState.selectedGender,
-                label: 'Gender',
-                icon: Icons.person_pin_rounded,
-                items: _Constants.genders,
-                onChanged: (value) => formState.selectedGender = value,
-                validator: _Validators.required('gender'),
+              child: FutureBuilder<List<String>>(
+                future: state.getArrayFromFirebase('gender'),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) return const CircularProgressIndicator();
+                  return _CustomDropdown<String>(
+                    value: formState.selectedGender,
+                    label: 'Gender',
+                    icon: Icons.person_pin_rounded,
+                    items: snapshot.data!,
+                    onChanged: (value) {
+  formState.selectedGender = value;
+  state.setState(() {});
+},
+                    validator: _Validators.required('gender'),
+                  );
+                },
               ),
             ),
           ],
         ),
         const SizedBox(height: 12),
+
+        // GPA Field stays the same
         _CustomTextField(
           controller: controllers.gpa,
           label: 'Current GPA',
@@ -526,7 +569,6 @@ class _AcademicInfoSection extends StatelessWidget {
     );
   }
 }
-
 /// Password field with detailed requirements feedback
 class _PasswordFieldWithRequirements extends StatefulWidget {
   final TextEditingController controller;
@@ -1036,7 +1078,7 @@ class _FormControllers {
 /// Form state manager
 class _FormState {
   String? selectedMajor;
-  String? selectedLevel;
+  int? selectedLevel;
   String? selectedGender;
 }
 
@@ -1101,14 +1143,6 @@ class _Validators {
     return null;
   }
 }
-
-class _Constants {
-  static const majors = ['Computer Science', 'Information Systems', 'Software Engineering','Information Technology'];
-  static const levels = ['Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'];
-  static const genders = ['Male', 'Female'];
-}
-
-/// App theme constants
 class _AppTheme {
   static const gradientBackground = BoxDecoration(
     gradient: LinearGradient(

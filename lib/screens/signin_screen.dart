@@ -5,6 +5,10 @@ import 'signup_screen.dart';
 import 'package:flutter_appauth/flutter_appauth.dart';
 import 'package:flutter/services.dart';
 import 'reset_password.dart';
+import 'welcome_screen.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -27,80 +31,170 @@ class _SignInScreenState extends State<SignInScreen> {
   bool _rememberMe = false;
   bool _obscurePassword = true;
 
-  Future<void> _handleMicrosoftSignIn() async {
-    setState(() => _isLoading = true);
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedCredentials();
+  }
 
-    try {
-      final result = await _appAuth.authorizeAndExchangeCode(
-        AuthorizationTokenRequest(
-          _msClientId,
-          _msRedirectUri,
-          serviceConfiguration: AuthorizationServiceConfiguration(
-            authorizationEndpoint:
-                'https://login.microsoftonline.com/$_msTenantId/oauth2/v2.0/authorize',
-            tokenEndpoint:
-                'https://login.microsoftonline.com/$_msTenantId/oauth2/v2.0/token',
-          ),
-          scopes: ['openid', 'profile', 'email', 'User.Read'],
-          promptValues: _rememberMe ? null : ['login'],
-        ),
-      );
+  // Load saved credentials when the screen initializes
+  Future<void> _loadSavedCredentials() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedEmail = prefs.getString('saved_email');
+    final savedPassword = prefs.getString('saved_password');
+    final rememberMe = prefs.getBool('remember_me') ?? false;
 
-      if (result != null) {
-        // Get user info from Microsoft (you'll need to implement this)
-        final userInfo = await _getUserInfoFromMicrosoft(result.accessToken!);
-        
-        // Check if this is a first-time Microsoft user
-        final isFirstTime = await _checkIfFirstTimeUser(userInfo['email']);
-        
-        if (isFirstTime) {
-          // First time Microsoft user - redirect to profile completion
-          if (mounted) {
-            _showSuccessMessage('Welcome! Please complete your profile to continue.');
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (context) => MicrosoftUserProfileForm(
-                  microsoftUserInfo: userInfo,
-                  accessToken: result.accessToken!,
-                ),
-              ),
-            );
-          }
-        } else {
-          // Existing user - proceed to calendar
-          _showSuccessMessage('Signed in with Microsoft successfully!');
-          _goToHome();
-        }
-      }
-    } on PlatformException catch (e) {
-      if (e.code == 'access_denied' ||
-          e.code == 'authorize_and_exchange_code_cancelled') {
-        return;
-      }
-    } catch (e, stackTrace) {
-      debugPrint('Microsoft Sign-In failed: $e');
-      debugPrintStack(stackTrace: stackTrace);
-      _showErrorMessage('Microsoft Sign-In failed. Please try again.');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+    if (rememberMe && savedEmail != null && savedPassword != null) {
+      setState(() {
+        _emailController.text = savedEmail;
+        _passwordController.text = savedPassword;
+        _rememberMe = true;
+      });
     }
   }
 
+  // Save credentials when remember me is checked
+  Future<void> _saveCredentials() async {
+    final prefs = await SharedPreferences.getInstance();
+    
+    if (_rememberMe) {
+      await prefs.setString('saved_email', _emailController.text.trim());
+      await prefs.setString('saved_password', _passwordController.text.trim());
+      await prefs.setBool('remember_me', true);
+    } else {
+      // Clear saved credentials if remember me is unchecked
+      await prefs.remove('saved_email');
+      await prefs.remove('saved_password');
+      await prefs.setBool('remember_me', false);
+    }
+  }
+Future<void> _handleMicrosoftSignIn() async {
+  setState(() => _isLoading = true);
+
+  try {
+    final result = await _appAuth.authorizeAndExchangeCode(
+      AuthorizationTokenRequest(
+        _msClientId,
+        _msRedirectUri,
+        serviceConfiguration: AuthorizationServiceConfiguration(
+          authorizationEndpoint:
+              'https://login.microsoftonline.com/$_msTenantId/oauth2/v2.0/authorize',
+          tokenEndpoint:
+              'https://login.microsoftonline.com/$_msTenantId/oauth2/v2.0/token',
+        ),
+        scopes: ['openid', 'profile', 'email', 'User.Read'],
+        // Always force login - ignore remember me for Microsoft
+        promptValues: ['login'],
+        additionalParameters: {
+          'domain_hint': 'student.ksu.edu.sa',
+        },
+      ),
+    );
+
+    if (result != null) {
+      // Microsoft sign-in successful - save preference if remember me is checked
+      if (_rememberMe) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('microsoft_remember_me', true);
+        await prefs.setString('microsoft_last_email', '');
+      }
+
+      // Get user info from Microsoft Graph API
+      final userInfo = await _getUserInfoFromMicrosoft(result.accessToken!);
+      userInfo['accessToken'] = result.accessToken!;
+      
+      // Check if this is a first-time Microsoft user
+      final isFirstTime = await _checkIfFirstTimeUser(userInfo['email']);
+      
+      if (isFirstTime) {
+        // First time Microsoft user - redirect to profile completion
+        if (mounted) {
+          _showSuccessMessage('Welcome! Please complete your profile to continue.');
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => MicrosoftUserProfileForm(
+                microsoftUserInfo: userInfo,
+                accessToken: result.accessToken!,
+              ),
+            ),
+          );
+        }
+      } else {
+        // Existing user - proceed to home directly
+        _showSuccessMessage('Signed in with Microsoft successfully!');
+        _goToHome();
+      }
+    }
+  } on PlatformException catch (e) {
+    if (e.code == 'access_denied' ||
+        e.code == 'authorize_and_exchange_code_cancelled') {
+      return;
+    }
+    debugPrint('Microsoft Sign-In Platform Exception: ${e.code} - ${e.message}');
+    _showErrorMessage('Microsoft Sign-In was cancelled or denied.');
+  } catch (e, stackTrace) {
+    debugPrint('Microsoft Sign-In failed: $e');
+    debugPrintStack(stackTrace: stackTrace);
+    _showErrorMessage('Microsoft Sign-In failed. Please try again.');
+  } finally {
+    if (mounted) setState(() => _isLoading = false);
+  }
+}
   Future<Map<String, dynamic>> _getUserInfoFromMicrosoft(String accessToken) async {
-    // TODO: Implement Microsoft Graph API call
-    // For now returning placeholder - you need to make HTTP request to:
-    // GET https://graph.microsoft.com/v1.0/me
-    return {
-      'email': 'user@student.ksu.edu.sa',
-      'firstName': 'John',
-      'lastName': 'Doe',
-      'microsoftId': 'ms_user_id',
-    };
+    try {
+      final response = await http.get(
+        Uri.parse('https://graph.microsoft.com/v1.0/me'),
+        headers: {
+          'Authorization': 'Bearer $accessToken',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final userData = json.decode(response.body);
+        return {
+          'email': userData['mail'] ?? userData['userPrincipalName'] ?? 'unknown@student.ksu.edu.sa',
+          'firstName': userData['givenName'] ?? '',
+          'lastName': userData['surname'] ?? '',
+          'microsoftId': userData['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+          'displayName': userData['displayName'] ?? 'Unknown User',
+        };
+      } else {
+        debugPrint('Microsoft Graph API error: ${response.statusCode} - ${response.body}');
+        throw Exception('Failed to fetch user info from Microsoft: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('Error fetching Microsoft user info: $e');
+      // Return default values if API call fails
+      return {
+        'email': 'unknown@student.ksu.edu.sa',
+        'firstName': 'Unknown',
+        'lastName': 'User',
+        'microsoftId': DateTime.now().millisecondsSinceEpoch.toString(),
+        'displayName': 'Unknown User',
+      };
+    }
+  }
+
+  Future<void> _signInExistingMicrosoftUser(Map<String, dynamic> userInfo) async {
+    try {
+      // Create a custom token or use Anonymous auth, then link the Microsoft account
+      final UserCredential userCredential = await FirebaseAuth.instance.signInAnonymously();
+      
+      // Update the user's display name
+      await userCredential.user?.updateDisplayName(userInfo['displayName']);
+      
+      debugPrint('Existing Microsoft user signed in successfully');
+    } catch (e) {
+      debugPrint('Error signing in existing Microsoft user: $e');
+      throw e;
+    }
   }
 
   Future<bool> _checkIfFirstTimeUser(String email) async {
     try {
+      // Check by email first (simpler approach)
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .where('email', isEqualTo: email)
@@ -112,6 +206,36 @@ class _SignInScreenState extends State<SignInScreen> {
       debugPrint('Error checking user existence: $e');
       return true; // Assume first time if error occurs
     }
+  }
+
+  // Add method to check for auto-login on app startup
+  Future<bool> checkAutoLogin() async {
+    final prefs = await SharedPreferences.getInstance();
+    final rememberMe = prefs.getBool('remember_me') ?? false;
+    final microsoftRememberMe = prefs.getBool('microsoft_remember_me') ?? false;
+    
+    if (rememberMe) {
+      final savedEmail = prefs.getString('saved_email');
+      final savedPassword = prefs.getString('saved_password');
+      
+      if (savedEmail != null && savedPassword != null) {
+        try {
+          await FirebaseAuth.instance.signInWithEmailAndPassword(
+            email: savedEmail,
+            password: savedPassword,
+          );
+          return true; // Auto-login successful
+        } catch (e) {
+          // Clear invalid saved credentials
+          await prefs.remove('saved_email');
+          await prefs.remove('saved_password');
+          await prefs.setBool('remember_me', false);
+          return false;
+        }
+      }
+    }
+    
+    return false; // No auto-login
   }
 
   @override
@@ -171,6 +295,9 @@ class _SignInScreenState extends State<SignInScreen> {
         password: _passwordController.text.trim(),
       );
 
+      // Save credentials if remember me is checked
+      await _saveCredentials();
+
       if (mounted) {
         _showSuccessMessage('Welcome back to ABSHERK!');
         _goToHome();
@@ -194,8 +321,7 @@ class _SignInScreenState extends State<SignInScreen> {
     if (!mounted) {
       return;
     }
-   Navigator.pushReplacementNamed(context, '/home');
-
+    Navigator.pushReplacementNamed(context, '/home');
   }
 
   void _handleForgotPassword() {
@@ -284,23 +410,38 @@ class _MicrosoftUserProfileFormState extends State<MicrosoftUserProfileForm> {
   final _gpaController = TextEditingController();
   
   String? _selectedMajor;
-  String? _selectedLevel;
+  int? _selectedLevel;
   String? _selectedGender;
   bool _isLoading = false;
 
-  static const _majors = [
-    'Computer Science',
-    'Information Systems', 
-    'Software Engineering',
-    'Information Technology'
-  ];
-  
-  static const _levels = [
-    'Level 3', 'Level 4', 'Level 5', 
-    'Level 6', 'Level 7', 'Level 8'
-  ];
-  
-  static const _genders = ['Male', 'Female'];
+  // Fetch arrays from Firebase like in signup screen
+  Future<List<String>> getArrayFromFirebase(String fieldName) async {
+    try {
+      final doc = await FirebaseFirestore.instance.collection('users').doc("1AceMLnpzHNptVsj5gakR4qcYX12").get();
+      if (doc.exists && doc.data()?[fieldName] != null) {
+        return List<String>.from(doc.data()![fieldName]);
+      }
+    } catch (e) {
+      debugPrint('Error fetching $fieldName: $e');
+    }
+    return []; // fallback empty list
+  }
+
+  Future<List<int>> getArrayFromFirebaseInt(String fieldName) async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc("1AceMLnpzHNptVsj5gakR4qcYX12")
+          .get();
+      if (doc.exists && doc.data()?[fieldName] != null) {
+        // Convert dynamic list to int list
+        return List<int>.from(doc.data()![fieldName]);
+      }
+    } catch (e) {
+      debugPrint('Error fetching $fieldName: $e');
+    }
+    return [];
+  }
 
   @override
   void initState() {
@@ -336,43 +477,40 @@ class _MicrosoftUserProfileFormState extends State<MicrosoftUserProfileForm> {
         gpaValue = double.parse(gpaText);
       }
 
-      // Save to Firestore
-      await FirebaseFirestore.instance.collection('users').add({
+      // Generate a unique document ID using Microsoft ID
+      final docId = 'ms_${widget.microsoftUserInfo['microsoftId']}';
+
+      // Save user data directly to Firestore without Firebase Auth
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(docId)
+          .set({
         'FName': _firstNameController.text.trim(),
         'LName': _lastNameController.text.trim(),
         'email': widget.microsoftUserInfo['email'],
         'major': _selectedMajor,
-        'level': _getLevelNumber(_selectedLevel!),
+        'level': _selectedLevel,
         'gender': _selectedGender,
         'GPA': gpaValue,
         'microsoftId': widget.microsoftUserInfo['microsoftId'],
         'authProvider': 'microsoft',
         'createdAt': FieldValue.serverTimestamp(),
-        'emailVerified': true, // Microsoft emails are pre-verified
+        'emailVerified': true,
         'accountStatus': 'active',
+        'isProfileComplete': true,
+        'accessToken': widget.accessToken,
+        'displayName': '${_firstNameController.text.trim()} ${_lastNameController.text.trim()}',
       });
 
       if (mounted) {
         _showSuccessMessage('Profile completed successfully!');
-        Navigator.pushReplacementNamed(context, '/calendar');
+        Navigator.pushReplacementNamed(context, '/home');
       }
     } catch (e) {
       debugPrint('Error saving profile: $e');
       _showErrorMessage('Failed to save profile. Please try again.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  int _getLevelNumber(String level) {
-    switch (level) {
-      case 'Level 3': return 3;
-      case 'Level 4': return 4;
-      case 'Level 5': return 5;
-      case 'Level 6': return 6;
-      case 'Level 7': return 7;
-      case 'Level 8': return 8;
-      default: return 0;
     }
   }
 
@@ -586,47 +724,65 @@ class _MicrosoftUserProfileFormState extends State<MicrosoftUserProfileForm> {
   }
 
   Widget _buildMajorDropdown() {
-    return DropdownButtonFormField<String>(
-      value: _selectedMajor,
-      validator: (value) => value == null ? 'Please select your major' : null,
-      onChanged: (value) => setState(() => _selectedMajor = value),
-      decoration: _inputDecoration('Major'),
-      items: _majors.map((major) {
-        return DropdownMenuItem<String>(
-          value: major,
-          child: Text(major, style: const TextStyle(fontSize: 14)),
+    return FutureBuilder<List<String>>(
+      future: getArrayFromFirebase('major'),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const CircularProgressIndicator();
+        return DropdownButtonFormField<String>(
+          value: _selectedMajor,
+          validator: (value) => value == null ? 'Please select your major' : null,
+          onChanged: (value) => setState(() => _selectedMajor = value),
+          decoration: _inputDecoration('Major'),
+          items: snapshot.data!.map((major) {
+            return DropdownMenuItem<String>(
+              value: major,
+              child: Text(major, style: const TextStyle(fontSize: 14)),
+            );
+          }).toList(),
         );
-      }).toList(),
+      },
     );
   }
 
   Widget _buildLevelDropdown() {
-    return DropdownButtonFormField<String>(
-      value: _selectedLevel,
-      validator: (value) => value == null ? 'Please select your level' : null,
-      onChanged: (value) => setState(() => _selectedLevel = value),
-      decoration: _inputDecoration('Level'),
-      items: _levels.map((level) {
-        return DropdownMenuItem<String>(
-          value: level,
-          child: Text(level, style: const TextStyle(fontSize: 14)),
+    return FutureBuilder<List<int>>(
+      future: getArrayFromFirebaseInt('level'),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const CircularProgressIndicator();
+        return DropdownButtonFormField<int>(
+          value: _selectedLevel,
+          validator: (value) => value == null ? 'Please select your level' : null,
+          onChanged: (value) => setState(() => _selectedLevel = value),
+          decoration: _inputDecoration('Level'),
+          items: snapshot.data!.map((level) {
+            return DropdownMenuItem<int>(
+              value: level,
+              child: Text('Level $level', style: const TextStyle(fontSize: 14)),
+            );
+          }).toList(),
         );
-      }).toList(),
+      },
     );
   }
 
   Widget _buildGenderDropdown() {
-    return DropdownButtonFormField<String>(
-      value: _selectedGender,
-      validator: (value) => value == null ? 'Please select gender' : null,
-      onChanged: (value) => setState(() => _selectedGender = value),
-      decoration: _inputDecoration('Gender'),
-      items: _genders.map((gender) {
-        return DropdownMenuItem<String>(
-          value: gender,
-          child: Text(gender, style: const TextStyle(fontSize: 14)),
+    return FutureBuilder<List<String>>(
+      future: getArrayFromFirebase('gender'),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const CircularProgressIndicator();
+        return DropdownButtonFormField<String>(
+          value: _selectedGender,
+          validator: (value) => value == null ? 'Please select gender' : null,
+          onChanged: (value) => setState(() => _selectedGender = value),
+          decoration: _inputDecoration('Gender'),
+          items: snapshot.data!.map((gender) {
+            return DropdownMenuItem<String>(
+              value: gender,
+              child: Text(gender, style: const TextStyle(fontSize: 14)),
+            );
+          }).toList(),
         );
-      }).toList(),
+      },
     );
   }
 
@@ -721,6 +877,8 @@ class _MicrosoftUserProfileFormState extends State<MicrosoftUserProfileForm> {
     );
   }
 }
+
+/// Custom App Bar with Deep Sea theme - FIXED VERSION
 class _AppBar extends StatelessWidget {
   const _AppBar();
 
@@ -737,7 +895,13 @@ class _AppBar extends StatelessWidget {
               border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
             ),
             child: IconButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (context) => const WelcomeScreen()),
+                  (route) => false,
+                );
+              },
               icon: const Icon(
                 Icons.arrow_back_ios_rounded,
                 color: Colors.white,
@@ -1052,7 +1216,7 @@ class _SignInCard extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         _SocialButton(
-          imagePath: 'assets/images/Microsoft.png', // 👈 use the asset
+          imagePath: 'assets/images/Microsoft.png',
           onPressed: onMicrosoftSignIn,
         ),
       ],
@@ -1190,16 +1354,15 @@ class _SignUpPrompt extends StatelessWidget {
                 pageBuilder: (context, animation, _) => const SignUpScreen(),
                 transitionsBuilder: (context, animation, _, child) {
                   return SlideTransition(
-                    position:
-                        Tween<Offset>(
-                          begin: const Offset(1.0, 0.0),
-                          end: Offset.zero,
-                        ).animate(
-                          CurvedAnimation(
-                            parent: animation,
-                            curve: Curves.easeOutCubic,
-                          ),
-                        ),
+                    position: Tween<Offset>(
+                      begin: const Offset(1.0, 0.0),
+                      end: Offset.zero,
+                    ).animate(
+                      CurvedAnimation(
+                        parent: animation,
+                        curve: Curves.easeOutCubic,
+                      ),
+                    ),
                     child: child,
                   );
                 },

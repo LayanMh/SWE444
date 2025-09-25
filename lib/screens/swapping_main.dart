@@ -19,41 +19,47 @@ class _SwapRequestPageState extends State<SwapRequestPage> {
   final TextEditingController courseCodeController = TextEditingController();
   String priority = "Must";
 
-  String? userId; // will replace hardcoded uid
-  String? major;  // will replace hardcoded major
+  String? userId; 
+  List<String>? major;
+
 
   @override
   void initState() {
     super.initState();
     _loadUserData();
   }
+Future<void> _loadUserData() async {
+  try {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null && user.email != null) {
+      // Extract the user id from email
+      final email = user.email!;
+      final idPart = email.split('@').first;
+      if (idPart.length == 9) {
+        userId = idPart;
+      }
 
-  Future<void> _loadUserData() async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null && user.email != null) {
-        // Extract 9-digit id from email before @
-        final email = user.email!;
-        final idPart = email.split('@').first;
-        if (idPart.length == 9) {
-          userId = idPart;
-        }
+      // Get major as a list
+      final doc = await FirebaseFirestore.instance
+          .collection("users")
+          .doc(user.uid)
+          .get();
 
-        // Get major from Firestore
-        final doc = await FirebaseFirestore.instance
-            .collection("users")
-            .doc(user.uid)
-            .get();
-
-        if (doc.exists && doc.data() != null) {
-          major = doc["major"];
+      if (doc.exists && doc.data() != null) {
+        final majorField = doc["major"];
+        if (majorField is List && majorField.isNotEmpty) {
+          major = (majorField as List<dynamic>).map((e) => e.toString()).toList();
+        } else {
+          major = [];
         }
       }
-      setState(() {});
-    } catch (e) {
-      debugPrint("Error loading user data: $e");
     }
+    setState(() {});
+  } catch (e) {
+    debugPrint("Error loading user data: $e");
   }
+}
+
 
   bool _validateCourseCode(String code) {
     final regex = RegExp(r'^[A-Z]{2,3}[0-9]{3}$');
@@ -100,8 +106,8 @@ class _SwapRequestPageState extends State<SwapRequestPage> {
 
       try {
         await FirebaseFirestore.instance.collection("swap_requests").add({
-          "userId": userId,      // ✅ dynamic from email
-          "major": major,        // ✅ dynamic from Firestore
+          "userId": userId,      
+          "major": major,        
           "fromGroup": int.parse(fromGroup!),
           "toGroup": int.parse(toGroup!),
           "status": "open",
@@ -150,7 +156,7 @@ class _SwapRequestPageState extends State<SwapRequestPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Group Info Card
+                     
                       Card(
                         elevation: 3,
                         shape: RoundedRectangleBorder(
@@ -213,7 +219,7 @@ class _SwapRequestPageState extends State<SwapRequestPage> {
                       ),
                       const SizedBox(height: 25),
 
-                      // Special Requests Card
+                    
                       Card(
                         elevation: 3,
                         shape: RoundedRectangleBorder(
@@ -300,7 +306,7 @@ class _SwapRequestPageState extends State<SwapRequestPage> {
                       ),
                       const SizedBox(height: 25),
 
-                      // Submit Button
+                     
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
