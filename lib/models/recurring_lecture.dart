@@ -11,7 +11,7 @@ class RecurringLecture {
   final int startMinutes;
   final int endMinutes;
 
-  /// When to stop the weekly recurrence in Google Calendar
+  /// When to stop the weekly recurrence in Microsoft Calendar
   final DateTime semesterEnd;
 
   const RecurringLecture({

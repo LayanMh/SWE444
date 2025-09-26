@@ -4,8 +4,8 @@ import 'package:uuid/uuid.dart';
 
 import '../models/lecture.dart';
 import '../providers/schedule_provider.dart';
-import '../services/google_auth_service.dart';
-import '../services/google_calendar_service.dart'as calendar;
+import '../services/microsoft_auth_service.dart';
+import '../services/microsoft_calendar_service.dart';
 import '../services/firebase_lecture_service.dart';
 
 
@@ -40,6 +40,7 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
 
       // Fetch from Firestore
       final lecture = await FirebaseLectureService.getLectureBySection(section);
+      if (!mounted) return;
 
       if (lecture == null) {
         messenger.showSnackBar(
@@ -63,28 +64,28 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
       Provider.of<ScheduleProvider>(context, listen: false)
           .addLecture(newLecture);
 
-      // 👉 Add to Google Calendar
-      final account = await GoogleAuthService.ensureSignedIn();
+      // Add to Microsoft Calendar
+      final account = await MicrosoftAuthService.ensureSignedIn();
       if (!mounted) return;
 
       if (account == null) {
         messenger.showSnackBar(
-          const SnackBar(content: Text('Google sign-in cancelled.')),
+          const SnackBar(content: Text('Microsoft sign-in cancelled.')),
         );
       } else {
         try {
-          await GoogleCalendarService.addWeeklyRecurringLecture(
+          await MicrosoftCalendarService.addWeeklyRecurringLecture(
             account: account,
             lecture: newLecture.toRecurringLecture(),
           );
           if (!mounted) return;
           messenger.showSnackBar(
-            const SnackBar(content: Text('Lecture added to Google Calendar.')),
+            const SnackBar(content: Text('Lecture added to Microsoft Calendar.')),
           );
         } catch (error) {
           if (!mounted) return;
           messenger.showSnackBar(
-            SnackBar(content: Text('Google Calendar error: $error')),
+            SnackBar(content: Text('Microsoft Calendar error: $error')),
           );
         }
       }

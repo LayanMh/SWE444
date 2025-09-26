@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:google_sign_in/google_sign_in.dart';
-import 'package:googleapis/calendar/v3.dart' as calendar;
 import 'package:intl/intl.dart';
 
-import '../services/google_auth_service.dart';
-import '../services/google_calendar_service.dart';
+import '../services/microsoft_auth_service.dart';
+import '../services/microsoft_calendar_service.dart';
 import 'add_lecture_screen.dart';
 
 class CalendarScreen extends StatefulWidget {
@@ -15,8 +13,8 @@ class CalendarScreen extends StatefulWidget {
 }
 
 class _CalendarScreenState extends State<CalendarScreen> {
-  GoogleSignInAccount? _account;
-  List<calendar.Event> _events = <calendar.Event>[];
+  MicrosoftAccount? _account;
+  List<MicrosoftCalendarEvent> _events = <MicrosoftCalendarEvent>[];
   bool _isLoading = false;
   String? _error;
 
@@ -42,7 +40,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     }
 
     try {
-      final account = await GoogleAuthService.ensureSignedIn(
+      final account = await MicrosoftAuthService.ensureSignedIn(
         interactive: interactive,
       );
 
@@ -53,13 +51,15 @@ class _CalendarScreenState extends State<CalendarScreen> {
       if (account == null) {
         setState(() {
           _account = null;
-          _events = <calendar.Event>[];
+          _events = <MicrosoftCalendarEvent>[];
           _isLoading = false;
         });
         return;
       }
 
-      final events = await GoogleCalendarService.fetchUpcomingEvents(account);
+      final events = await MicrosoftCalendarService.fetchUpcomingEvents(
+        account,
+      );
 
       if (!mounted) {
         return;
@@ -86,13 +86,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 
   Future<void> _handleSignOut() async {
-    await GoogleAuthService.signOut();
+    await MicrosoftAuthService.signOut();
     if (!mounted) {
       return;
     }
     setState(() {
       _account = null;
-      _events = <calendar.Event>[];
+      _events = <MicrosoftCalendarEvent>[];
     });
   }
 
@@ -111,7 +111,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Google Calendar'),
+        title: const Text('Microsoft Calendar'),
         actions: [
           if (_account != null && !_isLoading)
             IconButton(
@@ -162,7 +162,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
             Padding(
               padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               child: Text(
-                'No upcoming events on your Google Calendar. Tap "Add Section" to add your class section.',
+                'No upcoming events on your Microsoft Calendar. Tap "Add Section" to add your class section.',
                 textAlign: TextAlign.center,
               ),
             ),
@@ -179,10 +179,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
         itemCount: _events.length,
         itemBuilder: (context, index) {
           final event = _events[index];
-          final start = _eventDate(event.start);
-          final previousStart = index > 0
-              ? _eventDate(_events[index - 1].start)
-              : null;
+          final start = event.start;
+          final previousStart = index > 0 ? _events[index - 1].start : null;
           final showHeader = !_isSameDay(start, previousStart);
 
           return Column(
@@ -198,14 +196,16 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 ),
               Card(
                 child: ListTile(
-                  title: Text(event.summary ?? 'Untitled event'),
+                  title: Text(
+                    event.subject.isNotEmpty ? event.subject : 'Untitled event',
+                  ),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(_formatEventTime(event)),
-                      if ((event.location ?? '').trim().isNotEmpty) ...[
+                      if ((event.location ?? '').isNotEmpty) ...[
                         const SizedBox(height: 4),
-                        Text(event.location!.trim()),
+                        Text(event.location!),
                       ],
                     ],
                   ),
@@ -216,22 +216,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
         },
       ),
     );
-  }
-
-  DateTime? _eventDate(calendar.EventDateTime? value) {
-    if (value == null) {
-      return null;
-    }
-
-    if (value.dateTime != null) {
-      return value.dateTime!.toLocal();
-    }
-
-    if (value.date != null) {
-      return value.date!.toLocal();
-    }
-
-    return null;
   }
 
   bool _isSameDay(DateTime? a, DateTime? b) {
@@ -248,13 +232,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
     return DateFormat('EEEE, MMM d').format(date);
   }
 
-  String _formatEventTime(calendar.Event event) {
-    if (_isAllDay(event)) {
+  String _formatEventTime(MicrosoftCalendarEvent event) {
+    if (event.isAllDay) {
       return 'All day';
     }
 
-    final start = _eventDate(event.start);
-    final end = _eventDate(event.end);
+    final start = event.start;
+    final end = event.end;
 
     if (start == null) {
       return 'Time not specified';
@@ -268,11 +252,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
     }
 
     return '$startLabel - ${formatter.format(end)}';
-  }
-
-  bool _isAllDay(calendar.Event event) {
-    final start = event.start;
-    return start != null && start.dateTime == null && start.date != null;
   }
 }
 
@@ -288,13 +267,13 @@ class _SignInPrompt extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           const Text(
-            'Sign in with your Google account to view your calendar.',
+            'Sign in with your Microsoft account to view your calendar.',
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
           ElevatedButton(
             onPressed: onPressed,
-            child: const Text('Sign in with Google'),
+            child: const Text('Sign in with Microsoft'),
           ),
         ],
       ),
