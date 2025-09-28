@@ -1,0 +1,5 @@
+flutter emulators
+flutter emulators --launch 
+flutter clean
+flutter pub get
+flutter run

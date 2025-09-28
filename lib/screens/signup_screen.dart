@@ -33,7 +33,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   Future<List<String>> getArrayFromFirebase(String fieldName) async {
     try {
-      final doc = await _firestore.collection('users').doc("1AceMLnpzHNptVsj5gakR4qcYX12").get();
+      final doc = await _firestore.collection('users').doc("5YACUgOv9DV043jJreFPGuwXh2e2").get();
       if (doc.exists && doc.data()?[fieldName] != null) {
         return List<String>.from(doc.data()![fieldName]);
       }
@@ -47,7 +47,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     try {
       final doc = await _firestore
           .collection('users')
-          .doc("1AceMLnpzHNptVsj5gakR4qcYX12")
+          .doc("5YACUgOv9DV043jJreFPGuwXh2e2")
           .get();
       if (doc.exists && doc.data()?[fieldName] != null) {
         // Convert dynamic list to int list
@@ -430,7 +430,7 @@ class _PersonalInfoSection extends StatelessWidget {
                 controller: controllers.firstName,
                 label: 'First Name',
                 icon: Icons.badge_outlined,
-                validator: _Validators.required('first name'),
+                validator: _Validators.name('first name'),
               ),
             ),
             const SizedBox(width: 12),
@@ -439,7 +439,7 @@ class _PersonalInfoSection extends StatelessWidget {
                 controller: controllers.lastName,
                 label: 'Last Name',
                 icon: Icons.badge_outlined,
-                validator: _Validators.required('last name'),
+                validator: _Validators.name('last name'),
               ),
             ),
           ],
@@ -637,6 +637,8 @@ class _PasswordFieldWithRequirementsState
           obscureText: _obscureText,
           validator: _Validators.password,
           decoration: InputDecoration(
+            errorStyle: const TextStyle(fontSize: 11, height: 1.2),
+errorMaxLines: 2,
             labelText: widget.label,
             prefixIcon: const Icon(
               Icons.lock_outline_rounded,
@@ -777,9 +779,15 @@ class _CustomTextField extends StatelessWidget {
       keyboardType: keyboardType,
       validator: validator,
       decoration: InputDecoration(
+        errorStyle: const TextStyle(fontSize: 11, height: 1.2),
+errorMaxLines: 2,
         labelText: label,
         hintText: hint,
         prefixIcon: Icon(icon, color: const Color(0xFF006B7A), size: 20),
+        hintStyle: TextStyle(
+  color: const Color(0xFF006B7A).withOpacity(0.4), // Much lighter
+),
+
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(
@@ -830,6 +838,8 @@ class _PasswordFieldState extends State<_PasswordField> {
       obscureText: _obscureText,
       validator: widget.validator,
       decoration: InputDecoration(
+        errorStyle: const TextStyle(fontSize: 11, height: 1.2),
+errorMaxLines: 2,
         labelText: widget.label,
         prefixIcon: const Icon(
           Icons.lock_outline_rounded,
@@ -904,6 +914,8 @@ class _CustomDropdownState<T> extends State<_CustomDropdown<T>> {
         });
       },
       decoration: InputDecoration(
+        errorStyle: const TextStyle(fontSize: 11, height: 1.2),
+errorMaxLines: 2,
         labelText: widget.label,
         prefixIcon: Icon(widget.icon, color: const Color(0xFF006B7A), size: 20),
         border: OutlineInputBorder(
@@ -1168,6 +1180,19 @@ final emailPattern = RegExp(r'^\d{9}@student\.ksu\.edu\.sa$');
     }
     return null;
   }
+  static String? Function(String?) name(String fieldName) {
+  return (value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Please enter your $fieldName';
+    }
+    
+    if (RegExp(r'\d').hasMatch(value.trim())) {
+      return '$fieldName cannot contain numbers';
+    }
+    
+    return null;
+  };
+}
 }
 
 class _AppTheme {

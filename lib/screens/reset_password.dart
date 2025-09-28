@@ -500,12 +500,20 @@ class _FieldLabel extends StatelessWidget {
 
 class _Validators {
   static String? email(String? value) {
-    if (value == null || value.isEmpty) {
-      return 'Please enter your email address.';
+    if (value == null || value.trim().isEmpty) {
+      return 'Please enter your university email';
     }
-    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
-      return 'Please enter a valid email address.';
+    
+    // Check for valid email format
+    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value.trim())) {
+      return 'Please enter a valid email address';
     }
+    
+    // Check for KSU email domain (matching your sign-in validation)
+    if (!value.trim().contains('@student.ksu.edu.sa')) {
+      return 'Please use your KSU university email';
+    }
+    
     return null;
   }
 }
