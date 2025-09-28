@@ -1135,9 +1135,11 @@ class _Validators {
     if (value == null || value.trim().isEmpty) {
       return 'Please enter your university email';
     }
-    // Match exactly 9 digits before @student.ksu.edu.sa
-final emailPattern = RegExp(r'^\d{9}@student\.ksu\.edu\.sa$');
-
+     // Case-insensitive regex
+  final emailPattern = RegExp(
+    r'^\d{9}@student\.ksu\.edu\.sa$',
+    caseSensitive: false, // <-- this makes it ignore case
+  );
 
     if (!emailPattern.hasMatch(value.trim())) {
       return 'Email must be 9 digits followed by @student.ksu.edu.sa';
