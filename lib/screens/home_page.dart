@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import 'calendar_screen.dart'; // schedule screen
+import 'calendar_screen.dart'; 
 import 'experience.dart';
 import 'community.dart';
+import 'profile.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -17,7 +18,7 @@ class _HomePageState extends State<HomePage> {
   int _selectedIndex = 2; 
 
   late final List<Widget> _tabs = <Widget>[
-    const _ProfileTab(),
+    ProfileScreen(),
     const CalendarScreen(),
     const _HomeTab(), 
     const ExperiencePage(),
@@ -209,21 +210,6 @@ class _HomeTabState extends State<_HomeTab> {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-// profile placeholderr
-class _ProfileTab extends StatelessWidget {
-  const _ProfileTab();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Profile')),
-      body: const Center(
-        child: Text('Profile Page'),
       ),
     );
   }
