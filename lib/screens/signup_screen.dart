@@ -598,6 +598,7 @@ class _AcademicInfoSection extends StatelessWidget {
 /// Password field with detailed requirements feedback
 class _PasswordFieldWithRequirements extends StatefulWidget {
   final TextEditingController controller;
+  
   final String label;
 
   const _PasswordFieldWithRequirements({
@@ -1195,15 +1196,25 @@ class _Validators {
       return 'Please enter your $fieldName';
     }
     
+    // Check for spaces
+    if (value.trim().contains(' ')) {
+      return '$fieldName cannot contain spaces';
+    }
+    
+    // Check for digits
     if (RegExp(r'\d').hasMatch(value.trim())) {
       return '$fieldName cannot contain numbers';
+    }
+    
+    // Check for special characters (only letters allowed)
+    if (!RegExp(r'^[a-zA-Z]+$').hasMatch(value.trim())) {
+      return '$fieldName can only contain letters';
     }
     
     return null;
   };
 }
 }
-
 class _AppTheme {
   static const gradientBackground = BoxDecoration(
     gradient: LinearGradient(
