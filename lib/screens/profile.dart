@@ -80,11 +80,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('microsoft_user_email');
       await prefs.remove('microsoft_user_doc_id');
-      await prefs.remove('saved_email');
-      await prefs.remove('saved_password');
-      await prefs.setBool('remember_me', false);
-      await prefs.setBool('microsoft_remember_me', false);
-
+     
+      
       // Sign out from Firebase Auth (if user exists)
       if (_auth.currentUser != null) {
         await _auth.signOut();
@@ -129,13 +126,8 @@ Future<void> _deleteAccount() async {
     final prefs = await SharedPreferences.getInstance();
     final microsoftDocId = prefs.getString('microsoft_user_doc_id');
     
-    debugPrint('🔍 Attempting to delete account');
-    debugPrint('🔍 Stored Doc ID: $microsoftDocId');
-    debugPrint('🔍 Firebase Auth User: ${_auth.currentUser?.uid}');
-
     String? docIdToDelete;
 
-    // Determine which document to delete
     if (microsoftDocId != null) {
       docIdToDelete = microsoftDocId;
     } else if (_auth.currentUser != null) {
@@ -143,17 +135,59 @@ Future<void> _deleteAccount() async {
     }
 
     if (docIdToDelete != null) {
-      debugPrint('🗑️ Deleting user document: $docIdToDelete');
+      // Get user data to check auth provider and email
+      final userDoc = await _firestore.collection('users').doc(docIdToDelete).get();
+      final userData = userDoc.data();
+      final authProvider = userData?['authProvider'];
+      final userEmail = userData?['email'];
       
-      // Delete from Firestore
+      // **IF EMAIL USER: Ask for password FIRST before deleting anything**
+      if (authProvider == 'email' && userEmail != null) {
+        debugPrint('📧 Email account - verifying password before deletion');
+        
+        final savedPassword = prefs.getString('saved_password');
+        bool authSuccess = false;
+        
+        if (savedPassword != null) {
+          try {
+            await _auth.signInWithEmailAndPassword(
+              email: userEmail,
+              password: savedPassword,
+            );
+            authSuccess = true;
+          } catch (e) {
+            debugPrint('⚠️ Saved password invalid, asking user');
+          }
+        }
+        
+        // If saved password didn't work, ask user
+        if (!authSuccess) {
+          authSuccess = await _showPasswordDialogAndVerify(userEmail);
+        }
+        
+        // If password verification failed, STOP - don't delete anything
+        if (!authSuccess) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('Account deletion cancelled'),
+                backgroundColor: Colors.orange[400],
+              ),
+            );
+          }
+          return; // EXIT without deleting
+        }
+      }
+      
+      // Password verified (or Microsoft user) - NOW delete everything
+      debugPrint('🗑️ Deleting user document: $docIdToDelete');
       await _firestore.collection('users').doc(docIdToDelete).delete();
       debugPrint('✅ Firestore document deleted');
 
-      // Delete from Firebase Auth if exists
+      // Delete Firebase Auth account if exists
       if (_auth.currentUser != null) {
-        debugPrint('🗑️ Deleting from Firebase Auth');
         await _auth.currentUser!.delete();
-        debugPrint('✅ Firebase Auth user deleted');
+        debugPrint('✅ Firebase Auth account deleted');
       }
     }
 
@@ -188,6 +222,142 @@ Future<void> _deleteAccount() async {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       );
+    }
+  }
+}
+
+// Updated method - returns true if password correct, false if wrong
+Future<bool> _showPasswordDialogAndVerify(String email) async {
+  final passwordController = TextEditingController();
+  
+  final confirmed = await showDialog<bool>(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) {
+      return AlertDialog(
+        title: const Text('Confirm Password'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Please enter your password to delete your account:'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: passwordController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Password',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Confirm'),
+          ),
+        ],
+      );
+    },
+  );
+
+  if (confirmed == true && passwordController.text.isNotEmpty) {
+    try {
+      await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: passwordController.text,
+      );
+      debugPrint('✅ Password verified');
+      return true; // Password correct
+    } catch (e) {
+      debugPrint('❌ Password verification failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Incorrect password'),
+            backgroundColor: Colors.red[400],
+          ),
+        );
+      }
+      return false; // Password wrong
+    }
+  }
+  
+  return false; // User cancelled
+}
+// Add this method to ask for password
+Future<void> _showPasswordDialogAndDelete(String email) async {
+  final passwordController = TextEditingController();
+  
+  final confirmed = await showDialog<bool>(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) {
+      return AlertDialog(
+        title: const Text('Confirm Password'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('To complete account deletion, please enter your password:'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: passwordController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Password',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Confirm'),
+          ),
+        ],
+      );
+    },
+  );
+
+  if (confirmed == true && passwordController.text.isNotEmpty) {
+    try {
+      // Sign in with password
+      final credential = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: passwordController.text,
+      );
+      
+      // Delete Firebase Auth account
+      await credential.user!.delete();
+      debugPrint('✅ Firebase Auth account deleted with user-provided password');
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Account fully deleted'),
+            backgroundColor: Color(0xFF4ECDC4),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ Password verification failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Incorrect password. Firebase Auth account not deleted.'),
+            backgroundColor: Colors.red[400],
+          ),
+        );
+      }
     }
   }
 }

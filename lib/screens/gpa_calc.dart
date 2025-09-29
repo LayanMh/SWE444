@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class GpaCalculator extends StatefulWidget {
   const GpaCalculator({super.key});
@@ -26,29 +27,44 @@ class _GpaCalculatorState extends State<GpaCalculator> {
     super.initState();
     _loadCurrentGpa();
   }
+Future<void> _loadCurrentGpa() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final microsoftDocId = prefs.getString('microsoft_user_doc_id');
+    
+    DocumentSnapshot<Map<String, dynamic>>? doc;
 
-  Future<void> _loadCurrentGpa() async {
-    try {
+    // Check if this is a Microsoft user
+    if (microsoftDocId != null) {
+      doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(microsoftDocId)
+          .get();
+    } else {
+      // Regular Firebase Auth user
       final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid == null) return;
-
-      final doc =
-          await FirebaseFirestore.instance.collection("users").doc(uid).get();
-
-      if (doc.exists && doc.data()!.containsKey("GPA")) {
-        setState(() {
-          currentGpa = (doc["GPA"] as num).toDouble();
-        });
-      } else {
-        setState(() {
-          currentGpa = 0.0; 
-        });
+      if (uid != null) {
+        doc = await FirebaseFirestore.instance
+            .collection("users")
+            .doc(uid)
+            .get();
       }
-    } catch (e) {
-      debugPrint("Error loading GPA: $e");
-      setState(() => currentGpa = 0.0);
     }
+
+    if (doc != null && doc.exists && doc.data()!.containsKey("GPA")) {
+      setState(() {
+        currentGpa = (doc!.data()!["GPA"] as num).toDouble();
+      });
+    } else {
+      setState(() {
+        currentGpa = 0.0;
+      });
+    }
+  } catch (e) {
+    debugPrint("Error loading GPA: $e");
+    setState(() => currentGpa = 0.0);
   }
+}
 
   void calculateGpa() {
     if (!_formKey.currentState!.validate()) return;
