@@ -13,6 +13,8 @@ import 'screens/gpa_calc.dart';
 import 'screens/swapping_main.dart';
 import 'screens/experience.dart';
 import 'screens/community.dart';
+import 'screens/absence_page.dart';
+import 'services/notifications_service.dart';
 
 // Existing
 import 'screens/welcome_screen.dart';
@@ -30,6 +32,7 @@ Future<void> main() async {
     debugPrint('Firebase initialization failed: $e');
     debugPrintStack(stackTrace: st);
   }
+   await NotificationsService.init();  
   runApp(const MyApp());
 }
 
@@ -129,9 +132,9 @@ class MyApp extends StatelessWidget {
 }
 
 //  Absence placeholder
-class AbsencePage extends StatelessWidget {
+/*class AbsencePage extends StatelessWidget {
   const AbsencePage({super.key});
   @override
   Widget build(BuildContext context) =>
       const Scaffold(body: Center(child: Text("Absence Page")));
-}
+}*/
