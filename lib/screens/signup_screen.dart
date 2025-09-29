@@ -635,6 +635,7 @@ class _PasswordFieldWithRequirementsState
         TextFormField(
           controller: widget.controller,
           obscureText: _obscureText,
+          maxLength: 30,
           validator: _Validators.password,
           decoration: InputDecoration(
             errorStyle: const TextStyle(fontSize: 11, height: 1.2),
@@ -1151,6 +1152,12 @@ class _Validators {
     if (value == null || value.isEmpty) {
       return 'Please enter a password';
     }
+    if (value.contains(' ')) {
+    return 'Password cannot contain spaces';
+  }
+  if (RegExp(r'[\u{1F300}-\u{1F9FF}]', unicode: true).hasMatch(value)) {
+    return 'Password cannot contain emoji characters';
+  }
     if (value.length < 8) {
       return 'Password must be at least 8 characters long';
     }
