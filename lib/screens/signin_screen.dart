@@ -763,6 +763,7 @@ Widget _buildNameFields() {
         child: TextFormField(
           controller: _firstNameController,
           validator: _Validators.name('first name'),
+          keyboardType: TextInputType.name,  // Add this line
           decoration: _inputDecoration('First Name'),
         ),
       ),
@@ -771,6 +772,7 @@ Widget _buildNameFields() {
         child: TextFormField(
           controller: _lastNameController,
           validator: _Validators.name('last name'),
+          keyboardType: TextInputType.name,  // Add this line
           decoration: _inputDecoration('Last Name'),
         ),
       ),
@@ -1588,10 +1590,11 @@ class _Validators {
       return '$fieldName cannot contain numbers';
     }
     
-    // Check for special characters (only letters allowed)
-if (!RegExp(r'^[a-zA-Z]+$').hasMatch(value.trim())) {
-  return '$fieldName can only contain English letters';
-}
+    // Allow Arabic letters (Unicode range for Arabic: \u0600-\u06FF)
+    // and English letters
+    if (!RegExp(r'^[\u0600-\u06FFa-zA-Z]+$').hasMatch(value.trim())) {
+      return '$fieldName can only contain Arabic or English letters';
+    }
     
     return null;
   };
