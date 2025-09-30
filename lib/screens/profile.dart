@@ -171,7 +171,7 @@ Future<void> _deleteAccount() async {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: const Text('Account deletion cancelled'),
-                backgroundColor: Colors.orange[400],
+                backgroundColor: Colors.red[400],
               ),
             );
           }

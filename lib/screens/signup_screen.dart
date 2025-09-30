@@ -1165,7 +1165,7 @@ class _Validators {
     if (!RegExp(
       r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>])[A-Za-z\d!@#$%^&*(),.?":{}|<>]',
     ).hasMatch(value)) {
-      return 'Password must meet all requirements above';
+      return 'Password must meet all requirements below';
     }
     return null;
   }
