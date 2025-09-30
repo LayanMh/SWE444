@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 // This file contains the complete password reset functionality.
 
@@ -57,32 +58,55 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       ),
     );
   }
+Future<void> _handleResetPassword() async {
+  if (!_formKey.currentState!.validate()) return;
 
-  Future<void> _handleResetPassword() async {
-    if (!_formKey.currentState!.validate()) return;
+  setState(() => _isLoading = true);
 
-    setState(() => _isLoading = true);
-
-    try {
-      await FirebaseAuth.instance.sendPasswordResetEmail(
-        email: _emailController.text.trim(),
-      );
-
-      if (mounted) {
-        _showSuccessDialog();
-      }
-    } on FirebaseAuthException catch (e) {
-      if (mounted) {
-        _showErrorMessage(_getErrorMessage(e.code));
-      }
-    } catch (e) {
-      if (mounted) {
-        _showErrorMessage('An unexpected error occurred. Please try again.');
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+  try {
+    final email = _emailController.text.trim();
+    
+    // **NEW: Check if email exists in Firestore**
+    final emailExists = await _checkIfEmailExists(email);
+    
+    if (!emailExists) {
+      _showErrorMessage('This email does not exist in our system. Please check your email or sign up for a new account.');
+      return;
     }
+
+    await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+
+    if (mounted) {
+      _showSuccessDialog();
+    }
+  } on FirebaseAuthException catch (e) {
+    if (mounted) {
+      _showErrorMessage(_getErrorMessage(e.code));
+    }
+  } catch (e) {
+    if (mounted) {
+      _showErrorMessage('An unexpected error occurred. Please try again.');
+    }
+  } finally {
+    if (mounted) setState(() => _isLoading = false);
   }
+}
+  // **NEW: Check if email exists in Firestore**
+Future<bool> _checkIfEmailExists(String email) async {
+  try {
+    final querySnapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .where('email', isEqualTo: email)
+        .limit(1)
+        .get();
+    
+    return querySnapshot.docs.isNotEmpty;
+  } catch (e) {
+    debugPrint('Error checking email existence: $e');
+    // In case of error, allow the reset to proceed rather than blocking the user
+    return true;
+  }
+}
 
   void _showSuccessDialog() {
     showDialog(
