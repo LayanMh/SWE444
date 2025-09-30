@@ -27,10 +27,14 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF0097b2), Color(0xFF4ECDC4), Color(0xFF95E1D3)],
-          ),
+            begin: Alignment(-1, -1),
+            end: Alignment(1, 1),
+            colors: [
+                  Color(0xFF006B7A),
+                      Color(0xFF0097B2),
+                        Color(0xFF0E0259),],
+                        stops: [0.0, 0.55, 1.0],
+                        ),
         ),
         child: SafeArea(
           child: Column(
