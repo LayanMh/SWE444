@@ -841,25 +841,33 @@ Widget _buildNameFields() {
       },
     );
   }
-
-  Widget _buildGPAField() {
-    return TextFormField(
-      controller: _gpaController,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      validator: (value) {
-        if (value == null || value.trim().isEmpty) {
-          return 'Please enter your current GPA';
+Widget _buildGPAField() {
+  return TextFormField(
+    controller: _gpaController,
+    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+    // REMOVED inputFormatters - now users can type anything
+    validator: (value) {
+      if (value == null || value.trim().isEmpty) {
+        return 'Please enter your current GPA';
+      }
+      final gpa = double.tryParse(value.trim());
+      if (gpa == null || gpa < 0 || gpa > 5) {
+        return 'GPA must be between 0.00 and 5.00';
+      }
+      
+      // Check for more than 2 decimal places
+      if (value.trim().contains('.')) {
+        final decimalPart = value.trim().split('.')[1];
+        if (decimalPart.length > 2) {
+          return 'GPA can have at most 2 decimal places';
         }
-        final gpa = double.tryParse(value.trim());
-        if (gpa == null || gpa < 0 || gpa > 5) {
-          return 'GPA must be between 0.00 and 5.00';
-        }
-        return null;
-      },
-      decoration: _inputDecoration('Current GPA', hint: 'e.g., 3.75'),
-    );
-  }
-
+      }
+      
+      return null;
+    },
+    decoration: _inputDecoration('Current GPA', hint: 'e.g., 3.75'),
+  );
+}
   InputDecoration _inputDecoration(String label, {String? hint}) {
     return InputDecoration(
       labelText: label,

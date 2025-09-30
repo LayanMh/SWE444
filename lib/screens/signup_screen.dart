@@ -1214,12 +1214,18 @@ static String? gpa(String? value) {
     if (RegExp(r'\d').hasMatch(value.trim())) {
       return '$fieldName cannot contain numbers';
     }
+
+    if (value.trim().length > 30) {
+      return '$fieldName cannot exceed 30 characters';
+    }
     
     // Check for special characters (only letters allowed)
     if (!RegExp(r'^[a-zA-Z]+$').hasMatch(value.trim())) {
       return '$fieldName can only contain letters';
     }
-    
+    if (RegExp(r'[\u{1F300}-\u{1F9FF}]', unicode: true).hasMatch(value.trim())) {
+      return '$fieldName cannot contain emojis';
+    }
     return null;
   };
 }
