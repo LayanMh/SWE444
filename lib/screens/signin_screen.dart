@@ -763,6 +763,7 @@ Widget _buildNameFields() {
         child: TextFormField(
           controller: _firstNameController,
           validator: _Validators.name('first name'),
+          keyboardType: TextInputType.name,  // Add this line
           decoration: _inputDecoration('First Name'),
         ),
       ),
@@ -771,6 +772,7 @@ Widget _buildNameFields() {
         child: TextFormField(
           controller: _lastNameController,
           validator: _Validators.name('last name'),
+          keyboardType: TextInputType.name,  // Add this line
           decoration: _inputDecoration('Last Name'),
         ),
       ),
@@ -839,25 +841,33 @@ Widget _buildNameFields() {
       },
     );
   }
-
-  Widget _buildGPAField() {
-    return TextFormField(
-      controller: _gpaController,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      validator: (value) {
-        if (value == null || value.trim().isEmpty) {
-          return 'Please enter your current GPA';
+Widget _buildGPAField() {
+  return TextFormField(
+    controller: _gpaController,
+    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+    // REMOVED inputFormatters - now users can type anything
+    validator: (value) {
+      if (value == null || value.trim().isEmpty) {
+        return 'Please enter your current GPA';
+      }
+      final gpa = double.tryParse(value.trim());
+      if (gpa == null || gpa < 0 || gpa > 5) {
+        return 'GPA must be between 0.00 and 5.00';
+      }
+      
+      // Check for more than 2 decimal places
+      if (value.trim().contains('.')) {
+        final decimalPart = value.trim().split('.')[1];
+        if (decimalPart.length > 2) {
+          return 'GPA can have at most 2 decimal places';
         }
-        final gpa = double.tryParse(value.trim());
-        if (gpa == null || gpa < 0 || gpa > 5) {
-          return 'GPA must be between 0.00 and 5.00';
-        }
-        return null;
-      },
-      decoration: _inputDecoration('Current GPA', hint: 'e.g., 3.75'),
-    );
-  }
-
+      }
+      
+      return null;
+    },
+    decoration: _inputDecoration('Current GPA', hint: 'e.g., 3.75'),
+  );
+}
   InputDecoration _inputDecoration(String label, {String? hint}) {
     return InputDecoration(
       labelText: label,
@@ -1588,10 +1598,11 @@ class _Validators {
       return '$fieldName cannot contain numbers';
     }
     
-    // Check for special characters (only letters allowed)
-if (!RegExp(r'^[a-zA-Z]+$').hasMatch(value.trim())) {
-  return '$fieldName can only contain English letters';
-}
+    // Allow Arabic letters (Unicode range for Arabic: \u0600-\u06FF)
+    // and English letters
+    if (!RegExp(r'^[\u0600-\u06FFa-zA-Z]+$').hasMatch(value.trim())) {
+      return '$fieldName can only contain Arabic or English letters';
+    }
     
     return null;
   };
