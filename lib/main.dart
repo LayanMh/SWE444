@@ -14,7 +14,6 @@ import 'screens/swapping_main.dart';
 import 'screens/experience.dart';
 import 'screens/community.dart';
 import 'screens/absence_page.dart';
-import 'services/notifications_service.dart';
 
 // Existing
 import 'screens/welcome_screen.dart';
@@ -32,7 +31,6 @@ Future<void> main() async {
     debugPrint('Firebase initialization failed: $e');
     debugPrintStack(stackTrace: st);
   }
-   await NotificationsService.init();  
   runApp(const MyApp());
 }
 

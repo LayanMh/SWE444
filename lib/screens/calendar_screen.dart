@@ -388,6 +388,17 @@ Future<void> _recomputeAndWarn(String courseId) async {
       duration: const Duration(seconds: 3),
     ),
   );
+  await FirebaseFirestore.instance
+    .collection('users')
+    .doc(uid)
+    .collection('course_stats')
+    .doc(courseId)
+    .set({
+  'totalEvents': total,
+  'cancelled': cancelled,
+  'effectiveEvents': effective,
+  'updatedAt': FieldValue.serverTimestamp(),
+}, SetOptions(merge: true));
 }
 /// Extract a course code from the event subject, e.g. "CS101 – Lecture 5".
 /*String _resolveCourseId(MicrosoftCalendarEvent e) {

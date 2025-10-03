@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../models/lecture.dart';
-import 'notifications_service.dart';
 
 /// Computes absence percentage for a course using your Lecture model.
 /// We count only lectures that exist in the schedule.
@@ -48,13 +47,6 @@ class AbsenceCalculator {
     final pct = absent * 100.0 / effective;
 
     // 5) Optional local notification
-    if (notify && pct > 20.0) {
-      await NotificationsService.show(
-        id: norm.hashCode,
-        title: 'Warning: $courseId attendance',
-        body: 'Absences are ${pct.toStringAsFixed(1)}% (>20%).',
-      );
-    }
 
     return pct;
   }

@@ -9,6 +9,7 @@ import cloud_firestore
 import firebase_auth
 import firebase_core
 import flutter_appauth
+import flutter_local_notifications
 import flutter_secure_storage_macos
 import google_sign_in_ios
 import path_provider_foundation
