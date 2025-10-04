@@ -34,7 +34,6 @@ class _AbsencePageState extends State<AbsencePage> {
             return const Center(child: Text('No absences recorded.'));
           }
 
-          // Also stream per-course stats (true denominator)
           return StreamBuilder<Map<String, Map<String, dynamic>>>(
             stream: AttendanceService.streamCourseStats(),
             builder: (context, statsSnap) {
@@ -49,7 +48,7 @@ class _AbsencePageState extends State<AbsencePage> {
                 grouped.putIfAbsent(key, () => []).add({'id': d.id, ...data});
               }
 
-              // 2) Build _CourseItem list and apply COURSE-LEVEL filter
+              // 2) Build course items with COURSE-LEVEL filtering
               final items = <_CourseItem>[];
               grouped.forEach((courseCode, recs) {
                 final absentCount =
@@ -57,7 +56,6 @@ class _AbsencePageState extends State<AbsencePage> {
                 final cancelledCount =
                     recs.where((r) => (r['status'] ?? '') == 'cancelled').length;
 
-                // Decide inclusion based on filter (course-level)
                 final include = switch (_filter) {
                   AbsenceFilter.all => true,
                   AbsenceFilter.absent => absentCount > 0,
@@ -65,38 +63,35 @@ class _AbsencePageState extends State<AbsencePage> {
                 };
                 if (!include) return;
 
-                // Sort newest first for "Latest" and details
+                // newest first
                 recs.sort((a, b) {
                   final da = _asDateTime(a['start']) ?? DateTime(0);
                   final db = _asDateTime(b['start']) ?? DateTime(0);
                   return db.compareTo(da);
                 });
 
-                // Use stats (same denominator as snackbar) when available
+                // stats for denominator (preferred)
                 final stat = stats[courseCode] ?? {};
                 final totalEvents = (stat['totalEvents'] as num?)?.toInt();
                 final cancelledStat = (stat['cancelled'] as num?)?.toInt();
-
                 final cancelled = cancelledStat ?? cancelledCount;
-                int effective; // denominator
-                if (totalEvents != null) {
-                  effective = (totalEvents - (cancelled ?? 0)).clamp(0, 100000);
-                } else {
-                  // fallback: exceptions-only (not ideal, but safe)
-                  effective = (recs.length - (cancelled ?? 0)).clamp(0, 100000);
-                }
 
+                int effective;
+                if (totalEvents != null) {
+                  effective = (totalEvents - (cancelled)).clamp(0, 100000);
+                } else {
+                  effective = (recs.length - (cancelled)).clamp(0, 100000);
+                }
                 final pct = effective > 0 ? (absentCount / effective) * 100 : 0.0;
-                final latest = _asDateTime(recs.first['start']);
 
                 items.add(_CourseItem(
                   code: courseCode,
-                  records: recs,               // KEEP ALL records (absent & cancelled)
+                  records: recs,               // keep ALL records
                   absent: absentCount,
-                  cancelled: cancelled ?? 0,
+                  cancelled: cancelled,
                   effective: effective,
                   pct: pct,
-                  latest: latest,
+                  latest: _asDateTime(recs.first['start']),
                 ));
               });
 
@@ -104,17 +99,14 @@ class _AbsencePageState extends State<AbsencePage> {
 
               return Column(
                 children: [
-                  _FilterBar(
+                  _AnimatedFilterBar(
                     value: _filter,
                     onChanged: (f) => setState(() => _filter = f),
                   ),
                   const SizedBox(height: 8),
                   Expanded(
                     child: ListView.builder(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       itemCount: items.length,
                       itemBuilder: (context, i) => _CourseCard(item: items[i]),
                     ),
@@ -129,7 +121,7 @@ class _AbsencePageState extends State<AbsencePage> {
   }
 }
 
-/* =========================== UI widgets ============================ */
+/* =========================== Models ============================ */
 
 class _CourseItem {
   _CourseItem({
@@ -143,13 +135,15 @@ class _CourseItem {
   });
 
   final String code;
-  final List<Map<String, dynamic>> records; // contains BOTH absent & cancelled
+  final List<Map<String, dynamic>> records; // absent & cancelled entries
   final int absent;
   final int cancelled;
-  final int effective;   // denominator used
+  final int effective;   // denominator used for %
   final double pct;      // 0..100
   final DateTime? latest;
 }
+
+/* =========================== UI: Course Card ============================ */
 
 class _CourseCard extends StatelessWidget {
   const _CourseCard({required this.item});
@@ -232,7 +226,7 @@ class _CourseCard extends StatelessWidget {
         subtitle: latestStr == null ? null : Text('Latest: $latestStr'),
         children: [
           const Divider(height: 1),
-          // IMPORTANT: show ALL records for this course (don’t filter details)
+          // Show ALL records (with delete affordance per record)
           ...item.records.map((r) => _AbsenceRow(record: r)),
           const SizedBox(height: 6),
         ],
@@ -240,6 +234,8 @@ class _CourseCard extends StatelessWidget {
     );
   }
 }
+
+/* =========================== UI: Absence Row (with delete) ============================ */
 
 class _AbsenceRow extends StatelessWidget {
   const _AbsenceRow({required this.record});
@@ -256,20 +252,20 @@ class _AbsenceRow extends StatelessWidget {
             record['courseCode'] ??
             'Unknown class')
         .toString();
-
     final when = start != null
         ? DateFormat('EEE, MMM d • hh:mm a').format(start)
         : 'No date';
+    final eventId = (record['id'] ?? '').toString();
 
     IconData icon;
     Color color;
     switch (status) {
       case 'absent':
-        icon = Icons.close_rounded;
+        icon = Icons.remove_circle_rounded; // changed icon
         color = Colors.red;
         break;
       case 'cancelled':
-        icon = Icons.cancel_rounded;
+        icon = Icons.event_busy_rounded; // changed icon
         color = Colors.orange;
         break;
       default:
@@ -277,67 +273,158 @@ class _AbsenceRow extends StatelessWidget {
         color = Colors.green;
     }
 
-    return ListTile(
-      leading: Icon(icon, color: color),
-      title: Text(title),
-      subtitle: Text('$status • $when'),
-      dense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+    return Dismissible(
+      key: ValueKey('abs_row_$eventId'),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        color: Colors.red.withOpacity(0.12),
+        child: const Icon(Icons.delete_forever_rounded, color: Colors.red),
+      ),
+      confirmDismiss: (_) async {
+        return await _confirmDelete(context, title);
+      },
+      onDismissed: (_) async {
+        await AttendanceService.clearEvent(eventId);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Removed: $title'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      },
+      child: ListTile(
+        leading: Icon(icon, color: color),
+        title: Text(title),
+        subtitle: Text('$status • $when'),
+        dense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+        trailing: IconButton(
+          icon: const Icon(Icons.delete_rounded),
+          color: Colors.redAccent,
+          tooltip: 'Delete record',
+          onPressed: () async {
+            final ok = await _confirmDelete(context, title);
+            if (ok) {
+              await AttendanceService.clearEvent(eventId);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Removed: $title'),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+            }
+          },
+        ),
+      ),
     );
+  }
+
+  Future<bool> _confirmDelete(BuildContext context, String title) async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Delete record?'),
+            content: Text('This will remove:\n$title'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
   }
 }
 
-class _FilterBar extends StatelessWidget {
-  const _FilterBar({required this.value, required this.onChanged});
+/* =========================== UI: Animated Filter Bar ============================ */
+
+class _AnimatedFilterBar extends StatelessWidget {
+  const _AnimatedFilterBar({required this.value, required this.onChanged});
+
   final AbsenceFilter value;
   final ValueChanged<AbsenceFilter> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    Widget seg(String label, AbsenceFilter f) {
-      final selected = value == f;
-      final cs = Theme.of(context).colorScheme;
-      final bg = selected ? cs.primary.withOpacity(0.12) : Colors.white;
-      final fg = selected ? cs.primary : Colors.black87;
+    final cs = Theme.of(context).colorScheme;
 
-      return GestureDetector(
-        onTap: () => onChanged(f),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: selected ? fg : Colors.grey.shade300),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: fg,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-      );
-    }
+    const tabs = [
+      _Seg(label: 'All', filter: AbsenceFilter.all),
+      _Seg(label: 'Absent', filter: AbsenceFilter.absent),
+      _Seg(label: 'Cancelled', filter: AbsenceFilter.cancelled),
+    ];
+    final index = tabs.indexWhere((t) => t.filter == value);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      padding: const EdgeInsets.all(4),
+      height: 44,
       decoration: BoxDecoration(
         color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: Colors.grey.shade300),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      child: Stack(
         children: [
-          seg('All', AbsenceFilter.all),
-          seg('Absent', AbsenceFilter.absent),
-          seg('Cancelled', AbsenceFilter.cancelled),
+          // Animated thumb
+          AnimatedAlign(
+            alignment: switch (index) {
+              0 => Alignment.centerLeft,
+              1 => Alignment.center,
+              _ => Alignment.centerRight,
+            },
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
+            child: Container(
+              width: (MediaQuery.of(context).size.width - 24) / 3, // 3 tabs
+              height: 44,
+              decoration: BoxDecoration(
+                color: cs.primary.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(28),
+              ),
+            ),
+          ),
+          // Labels
+          Row(
+            children: tabs.map((t) {
+              final selected = t.filter == value;
+              return Expanded(
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(28),
+                  onTap: () => onChanged(t.filter),
+                  child: AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 180),
+                    style: TextStyle(
+                      color: selected ? cs.primary : Colors.black87,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                    ),
+                    child: Center(child: Text(t.label)),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
         ],
       ),
     );
   }
 }
+
+class _Seg {
+  const _Seg({required this.label, required this.filter});
+  final String label;
+  final AbsenceFilter filter;
+}
+
+/* =========================== Badges & Helpers ============================ */
 
 class _Badge extends StatelessWidget {
   const _Badge({required this.label, required this.color, this.textColor});
@@ -364,8 +451,6 @@ class _Badge extends StatelessWidget {
     );
   }
 }
-
-/* =========================== helpers ============================== */
 
 DateTime? _asDateTime(dynamic v) {
   if (v == null) return null;
