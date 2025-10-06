@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-import 'calendar_screen.dart'; // schedule screen
+import 'calendar_screen.dart'; 
 import 'experience.dart';
 import 'community.dart';
+import 'profile.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -17,7 +19,7 @@ class _HomePageState extends State<HomePage> {
   int _selectedIndex = 2; 
 
   late final List<Widget> _tabs = <Widget>[
-    const _ProfileTab(),
+    ProfileScreen(),
     const CalendarScreen(),
     const _HomeTab(), 
     const ExperiencePage(),
@@ -79,30 +81,49 @@ class _HomeTabState extends State<_HomeTab> {
     _fetchUserName();
   }
 
-  Future<void> _fetchUserName() async {
-    try {
+Future<void> _fetchUserName() async {
+  try {
+    // First check SharedPreferences for Microsoft user
+    final prefs = await SharedPreferences.getInstance();
+    final microsoftDocId = prefs.getString('microsoft_user_doc_id');
+    
+    DocumentSnapshot<Map<String, dynamic>>? doc;
+    
+    if (microsoftDocId != null) {
+      // Microsoft user
+      doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(microsoftDocId)
+          .get();
+    } else {
+      // Regular Firebase Auth user
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
-        final doc = await FirebaseFirestore.instance
-            .collection('users') 
+        doc = await FirebaseFirestore.instance
+            .collection('users')
             .doc(user.uid)
             .get();
-
-        if (doc.exists && doc.data() != null) {
-          setState(() {
-            firstName = doc['FName'] ?? "User";
-            _loading = false;
-          });
-        }
       }
-    } catch (e) {
+    }
+    
+    if (doc != null && doc.exists && doc.data() != null) {
+      setState(() {
+        firstName = doc!.data()!['FName'] ?? "User";
+        _loading = false;
+      });
+    } else {
       setState(() {
         firstName = "User";
         _loading = false;
       });
     }
+  } catch (e) {
+    setState(() {
+      firstName = "User";
+      _loading = false;
+    });
   }
-
+}
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -209,21 +230,6 @@ class _HomeTabState extends State<_HomeTab> {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-// profile placeholderr
-class _ProfileTab extends StatelessWidget {
-  const _ProfileTab();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Profile')),
-      body: const Center(
-        child: Text('Profile Page'),
       ),
     );
   }

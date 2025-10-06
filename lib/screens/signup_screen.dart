@@ -33,7 +33,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   Future<List<String>> getArrayFromFirebase(String fieldName) async {
     try {
-      final doc = await _firestore.collection('users').doc("1AceMLnpzHNptVsj5gakR4qcYX12").get();
+      final doc = await _firestore.collection('users').doc("5YACUgOv9DV043jJreFPGuwXh2e2").get();
       if (doc.exists && doc.data()?[fieldName] != null) {
         return List<String>.from(doc.data()![fieldName]);
       }
@@ -47,7 +47,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     try {
       final doc = await _firestore
           .collection('users')
-          .doc("1AceMLnpzHNptVsj5gakR4qcYX12")
+          .doc("5YACUgOv9DV043jJreFPGuwXh2e2")
           .get();
       if (doc.exists && doc.data()?[fieldName] != null) {
         // Convert dynamic list to int list
@@ -430,7 +430,7 @@ class _PersonalInfoSection extends StatelessWidget {
                 controller: controllers.firstName,
                 label: 'First Name',
                 icon: Icons.badge_outlined,
-                validator: _Validators.required('first name'),
+                validator: _Validators.name('first name'),
               ),
             ),
             const SizedBox(width: 12),
@@ -439,7 +439,7 @@ class _PersonalInfoSection extends StatelessWidget {
                 controller: controllers.lastName,
                 label: 'Last Name',
                 icon: Icons.badge_outlined,
-                validator: _Validators.required('last name'),
+                validator: _Validators.name('last name'),
               ),
             ),
           ],
@@ -598,6 +598,7 @@ class _AcademicInfoSection extends StatelessWidget {
 /// Password field with detailed requirements feedback
 class _PasswordFieldWithRequirements extends StatefulWidget {
   final TextEditingController controller;
+  
   final String label;
 
   const _PasswordFieldWithRequirements({
@@ -635,8 +636,11 @@ class _PasswordFieldWithRequirementsState
         TextFormField(
           controller: widget.controller,
           obscureText: _obscureText,
+          maxLength: 30,
           validator: _Validators.password,
           decoration: InputDecoration(
+            errorStyle: const TextStyle(fontSize: 11, height: 1.2),
+errorMaxLines: 2,
             labelText: widget.label,
             prefixIcon: const Icon(
               Icons.lock_outline_rounded,
@@ -777,9 +781,15 @@ class _CustomTextField extends StatelessWidget {
       keyboardType: keyboardType,
       validator: validator,
       decoration: InputDecoration(
+        errorStyle: const TextStyle(fontSize: 11, height: 1.2),
+errorMaxLines: 2,
         labelText: label,
         hintText: hint,
         prefixIcon: Icon(icon, color: const Color(0xFF006B7A), size: 20),
+        hintStyle: TextStyle(
+  color: const Color(0xFF006B7A).withOpacity(0.4), // Much lighter
+),
+
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(
@@ -830,6 +840,8 @@ class _PasswordFieldState extends State<_PasswordField> {
       obscureText: _obscureText,
       validator: widget.validator,
       decoration: InputDecoration(
+        errorStyle: const TextStyle(fontSize: 11, height: 1.2),
+errorMaxLines: 2,
         labelText: widget.label,
         prefixIcon: const Icon(
           Icons.lock_outline_rounded,
@@ -904,6 +916,8 @@ class _CustomDropdownState<T> extends State<_CustomDropdown<T>> {
         });
       },
       decoration: InputDecoration(
+        errorStyle: const TextStyle(fontSize: 11, height: 1.2),
+errorMaxLines: 2,
         labelText: widget.label,
         prefixIcon: Icon(widget.icon, color: const Color(0xFF006B7A), size: 20),
         border: OutlineInputBorder(
@@ -1123,9 +1137,11 @@ class _Validators {
     if (value == null || value.trim().isEmpty) {
       return 'Please enter your university email';
     }
-    // Match exactly 9 digits before @student.ksu.edu.sa
-final emailPattern = RegExp(r'^\d{9}@student\.ksu\.edu\.sa$');
-
+     // Case-insensitive regex
+  final emailPattern = RegExp(
+    r'^\d{9}@student\.ksu\.edu\.sa$',
+    caseSensitive: false, // <-- this makes it ignore case
+  );
 
     if (!emailPattern.hasMatch(value.trim())) {
       return 'Email must be 9 digits followed by @student.ksu.edu.sa';
@@ -1137,13 +1153,19 @@ final emailPattern = RegExp(r'^\d{9}@student\.ksu\.edu\.sa$');
     if (value == null || value.isEmpty) {
       return 'Please enter a password';
     }
+    if (value.contains(' ')) {
+    return 'Password cannot contain spaces';
+  }
+  if (RegExp(r'[\u{1F300}-\u{1F9FF}]', unicode: true).hasMatch(value)) {
+    return 'Password cannot contain emoji characters';
+  }
     if (value.length < 8) {
       return 'Password must be at least 8 characters long';
     }
     if (!RegExp(
       r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>])[A-Za-z\d!@#$%^&*(),.?":{}|<>]',
     ).hasMatch(value)) {
-      return 'Password must meet all requirements above';
+      return 'Password must meet all requirements below';
     }
     return null;
   }
@@ -1157,19 +1179,57 @@ final emailPattern = RegExp(r'^\d{9}@student\.ksu\.edu\.sa$');
     }
     return null;
   }
-
-  static String? gpa(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'Please enter your current GPA';
+static String? gpa(String? value) {
+  if (value == null || value.trim().isEmpty) {
+    return 'Please enter your current GPA';
+  }
+  
+  final gpaValue = double.tryParse(value.trim());
+  if (gpaValue == null || gpaValue < 0 || gpaValue > 5) {
+    return 'GPA must be between 0.00 and 5.00';
+  }
+  
+  // Check for more than 2 decimal places
+  if (value.trim().contains('.')) {
+    final decimalPart = value.trim().split('.')[1];
+    if (decimalPart.length > 2) {
+      return 'GPA can have at most 2 decimal places';
     }
-    final gpaValue = double.tryParse(value.trim());
-    if (gpaValue == null || gpaValue < 0 || gpaValue > 5) {
-      return 'GPA must be between 0.00 and 5.00';
+  }
+  
+  return null;
+}
+  static String? Function(String?) name(String fieldName) {
+  return (value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Please enter your $fieldName';
+    }
+    
+    // Check for spaces
+    if (value.trim().contains(' ')) {
+      return '$fieldName cannot contain spaces';
+    }
+    
+    // Check for digits
+    if (RegExp(r'\d').hasMatch(value.trim())) {
+      return '$fieldName cannot contain numbers';
+    }
+
+    if (value.trim().length > 30) {
+      return '$fieldName cannot exceed 30 characters';
+    }
+    
+    // Check for special characters (only letters allowed)
+    if (!RegExp(r'^[a-zA-Z]+$').hasMatch(value.trim())) {
+      return '$fieldName can only contain letters';
+    }
+    if (RegExp(r'[\u{1F300}-\u{1F9FF}]', unicode: true).hasMatch(value.trim())) {
+      return '$fieldName cannot contain emojis';
     }
     return null;
-  }
+  };
 }
-
+}
 class _AppTheme {
   static const gradientBackground = BoxDecoration(
     gradient: LinearGradient(

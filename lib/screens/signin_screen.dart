@@ -118,7 +118,6 @@ Future<void> _handleMicrosoftSignIn() async {
               'https://login.microsoftonline.com/$_msTenantId/oauth2/v2.0/token',
         ),
         scopes: ['openid', 'profile', 'email', 'User.Read'],
-        // Always force login - ignore remember me for Microsoft
         promptValues: ['login'],
         additionalParameters: {
           'domain_hint': 'student.ksu.edu.sa',
@@ -127,14 +126,6 @@ Future<void> _handleMicrosoftSignIn() async {
     );
 
     if (result != null) {
-      // Microsoft sign-in successful - save preference if remember me is checked
-      if (_rememberMe) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool('microsoft_remember_me', true);
-        await prefs.setString('microsoft_last_email', '');
-      }
-
-      // Get user info from Microsoft Graph API
       final userInfo = await _getUserInfoFromMicrosoft(result.accessToken!);
       userInfo['accessToken'] = result.accessToken!;
 
@@ -150,11 +141,30 @@ Future<void> _handleMicrosoftSignIn() async {
   },
 );
       
-      // Check if this is a first-time Microsoft user
-      final isFirstTime = await _checkIfFirstTimeUser(userInfo['email']);
+      // **NEW: Check if user exists with ANY auth provider**
+      final existingUser = await _findExistingUserByEmail(userInfo['email']);
       
-      if (isFirstTime) {
-        // First time Microsoft user - redirect to profile completion
+      if (existingUser != null) {
+        // User already exists - just save session info and sign in
+        final prefs = await SharedPreferences.getInstance();
+        
+        // Determine the doc ID based on existing auth provider
+        String docId;
+        if (existingUser['authProvider'] == 'email') {
+          // Existing email user - use their Firebase Auth UID
+          docId = existingUser['docId'];
+        } else {
+          // Existing Microsoft user
+          docId = 'ms_${existingUser['microsoftId']}';
+        }
+        
+        await prefs.setString('microsoft_user_email', userInfo['email']);
+        await prefs.setString('microsoft_user_doc_id', docId);
+        
+        _showSuccessMessage('Welcome back to ABSHERK!');
+        _goToHome();
+      } else {
+        // First time user - redirect to profile completion
         if (mounted) {
           _showSuccessMessage('Welcome! Please complete your profile to continue.');
           Navigator.pushReplacement(
@@ -167,10 +177,6 @@ Future<void> _handleMicrosoftSignIn() async {
             ),
           );
         }
-      } else {
-        // Existing user - proceed to home directly
-        _showSuccessMessage('Signed in with Microsoft successfully!');
-        _goToHome();
       }
     }
   } on PlatformException catch (e) {
@@ -186,6 +192,28 @@ Future<void> _handleMicrosoftSignIn() async {
     _showErrorMessage('Microsoft Sign-In failed. Please try again.');
   } finally {
     if (mounted) setState(() => _isLoading = false);
+  }
+}
+
+// **NEW: Find existing user by email regardless of auth provider**
+Future<Map<String, dynamic>?> _findExistingUserByEmail(String email) async {
+  try {
+    final querySnapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .where('email', isEqualTo: email)
+        .limit(1)
+        .get();
+    
+    if (querySnapshot.docs.isNotEmpty) {
+      final doc = querySnapshot.docs.first;
+      final data = doc.data();
+      data['docId'] = doc.id; // Add the document ID to the returned data
+      return data;
+    }
+    return null;
+  } catch (e) {
+    debugPrint('Error finding existing user: $e');
+    return null;
   }
 }
   Future<Map<String, dynamic>> _getUserInfoFromMicrosoft(String accessToken) async {
@@ -408,7 +436,7 @@ Future<void> _handleMicrosoftSignIn() async {
       case 'network-request-failed':
         return 'Network error. Please check your connection.';
       default:
-        return 'Sign in failed. Please try again.';
+        return 'Invalid email or password. Please try again.';
     }
   }
 
@@ -464,7 +492,7 @@ class _MicrosoftUserProfileFormState extends State<MicrosoftUserProfileForm> {
   // Fetch arrays from Firebase like in signup screen
   Future<List<String>> getArrayFromFirebase(String fieldName) async {
     try {
-      final doc = await FirebaseFirestore.instance.collection('users').doc("1AceMLnpzHNptVsj5gakR4qcYX12").get();
+      final doc = await FirebaseFirestore.instance.collection('users').doc("5YACUgOv9DV043jJreFPGuwXh2e2").get();
       if (doc.exists && doc.data()?[fieldName] != null) {
         return List<String>.from(doc.data()![fieldName]);
       }
@@ -478,7 +506,7 @@ class _MicrosoftUserProfileFormState extends State<MicrosoftUserProfileForm> {
     try {
       final doc = await FirebaseFirestore.instance
           .collection('users')
-          .doc("1AceMLnpzHNptVsj5gakR4qcYX12")
+          .doc("5YACUgOv9DV043jJreFPGuwXh2e2")
           .get();
       if (doc.exists && doc.data()?[fieldName] != null) {
         // Convert dynamic list to int list
@@ -507,60 +535,64 @@ class _MicrosoftUserProfileFormState extends State<MicrosoftUserProfileForm> {
   }
 
   Future<void> _saveUserProfile() async {
-    if (!_formKey.currentState!.validate()) return;
-    
-    if (_selectedMajor == null || _selectedLevel == null || _selectedGender == null) {
-      _showErrorMessage('Please fill all required fields');
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      // Parse GPA safely
-      double gpaValue = 0.0;
-      final gpaText = _gpaController.text.trim();
-      if (gpaText.isNotEmpty) {
-        gpaValue = double.parse(gpaText);
-      }
-
-      // Generate a unique document ID using Microsoft ID
-      final docId = 'ms_${widget.microsoftUserInfo['microsoftId']}';
-
-      // Save user data directly to Firestore without Firebase Auth
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(docId)
-          .set({
-        'FName': _firstNameController.text.trim(),
-        'LName': _lastNameController.text.trim(),
-        'email': widget.microsoftUserInfo['email'],
-        'major': _selectedMajor,
-        'level': _selectedLevel,
-        'gender': _selectedGender,
-        'GPA': gpaValue,
-        'microsoftId': widget.microsoftUserInfo['microsoftId'],
-        'authProvider': 'microsoft',
-        'createdAt': FieldValue.serverTimestamp(),
-        'emailVerified': true,
-        'accountStatus': 'active',
-        'isProfileComplete': true,
-        'accessToken': widget.accessToken,
-        'displayName': '${_firstNameController.text.trim()} ${_lastNameController.text.trim()}',
-      });
-
-      if (mounted) {
-        _showSuccessMessage('Profile completed successfully!');
-        Navigator.pushReplacementNamed(context, '/home');
-      }
-    } catch (e) {
-      debugPrint('Error saving profile: $e');
-      _showErrorMessage('Failed to save profile. Please try again.');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+  if (!_formKey.currentState!.validate()) return;
+  
+  if (_selectedMajor == null || _selectedLevel == null || _selectedGender == null) {
+    _showErrorMessage('Please fill all required fields');
+    return;
   }
 
+  setState(() => _isLoading = true);
+
+  try {
+    // Parse GPA safely
+    double gpaValue = 0.0;
+    final gpaText = _gpaController.text.trim();
+    if (gpaText.isNotEmpty) {
+      gpaValue = double.parse(gpaText);
+    }
+
+    // Generate a unique document ID using Microsoft ID
+    final docId = 'ms_${widget.microsoftUserInfo['microsoftId']}';
+
+    // Save user data directly to Firestore without Firebase Auth
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(docId)
+        .set({
+      'FName': _firstNameController.text.trim(),
+      'LName': _lastNameController.text.trim(),
+      'email': widget.microsoftUserInfo['email'],
+      'major': _selectedMajor,
+      'level': _selectedLevel,
+      'gender': _selectedGender,
+      'GPA': gpaValue,
+      'microsoftId': widget.microsoftUserInfo['microsoftId'],
+      'authProvider': 'microsoft',
+      'createdAt': FieldValue.serverTimestamp(),
+      'emailVerified': true,
+      'accountStatus': 'active',
+      'isProfileComplete': true,
+      'accessToken': widget.accessToken,
+      'displayName': '${_firstNameController.text.trim()} ${_lastNameController.text.trim()}',
+    });
+
+    // Save to SharedPreferences AFTER Firestore save succeeds
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('microsoft_user_email', widget.microsoftUserInfo['email']);
+    await prefs.setString('microsoft_user_doc_id', docId);
+
+    if (mounted) {
+      _showSuccessMessage('Profile completed successfully!');
+      Navigator.pushReplacementNamed(context, '/home');
+    }
+  } catch (e) {
+    debugPrint('Error saving profile: $e');
+    _showErrorMessage('Failed to save profile. Please try again.');
+  } finally {
+    if (mounted) setState(() => _isLoading = false);
+  }
+}
   void _showSuccessMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -737,39 +769,29 @@ class _MicrosoftUserProfileFormState extends State<MicrosoftUserProfileForm> {
       ],
     );
   }
-
-  Widget _buildNameFields() {
-    return Row(
-      children: [
-        Expanded(
-          child: TextFormField(
-            controller: _firstNameController,
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'Please enter your first name';
-              }
-              return null;
-            },
-            decoration: _inputDecoration('First Name'),
-          ),
+Widget _buildNameFields() {
+  return Row(
+    children: [
+      Expanded(
+        child: TextFormField(
+          controller: _firstNameController,
+          validator: _Validators.name('first name'),
+          keyboardType: TextInputType.name,  // Add this line
+          decoration: _inputDecoration('First Name'),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: TextFormField(
-            controller: _lastNameController,
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'Please enter your last name';
-              }
-              return null;
-            },
-            decoration: _inputDecoration('Last Name'),
-          ),
+      ),
+      const SizedBox(width: 12),
+      Expanded(
+        child: TextFormField(
+          controller: _lastNameController,
+          validator: _Validators.name('last name'),
+          keyboardType: TextInputType.name,  // Add this line
+          decoration: _inputDecoration('Last Name'),
         ),
-      ],
-    );
-  }
-
+      ),
+    ],
+  );
+}
   Widget _buildMajorDropdown() {
     return FutureBuilder<List<String>>(
       future: getArrayFromFirebase('major'),
@@ -832,35 +854,49 @@ class _MicrosoftUserProfileFormState extends State<MicrosoftUserProfileForm> {
       },
     );
   }
-
-  Widget _buildGPAField() {
-    return TextFormField(
-      controller: _gpaController,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      validator: (value) {
-        if (value == null || value.trim().isEmpty) {
-          return 'Please enter your current GPA';
+Widget _buildGPAField() {
+  return TextFormField(
+    controller: _gpaController,
+    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+    // REMOVED inputFormatters - now users can type anything
+    validator: (value) {
+      if (value == null || value.trim().isEmpty) {
+        return 'Please enter your current GPA';
+      }
+      final gpa = double.tryParse(value.trim());
+      if (gpa == null || gpa < 0 || gpa > 5) {
+        return 'GPA must be between 0.00 and 5.00';
+      }
+      
+      // Check for more than 2 decimal places
+      if (value.trim().contains('.')) {
+        final decimalPart = value.trim().split('.')[1];
+        if (decimalPart.length > 2) {
+          return 'GPA can have at most 2 decimal places';
         }
-        final gpa = double.tryParse(value.trim());
-        if (gpa == null || gpa < 0 || gpa > 5) {
-          return 'GPA must be between 0.00 and 5.00';
-        }
-        return null;
-      },
-      decoration: _inputDecoration('Current GPA', hint: 'e.g., 3.75'),
-    );
-  }
-
+      }
+      
+      return null;
+    },
+    decoration: _inputDecoration('Current GPA', hint: 'e.g., 3.75'),
+  );
+}
   InputDecoration _inputDecoration(String label, {String? hint}) {
     return InputDecoration(
       labelText: label,
       hintText: hint,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(
-          color: const Color(0xFF4ECDC4).withOpacity(0.5),
-        ),
+      errorStyle: const TextStyle(
+      fontSize: 10,  // Slightly larger
+      height: 1.3,
+      fontWeight: FontWeight.w600,  // Bolder text
+    ),
+      errorMaxLines: 2,
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(
+        color: const Color(0xFF4ECDC4).withOpacity(0.5),
       ),
+    ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: Color(0xFF0097b2), width: 2),
@@ -1061,6 +1097,9 @@ class _SignInCard extends StatelessWidget {
           validator: _Validators.email,
           decoration: InputDecoration(
             hintText: 'student@student.ksu.edu.sa',
+            hintStyle: TextStyle(
+  color: const Color(0xFF006B7A).withOpacity(0.4), // Much lighter
+),
             prefixIcon: const Icon(
               Icons.alternate_email_rounded,
               color: Color(0xFF006B7A),
@@ -1100,6 +1139,9 @@ class _SignInCard extends StatelessWidget {
           validator: _Validators.password,
           decoration: InputDecoration(
             hintText: '••••••••••',
+            hintStyle: TextStyle(
+  color: const Color(0xFF006B7A).withOpacity(0.4), // Much lighter
+),
             prefixIcon: const Icon(
               Icons.lock_outline_rounded,
               color: Color(0xFF006B7A),
@@ -1553,7 +1595,31 @@ class _Validators {
     }
     return null;
   }
-
+  static String? Function(String?) name(String fieldName) {
+  return (value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Please enter your $fieldName';
+    }
+    
+    // Check for spaces
+    if (value.trim().contains(' ')) {
+      return '$fieldName cannot contain spaces';
+    }
+    
+    // Check for digits
+    if (RegExp(r'\d').hasMatch(value.trim())) {
+      return '$fieldName cannot contain numbers';
+    }
+    
+    // Allow Arabic letters (Unicode range for Arabic: \u0600-\u06FF)
+    // and English letters
+    if (!RegExp(r'^[\u0600-\u06FFa-zA-Z]+$').hasMatch(value.trim())) {
+      return '$fieldName can only contain Arabic or English letters';
+    }
+    
+    return null;
+  };
+}
   static String? password(String? value) {
     if (value == null || value.isEmpty) {
       return 'Please enter your password';

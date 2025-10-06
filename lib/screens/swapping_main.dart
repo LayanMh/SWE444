@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SwapRequestPage extends StatefulWidget {
   const SwapRequestPage({super.key});
@@ -28,38 +29,60 @@ class _SwapRequestPageState extends State<SwapRequestPage> {
     super.initState();
     _loadUserData();
   }
+
 Future<void> _loadUserData() async {
   try {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null && user.email != null) {
-      // Extract the user id from email
-      final email = user.email!;
-      final idPart = email.split('@').first;
+    final prefs = await SharedPreferences.getInstance();
+    final microsoftDocId = prefs.getString('microsoft_user_doc_id');
+    final microsoftEmail = prefs.getString('microsoft_user_email');
+    
+    DocumentSnapshot<Map<String, dynamic>>? doc;
+    String? userEmail;
+
+    // Check if this is a Microsoft user
+    if (microsoftDocId != null) {
+      doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(microsoftDocId)
+          .get();
+      userEmail = microsoftEmail;
+    } else {
+      // Regular Firebase Auth user
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        doc = await FirebaseFirestore.instance
+            .collection("users")
+            .doc(user.uid)
+            .get();
+        userEmail = user.email;
+      }
+    }
+
+    // Extract userId from email
+    if (userEmail != null) {
+      final idPart = userEmail.split('@').first;
       if (idPart.length == 9) {
         userId = idPart;
       }
+    }
 
-      // Get major as a list
-      final doc = await FirebaseFirestore.instance
-          .collection("users")
-          .doc(user.uid)
-          .get();
-
-      if (doc.exists && doc.data() != null) {
-        final majorField = doc["major"];
-        if (majorField is List && majorField.isNotEmpty) {
-          major = (majorField as List<dynamic>).map((e) => e.toString()).toList();
-        } else {
-          major = [];
-        }
+    // Get major from document
+    if (doc != null && doc.exists && doc.data() != null) {
+      final majorField = doc.data()!["major"];
+      if (majorField is List && majorField.isNotEmpty) {
+        major = (majorField as List<dynamic>).map((e) => e.toString()).toList();
+      } else if (majorField is String) {
+        major = [majorField];
+      } else {
+        major = [];
       }
     }
+
     setState(() {});
   } catch (e) {
     debugPrint("Error loading user data: $e");
   }
 }
-
 
   bool _validateCourseCode(String code) {
     final regex = RegExp(r'^[A-Z]{2,3}[0-9]{3}$');

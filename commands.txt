@@ -1,0 +1,88 @@
+flutter emulators
+flutter emulators --launch 
+flutter clean
+flutter pub get
+flutter run
+
+
+class _Validators {
+  static String? Function(String?) required(String fieldName) {
+    return (value) {
+      if (value == null || value.trim().isEmpty) {
+        return 'Please enter your $fieldName';
+      }
+      return null;
+    };
+  }
+
+  static String? email(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Please enter your university email';
+    }
+     // Case-insensitive regex
+  final emailPattern = RegExp(
+    r'^\d{9}@student\.ksu\.edu\.sa$',
+    caseSensitive: false, // <-- this makes it ignore case
+  );
+
+    if (!emailPattern.hasMatch(value.trim())) {
+      return 'Email must be 9 digits followed by @student.ksu.edu.sa';
+    }
+    return null;
+  }
+
+  static String? password(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Please enter a password';
+    }
+    if (value.contains(' ')) {
+    return 'Password cannot contain spaces';
+  }
+  if (RegExp(r'[\u{1F300}-\u{1F9FF}]', unicode: true).hasMatch(value)) {
+    return 'Password cannot contain emoji characters';
+  }
+    if (value.length < 8) {
+      return 'Password must be at least 8 characters long';
+    }
+    if (!RegExp(
+      r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>])[A-Za-z\d!@#$%^&*(),.?":{}|<>]',
+    ).hasMatch(value)) {
+      return 'Password must meet all requirements above';
+    }
+    return null;
+  }
+
+  static String? confirmPassword(String? value, String password) {
+    if (value == null || value.isEmpty) {
+      return 'Please confirm your password';
+    }
+    if (value != password) {
+      return 'Passwords do not match';
+    }
+    return null;
+  }
+
+  static String? gpa(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Please enter your current GPA';
+    }
+    final gpaValue = double.tryParse(value.trim());
+    if (gpaValue == null || gpaValue < 0 || gpaValue > 5) {
+      return 'GPA must be between 0.00 and 5.00';
+    }
+    return null;
+  }
+  static String? Function(String?) name(String fieldName) {
+  return (value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Please enter your $fieldName';
+    }
+    
+    if (RegExp(r'\d').hasMatch(value.trim())) {
+      return '$fieldName cannot contain numbers';
+    }
+    
+    return null;
+  };
+}
+}
