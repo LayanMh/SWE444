@@ -117,7 +117,7 @@ Future<void> _handleMicrosoftSignIn() async {
           tokenEndpoint:
               'https://login.microsoftonline.com/$_msTenantId/oauth2/v2.0/token',
         ),
-        scopes: ['openid', 'profile', 'email', 'User.Read'],
+        scopes: MicrosoftAuthService.scopes,
         promptValues: ['login'],
         additionalParameters: {
           'domain_hint': 'student.ksu.edu.sa',

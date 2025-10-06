@@ -206,23 +206,29 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                 ),
-              Card(
-                child: ListTile(
-                  title: Text(
-                    event.subject.isNotEmpty ? event.subject : 'Untitled event',
-                  ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(_formatEventTime(event)),
-                      if ((event.location ?? '').isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(event.location!),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
+             Card(
+  child: ListTile(
+    title: Text(
+      event.subject.isNotEmpty ? event.subject : 'Untitled event',
+    ),
+    subtitle: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(_formatEventTime(event)),
+        if ((event.location ?? '').isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(event.location!),
+        ],
+      ],
+    ),
+    trailing: IconButton(
+      icon: const Icon(Icons.delete, color: Colors.red),
+      tooltip: 'Delete',
+      onPressed: () => _confirmDelete(event), // ✅ call delete function
+    ),
+  ),
+),
+
             ],
           );
         },
@@ -264,6 +270,53 @@ class _CalendarScreenState extends State<CalendarScreen> {
     }
 
     return '$startLabel - ${formatter.format(end)}';
+  }
+
+  Future<void> _confirmDelete(MicrosoftCalendarEvent event) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Lecture'),
+        content: Text('Are you sure you want to delete "${event.subject}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      if (_account == null) return;
+
+      // Delete from Microsoft Calendar
+      await MicrosoftCalendarService.deleteLecture(
+        account: _account!,
+        eventId: event.id,
+      );
+
+      // Update local UI (remove event)
+      setState(() {
+        _events.removeWhere((e) => e.id == event.id);
+      });
+
+      messenger.showSnackBar(
+        SnackBar(content: Text('${event.subject} deleted successfully.')),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Error deleting event: $e')),
+      );
+    }
   }
 }
 

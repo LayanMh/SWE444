@@ -176,6 +176,27 @@ class MicrosoftCalendarService {
     }
   }
 
+
+  static Future<void> deleteLecture({
+    required MicrosoftAccount account,
+    required String eventId,
+  }) async {
+    final uri = Uri.https(_host, '/v1.0/me/events/$eventId');
+
+    final response = await http.delete(
+      uri,
+      headers: <String, String>{
+        'Authorization': 'Bearer ${account.accessToken}',
+      },
+    );
+
+    if (response.statusCode != 204) {
+      throw Exception(
+        'Failed to delete event (${response.statusCode}): ${response.body}',
+      );
+    }
+  }
+
   static DateTime _nextOccurrenceLocal({
     required int dayOfWeek,
     required int minutes,
@@ -233,11 +254,35 @@ DateTime? _parseGraphDateTime(Map<String, dynamic>? value) {
     return null;
   }
 
+  final timeZone = value['timeZone'] as String?;
+  final normalized = _normalizeGraphDateTime(raw, timeZone);
+
   try {
-    final parsed = DateTime.parse(raw);
+    final parsed = DateTime.parse(normalized);
     return parsed.isUtc ? parsed.toLocal() : parsed;
   } catch (_) {
-    return null;
+    try {
+      final fallback = DateTime.parse(raw);
+      return fallback.isUtc ? fallback.toLocal() : fallback;
+    } catch (_) {
+      return null;
+    }
   }
 }
 
+String _normalizeGraphDateTime(String raw, String? timeZone) {
+  final hasExplicitOffset = raw.endsWith('Z') ||
+      (raw.length >= 6 &&
+          (raw[raw.length - 6] == '+' || raw[raw.length - 6] == '-') &&
+          raw[raw.length - 3] == ':');
+
+  if (hasExplicitOffset) {
+    return raw;
+  }
+
+  if (timeZone != null && timeZone.toUpperCase() == 'UTC') {
+    return '${raw}Z';
+  }
+
+  return raw;
+}

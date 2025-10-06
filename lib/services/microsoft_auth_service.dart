@@ -53,6 +53,8 @@ class MicrosoftAuthService {
     'Calendars.ReadWrite',
   ];
 
+  static List<String> get scopes => _scopes;
+
   static MicrosoftAccount? _account;
   static String? _refreshToken;
   static DateTime? _accessTokenExpiry;
