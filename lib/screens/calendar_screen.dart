@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../services/microsoft_auth_service.dart';
@@ -79,6 +79,18 @@ class _CalendarScreenState extends State<CalendarScreen> {
         _isLoading = false;
       });
     }
+      // ✅ Use existing session
+  final account = MicrosoftAuthService.currentAccount ??
+      await MicrosoftAuthService.ensureSignedIn(interactive: interactive);
+  
+  if (account == null) {
+    setState(() {
+      _account = null;
+      _events = <MicrosoftCalendarEvent>[];
+      _isLoading = false;
+    });
+    return;
+  }
   }
 
   Future<void> _handleRefresh() {
@@ -162,7 +174,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
             Padding(
               padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               child: Text(
-                'No upcoming events on your Microsoft Calendar. Tap "Add Section" to add your class section.',
+                'Go ahead and build your calendar 🎉\nTap "Add Section" to start adding your class schedule.',
                 textAlign: TextAlign.center,
               ),
             ),

@@ -1,3 +1,4 @@
+import 'package:absherk/services/microsoft_auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -136,6 +137,18 @@ Future<void> _handleMicrosoftSignIn() async {
       // Get user info from Microsoft Graph API
       final userInfo = await _getUserInfoFromMicrosoft(result.accessToken!);
       userInfo['accessToken'] = result.accessToken!;
+
+      // ✅ Save Microsoft session globally so Calendar can reuse it
+      await MicrosoftAuthService.updateSessionFromSignIn(
+      accessToken: result.accessToken!,
+      refreshToken: result.refreshToken,
+      expiry: result.accessTokenExpirationDateTime,
+      profile: {
+      'microsoftId': userInfo['microsoftId'],
+       'displayName': userInfo['displayName'],
+        'email': userInfo['email'],
+  },
+);
       
       // Check if this is a first-time Microsoft user
       final isFirstTime = await _checkIfFirstTimeUser(userInfo['email']);

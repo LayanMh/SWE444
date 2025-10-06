@@ -72,36 +72,46 @@ class MicrosoftCalendarService {
       },
     );
 
-    if (response.statusCode != 200) {
-      throw Exception('Failed to load events (): ');
+    if (response.statusCode == 200) {
+      final decoded = jsonDecode(response.body);
+      final items = decoded is Map<String, dynamic>
+          ? decoded['value'] as List<dynamic>? ?? <dynamic>[]
+          : <dynamic>[];
+
+      if (items.isEmpty) {
+        // No events: just return empty list
+        return [];
+      }
+
+      final events = items
+          .map((dynamic item) =>
+              MicrosoftCalendarEvent.fromJson(item as Map<String, dynamic>))
+          .toList();
+
+      events.sort((a, b) {
+        final aStart = a.start;
+        final bStart = b.start;
+        if (aStart == null && bStart == null) {
+          return 0;
+        }
+        if (aStart == null) {
+          return 1;
+        }
+        if (bStart == null) {
+          return -1;
+        }
+        return aStart.compareTo(bStart);
+      });
+
+      return events;
+    } else if (response.statusCode == 404) {
+      // ✅ No calendar yet → treat like empty
+      return [];
+    } else {
+      // ❌ Real error (bad token, server issue, etc.)
+      throw Exception(
+          'Failed to load events (${response.statusCode}): ${response.body}');
     }
-
-    final decoded = jsonDecode(response.body);
-    final items = decoded is Map<String, dynamic>
-        ? decoded['value'] as List<dynamic>? ?? <dynamic>[]
-        : <dynamic>[];
-
-    final events = items
-        .map((dynamic item) =>
-            MicrosoftCalendarEvent.fromJson(item as Map<String, dynamic>))
-        .toList();
-
-    events.sort((a, b) {
-      final aStart = a.start;
-      final bStart = b.start;
-      if (aStart == null && bStart == null) {
-        return 0;
-      }
-      if (aStart == null) {
-        return 1;
-      }
-      if (bStart == null) {
-        return -1;
-      }
-      return aStart.compareTo(bStart);
-    });
-
-    return events;
   }
 
   static Future<void> addWeeklyRecurringLecture({
