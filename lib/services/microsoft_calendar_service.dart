@@ -72,36 +72,46 @@ class MicrosoftCalendarService {
       },
     );
 
-    if (response.statusCode != 200) {
-      throw Exception('Failed to load events (): ');
+    if (response.statusCode == 200) {
+      final decoded = jsonDecode(response.body);
+      final items = decoded is Map<String, dynamic>
+          ? decoded['value'] as List<dynamic>? ?? <dynamic>[]
+          : <dynamic>[];
+
+      if (items.isEmpty) {
+        // No events: just return empty list
+        return [];
+      }
+
+      final events = items
+          .map((dynamic item) =>
+              MicrosoftCalendarEvent.fromJson(item as Map<String, dynamic>))
+          .toList();
+
+      events.sort((a, b) {
+        final aStart = a.start;
+        final bStart = b.start;
+        if (aStart == null && bStart == null) {
+          return 0;
+        }
+        if (aStart == null) {
+          return 1;
+        }
+        if (bStart == null) {
+          return -1;
+        }
+        return aStart.compareTo(bStart);
+      });
+
+      return events;
+    } else if (response.statusCode == 404) {
+      // ✅ No calendar yet → treat like empty
+      return [];
+    } else {
+      // ❌ Real error (bad token, server issue, etc.)
+      throw Exception(
+          'Failed to load events (${response.statusCode}): ${response.body}');
     }
-
-    final decoded = jsonDecode(response.body);
-    final items = decoded is Map<String, dynamic>
-        ? decoded['value'] as List<dynamic>? ?? <dynamic>[]
-        : <dynamic>[];
-
-    final events = items
-        .map((dynamic item) =>
-            MicrosoftCalendarEvent.fromJson(item as Map<String, dynamic>))
-        .toList();
-
-    events.sort((a, b) {
-      final aStart = a.start;
-      final bStart = b.start;
-      if (aStart == null && bStart == null) {
-        return 0;
-      }
-      if (aStart == null) {
-        return 1;
-      }
-      if (bStart == null) {
-        return -1;
-      }
-      return aStart.compareTo(bStart);
-    });
-
-    return events;
   }
 
   static Future<void> addWeeklyRecurringLecture({
@@ -166,6 +176,27 @@ class MicrosoftCalendarService {
     }
   }
 
+
+  static Future<void> deleteLecture({
+    required MicrosoftAccount account,
+    required String eventId,
+  }) async {
+    final uri = Uri.https(_host, '/v1.0/me/events/$eventId');
+
+    final response = await http.delete(
+      uri,
+      headers: <String, String>{
+        'Authorization': 'Bearer ${account.accessToken}',
+      },
+    );
+
+    if (response.statusCode != 204) {
+      throw Exception(
+        'Failed to delete event (${response.statusCode}): ${response.body}',
+      );
+    }
+  }
+
   static DateTime _nextOccurrenceLocal({
     required int dayOfWeek,
     required int minutes,
@@ -223,11 +254,35 @@ DateTime? _parseGraphDateTime(Map<String, dynamic>? value) {
     return null;
   }
 
+  final timeZone = value['timeZone'] as String?;
+  final normalized = _normalizeGraphDateTime(raw, timeZone);
+
   try {
-    final parsed = DateTime.parse(raw);
+    final parsed = DateTime.parse(normalized);
     return parsed.isUtc ? parsed.toLocal() : parsed;
   } catch (_) {
-    return null;
+    try {
+      final fallback = DateTime.parse(raw);
+      return fallback.isUtc ? fallback.toLocal() : fallback;
+    } catch (_) {
+      return null;
+    }
   }
 }
 
+String _normalizeGraphDateTime(String raw, String? timeZone) {
+  final hasExplicitOffset = raw.endsWith('Z') ||
+      (raw.length >= 6 &&
+          (raw[raw.length - 6] == '+' || raw[raw.length - 6] == '-') &&
+          raw[raw.length - 3] == ':');
+
+  if (hasExplicitOffset) {
+    return raw;
+  }
+
+  if (timeZone != null && timeZone.toUpperCase() == 'UTC') {
+    return '${raw}Z';
+  }
+
+  return raw;
+}
