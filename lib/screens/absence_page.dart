@@ -154,7 +154,7 @@ class _CourseCard extends StatelessWidget {
     final courseCode = item.code == 'UNKNOWN' ? 'Unknown course' : item.code;
 
     // Progress toward 20%
-    final level = (item.pct / 20).clamp(0, 1).toDouble(); // 0..1
+    final level = (item.pct / 25).clamp(0, 1).toDouble(); // 0..1
     Color barColor;
     if (level >= 1.0) {
       barColor = Colors.red;
