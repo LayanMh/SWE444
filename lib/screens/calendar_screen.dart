@@ -1,11 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../services/microsoft_auth_service.dart';
 import '../services/microsoft_calendar_service.dart';
 import 'add_lecture_screen.dart';
 
-import '../services/attendance_service.dart'; // attendance only
+import '../services/attendance_service.dart'; // for attendance
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -44,9 +44,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
     }
 
     try {
-      final account = await MicrosoftAuthService.ensureSignedIn(
-        interactive: interactive,
-      );
+      // use existing account if available, otherwise sign in if allowed
+      final account = MicrosoftAuthService.currentAccount ??
+          await MicrosoftAuthService.ensureSignedIn(interactive: interactive);
 
       if (!mounted) return;
 
@@ -60,7 +60,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
       }
 
       final events = await MicrosoftCalendarService.fetchUpcomingEvents(account);
-
       if (!mounted) return;
 
       setState(() {
@@ -154,7 +153,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
             Padding(
               padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               child: Text(
-                'No upcoming events on your Microsoft Calendar. Tap "Add Section" to add your class section.',
+                'Go ahead and build your calendar 🎉\nTap "Add Section" to start adding your class schedule.',
                 textAlign: TextAlign.center,
               ),
             ),
@@ -205,7 +204,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         ],
                       ],
                     ),
-                    trailing: const Icon(Icons.edit_calendar_outlined),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete, color: Colors.red),
+                      tooltip: 'Delete',
+                      onPressed: () => _confirmDelete(event),
+                    ),
                   ),
                 ),
               ),
@@ -231,31 +234,74 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
     final start = event.start;
     final end = event.end;
-
     if (start == null) return 'Time not specified';
 
     final formatter = DateFormat('hh:mm a');
     final startLabel = formatter.format(start);
-
-    if (end == null || start.isAtSameMomentAs(end)) {
-      return startLabel;
-    }
-
+    if (end == null || start.isAtSameMomentAs(end)) return startLabel;
     return '$startLabel - ${formatter.format(end)}';
   }
 
-  /// Extract a course code from the subject, e.g. "CS101 – Lecture 5".
+  Future<void> _confirmDelete(MicrosoftCalendarEvent event) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Lecture'),
+        content: Text('Are you sure you want to delete "${event.subject}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      if (_account == null) return;
+
+      // Delete from Microsoft Calendar
+      await MicrosoftCalendarService.deleteLecture(
+        account: _account!,
+        eventId: event.id,
+      );
+
+      // Update local UI
+      setState(() {
+        _events.removeWhere((e) => e.id == event.id);
+      });
+
+      messenger.showSnackBar(
+        SnackBar(content: Text('${event.subject} deleted successfully.')),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Error deleting event: $e')),
+      );
+    }
+  }
+
+  /// Extract a course code from the event subject, e.g. "CS101 – Lecture 5".
   String _resolveCourseId(MicrosoftCalendarEvent e) {
     final s = (e.subject).toUpperCase();
     final m = RegExp(r'[A-Z]{2,}\s?\d{2,}').firstMatch(s); // CS101 or CS 101
     return (m?.group(0)?.replaceAll(' ', '')) ?? 'UNASSIGNED';
   }
 
-  /// Show dialog to mark Absent / Clear (present).  (Cancelled removed)
+  /// Show dialog to mark Absent / Cancelled / Clear (present).
   void _openAbsenceDialog(MicrosoftCalendarEvent event) {
-    final String eventId = event.id; // Microsoft event id
+    final String eventId = event.id; // Microsoft event id (must be non-null)
     final String courseId = _resolveCourseId(event);
-    final String title = event.subject.isNotEmpty ? event.subject : 'Lecture';
+    final String title =
+        event.subject.isNotEmpty ? event.subject : 'Lecture';
     final DateTime start = event.start ?? DateTime.now();
     final DateTime end = event.end ?? start.add(const Duration(minutes: 1));
 
@@ -272,6 +318,21 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 courseId: courseId,
                 eventId: eventId,
                 status: 'absent',
+                title: title,
+                start: start,
+                end: end,
+              );
+              await _recomputeAndWarn(courseId);
+              if (mounted) Navigator.pop(context);
+            },
+          ),
+          TextButton(
+            child: const Text('Cancelled'),
+            onPressed: () async {
+              await AttendanceService.mark(
+                courseId: courseId,
+                eventId: eventId,
+                status: 'cancelled',
                 title: title,
                 start: start,
                 end: end,
@@ -302,17 +363,18 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   /// Recompute absence % for a course and show a SnackBar warning if > 20%.
   ///
-  /// Now we only track 'absent' exceptions. Percentage = ABSENT / TOTAL_EVENTS * 100
+  /// Rule:
+  /// - Present = default (no doc in Firestore)
+  /// - We only store exceptions: 'absent' or 'cancelled'
+  /// - Percentage = ABSENT / (TOTAL_EVENTS - CANCELLED) * 100
   Future<void> _recomputeAndWarn(String courseId) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
-    // 1) Events currently loaded for that course
     final courseEvents =
         _events.where((e) => _resolveCourseId(e) == courseId).toList();
     if (courseEvents.isEmpty) return;
 
-    // 2) Load absences for this course from Firestore
     final q = await FirebaseFirestore.instance
         .collection('users')
         .doc(uid)
@@ -320,28 +382,28 @@ class _CalendarScreenState extends State<CalendarScreen> {
         .where('courseCode', isEqualTo: courseId)
         .get();
 
-    // Map eventId -> status
     final byEvent = <String, String>{};
     for (final d in q.docs) {
       final status = (d.data()['status'] ?? '').toString();
       byEvent[d.id] = status;
     }
 
-    // 3) Count absences for events that exist in the schedule
-    int absent = 0;
+    int absent = 0, cancelled = 0;
     for (final e in courseEvents) {
       final st = byEvent[e.id];
       if (st == 'absent') absent++;
+      if (st == 'cancelled') cancelled++;
     }
 
-    final total = courseEvents.length; // no cancelled subtraction anymore
-    if (total <= 0) return;
+    final total = courseEvents.length;
+    final effective = total - cancelled;
+    if (effective <= 0) return;
 
-    final pct = absent * 100.0 / total;
+    final pct = absent * 100.0 / effective;
 
     if (!mounted) return;
     final msg =
-        '$courseId absence: ${pct.toStringAsFixed(1)}% (absent $absent of $total)';
+        '$courseId absence: ${pct.toStringAsFixed(1)}% (absent $absent of $effective, cancelled $cancelled)';
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -350,6 +412,19 @@ class _CalendarScreenState extends State<CalendarScreen> {
         duration: const Duration(seconds: 3),
       ),
     );
+
+    // If you’ve decided to remove course_stats entirely, delete this block.
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('course_stats')
+        .doc(courseId)
+        .set({
+      'totalEvents': total,
+      'cancelled': cancelled,
+      'effectiveEvents': effective,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 }
 
