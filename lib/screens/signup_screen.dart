@@ -1179,17 +1179,26 @@ class _Validators {
     }
     return null;
   }
-
-  static String? gpa(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'Please enter your current GPA';
-    }
-    final gpaValue = double.tryParse(value.trim());
-    if (gpaValue == null || gpaValue < 0 || gpaValue > 5) {
-      return 'GPA must be between 0.00 and 5.00';
-    }
-    return null;
+static String? gpa(String? value) {
+  if (value == null || value.trim().isEmpty) {
+    return 'Please enter your current GPA';
   }
+  
+  final gpaValue = double.tryParse(value.trim());
+  if (gpaValue == null || gpaValue < 0 || gpaValue > 5) {
+    return 'GPA must be between 0.00 and 5.00';
+  }
+  
+  // Check for more than 2 decimal places
+  if (value.trim().contains('.')) {
+    final decimalPart = value.trim().split('.')[1];
+    if (decimalPart.length > 2) {
+      return 'GPA can have at most 2 decimal places';
+    }
+  }
+  
+  return null;
+}
   static String? Function(String?) name(String fieldName) {
   return (value) {
     if (value == null || value.trim().isEmpty) {
@@ -1205,12 +1214,18 @@ class _Validators {
     if (RegExp(r'\d').hasMatch(value.trim())) {
       return '$fieldName cannot contain numbers';
     }
+
+    if (value.trim().length > 30) {
+      return '$fieldName cannot exceed 30 characters';
+    }
     
     // Check for special characters (only letters allowed)
     if (!RegExp(r'^[a-zA-Z]+$').hasMatch(value.trim())) {
       return '$fieldName can only contain letters';
     }
-    
+    if (RegExp(r'[\u{1F300}-\u{1F9FF}]', unicode: true).hasMatch(value.trim())) {
+      return '$fieldName cannot contain emojis';
+    }
     return null;
   };
 }
