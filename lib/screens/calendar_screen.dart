@@ -5,11 +5,9 @@ import '../services/microsoft_auth_service.dart';
 import '../services/microsoft_calendar_service.dart';
 import 'add_lecture_screen.dart';
 
-import '../services/attendance_service.dart'; //for the attendeance
+import '../services/attendance_service.dart'; // attendance only
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-
-
 
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
@@ -50,9 +48,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
         interactive: interactive,
       );
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       if (account == null) {
         setState(() {
@@ -63,13 +59,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
         return;
       }
 
-      final events = await MicrosoftCalendarService.fetchUpcomingEvents(
-        account,
-      );
+      final events = await MicrosoftCalendarService.fetchUpcomingEvents(account);
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       setState(() {
         _account = account;
@@ -77,9 +69,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
         _isLoading = false;
       });
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       setState(() {
         _error = error.toString();
         _isLoading = false;
@@ -93,9 +83,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   Future<void> _handleSignOut() async {
     await MicrosoftAuthService.signOut();
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
     setState(() {
       _account = null;
       _events = <MicrosoftCalendarEvent>[];
@@ -107,9 +95,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       context,
       MaterialPageRoute(builder: (_) => const AddLectureScreen()),
     );
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
     await _loadCalendar(interactive: false);
   }
 
@@ -200,26 +186,29 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                 ),
-                Card(
-  child: InkWell(
-    onTap: () => _openAbsenceDialog(event),
-    child: ListTile(
-      title: Text(event.subject.isNotEmpty ? event.subject : 'Untitled event'),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(_formatEventTime(event)),
-          if ((event.location ?? '').isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(event.location!),
-          ],
-        ],
-      ),
-      trailing: const Icon(Icons.edit_calendar_outlined),
-    ),
-  ),
-),
-
+              Card(
+                child: InkWell(
+                  onTap: () => _openAbsenceDialog(event),
+                  child: ListTile(
+                    title: Text(
+                      event.subject.isNotEmpty
+                          ? event.subject
+                          : 'Untitled event',
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(_formatEventTime(event)),
+                        if ((event.location ?? '').isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(event.location!),
+                        ],
+                      ],
+                    ),
+                    trailing: const Icon(Icons.edit_calendar_outlined),
+                  ),
+                ),
+              ),
             ],
           );
         },
@@ -228,30 +217,22 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 
   bool _isSameDay(DateTime? a, DateTime? b) {
-    if (a == null || b == null) {
-      return false;
-    }
+    if (a == null || b == null) return false;
     return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 
   String _formatHeader(DateTime? date) {
-    if (date == null) {
-      return 'Unknown date';
-    }
+    if (date == null) return 'Unknown date';
     return DateFormat('EEEE, MMM d').format(date);
   }
 
   String _formatEventTime(MicrosoftCalendarEvent event) {
-    if (event.isAllDay) {
-      return 'All day';
-    }
+    if (event.isAllDay) return 'All day';
 
     final start = event.start;
     final end = event.end;
 
-    if (start == null) {
-      return 'Time not specified';
-    }
+    if (start == null) return 'Time not specified';
 
     final formatter = DateFormat('hh:mm a');
     final startLabel = formatter.format(start);
@@ -263,270 +244,115 @@ class _CalendarScreenState extends State<CalendarScreen> {
     return '$startLabel - ${formatter.format(end)}';
   }
 
- /// Extract a course code from the event subject, e.g. "CS101 – Lecture 5".
-String _resolveCourseId(MicrosoftCalendarEvent e) {
-  final s = (e.subject).toUpperCase();
-  final m = RegExp(r'[A-Z]{2,}\s?\d{2,}').firstMatch(s); // CS101 or CS 101
-  return (m?.group(0)?.replaceAll(' ', '')) ?? 'UNASSIGNED';
-}
-
-/// Show dialog to mark Absent / Cancelled / Clear (present).
-void _openAbsenceDialog(MicrosoftCalendarEvent event) {
-  final String eventId = event.id; // Microsoft event id (must be non-null)
-  final String courseId = _resolveCourseId(event);
-  final String title = event.subject.isNotEmpty ? event.subject : 'Lecture';
-  final DateTime start = event.start ?? DateTime.now();
-  final DateTime end = event.end ?? start.add(const Duration(minutes: 1));
-
-  showDialog(
-    context: context,
-    builder: (_) => AlertDialog(
-      title: const Text('Record absence'),
-      content: Text(title),
-      actions: [
-        TextButton(
-          child: const Text('Absent'),
-          onPressed: () async {
-            await AttendanceService.mark(
-              courseId: courseId,
-              eventId: eventId,
-              status: 'absent',
-              title: title,
-              start: start,
-              end: end,
-            );
-            await _recomputeAndWarn(courseId);
-            if (mounted) Navigator.pop(context);
-          },
-        ),
-        TextButton(
-          child: const Text('Cancelled'),
-          onPressed: () async {
-            await AttendanceService.mark(
-              courseId: courseId,
-              eventId: eventId,
-              status: 'cancelled',
-              title: title,
-              start: start,
-              end: end,
-            );
-            await _recomputeAndWarn(courseId);
-            if (mounted) Navigator.pop(context);
-          },
-        ),
-        TextButton(
-          child: const Text('Clear'),
-          onPressed: () async {
-            await AttendanceService.mark(
-              courseId: courseId,
-              eventId: eventId,
-              status: 'present', // removes exception doc
-              title: title,
-              start: start,
-              end: end,
-            );
-            await _recomputeAndWarn(courseId);
-            if (mounted) Navigator.pop(context);
-          },
-        ),
-      ],
-    ),
-  );
-}
-
-/// Recompute absence % for a course and show a SnackBar warning if > 20%.
-///
-/// Rule:
-/// - Present = default (no doc in Firestore)
-/// - We only store exceptions: 'absent' or 'cancelled'
-/// - Percentage = ABSENT / (TOTAL_EVENTS - CANCELLED) * 100
-Future<void> _recomputeAndWarn(String courseId) async {
-  final uid = FirebaseAuth.instance.currentUser?.uid;
-  if (uid == null) return; // must be signed in with FirebaseAuth
-
-  // 1) Events currently loaded for that course
-  final courseEvents = _events.where((e) => _resolveCourseId(e) == courseId).toList();
-  if (courseEvents.isEmpty) return;
-
-  // 2) Load exceptions for this course from Firestore
-  final q = await FirebaseFirestore.instance
-      .collection('users')
-      .doc(uid)
-      .collection('absences')
-      .where('courseCode', isEqualTo: courseId)
-      .get();
-
-  // Map eventId -> status
-  final byEvent = <String, String>{};
-  for (final d in q.docs) {
-    final status = (d.data()['status'] ?? '').toString();
-    byEvent[d.id] = status;
+  /// Extract a course code from the subject, e.g. "CS101 – Lecture 5".
+  String _resolveCourseId(MicrosoftCalendarEvent e) {
+    final s = (e.subject).toUpperCase();
+    final m = RegExp(r'[A-Z]{2,}\s?\d{2,}').firstMatch(s); // CS101 or CS 101
+    return (m?.group(0)?.replaceAll(' ', '')) ?? 'UNASSIGNED';
   }
 
-  // 3) Count for events that exist in the schedule
-  int absent = 0, cancelled = 0;
-  for (final e in courseEvents) {
-    final st = byEvent[e.id];
-    if (st == 'absent') absent++;
-    if (st == 'cancelled') cancelled++;
+  /// Show dialog to mark Absent / Clear (present).  (Cancelled removed)
+  void _openAbsenceDialog(MicrosoftCalendarEvent event) {
+    final String eventId = event.id; // Microsoft event id
+    final String courseId = _resolveCourseId(event);
+    final String title = event.subject.isNotEmpty ? event.subject : 'Lecture';
+    final DateTime start = event.start ?? DateTime.now();
+    final DateTime end = event.end ?? start.add(const Duration(minutes: 1));
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Record absence'),
+        content: Text(title),
+        actions: [
+          TextButton(
+            child: const Text('Absent'),
+            onPressed: () async {
+              await AttendanceService.mark(
+                courseId: courseId,
+                eventId: eventId,
+                status: 'absent',
+                title: title,
+                start: start,
+                end: end,
+              );
+              await _recomputeAndWarn(courseId);
+              if (mounted) Navigator.pop(context);
+            },
+          ),
+          TextButton(
+            child: const Text('Clear'),
+            onPressed: () async {
+              await AttendanceService.mark(
+                courseId: courseId,
+                eventId: eventId,
+                status: 'present', // removes exception doc
+                title: title,
+                start: start,
+                end: end,
+              );
+              await _recomputeAndWarn(courseId);
+              if (mounted) Navigator.pop(context);
+            },
+          ),
+        ],
+      ),
+    );
   }
 
-  final total = courseEvents.length;
-  final effective = total - cancelled;
-  if (effective <= 0) return;
+  /// Recompute absence % for a course and show a SnackBar warning if > 20%.
+  ///
+  /// Now we only track 'absent' exceptions. Percentage = ABSENT / TOTAL_EVENTS * 100
+  Future<void> _recomputeAndWarn(String courseId) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
 
-  final pct = absent * 100.0 / effective;
+    // 1) Events currently loaded for that course
+    final courseEvents =
+        _events.where((e) => _resolveCourseId(e) == courseId).toList();
+    if (courseEvents.isEmpty) return;
 
-  if (!mounted) return;
-  final msg = '$courseId absence: ${pct.toStringAsFixed(1)}% '
-              '(absent $absent of $effective, cancelled $cancelled)';
+    // 2) Load absences for this course from Firestore
+    final q = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('absences')
+        .where('courseCode', isEqualTo: courseId)
+        .get();
 
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(pct > 20 ? '⚠️ $msg — over 20%!' : msg),
-      backgroundColor: pct > 20 ? Colors.red : null,
-      duration: const Duration(seconds: 3),
-    ),
-  );
-  await FirebaseFirestore.instance
-    .collection('users')
-    .doc(uid)
-    .collection('course_stats')
-    .doc(courseId)
-    .set({
-  'totalEvents': total,
-  'cancelled': cancelled,
-  'effectiveEvents': effective,
-  'updatedAt': FieldValue.serverTimestamp(),
-}, SetOptions(merge: true));
+    // Map eventId -> status
+    final byEvent = <String, String>{};
+    for (final d in q.docs) {
+      final status = (d.data()['status'] ?? '').toString();
+      byEvent[d.id] = status;
+    }
+
+    // 3) Count absences for events that exist in the schedule
+    int absent = 0;
+    for (final e in courseEvents) {
+      final st = byEvent[e.id];
+      if (st == 'absent') absent++;
+    }
+
+    final total = courseEvents.length; // no cancelled subtraction anymore
+    if (total <= 0) return;
+
+    final pct = absent * 100.0 / total;
+
+    if (!mounted) return;
+    final msg =
+        '$courseId absence: ${pct.toStringAsFixed(1)}% (absent $absent of $total)';
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(pct > 20 ? '⚠️ $msg — over 20%!' : msg),
+        backgroundColor: pct > 20 ? Colors.red : null,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
 }
-/// Extract a course code from the event subject, e.g. "CS101 – Lecture 5".
-/*String _resolveCourseId(MicrosoftCalendarEvent e) {
-  final s = (e.subject).toUpperCase();
-  final m = RegExp(r'[A-Z]{2,}\s?\d{2,}').firstMatch(s); // CS101 or CS 101
-  return (m?.group(0)?.replaceAll(' ', '')) ?? 'UNASSIGNED';
-}*/
 
-/// Show dialog to mark Absent / Cancelled / Clear (present).
-/*void _openAbsenceDialog(MicrosoftCalendarEvent event) {
-  final String eventId = event.id; // Microsoft event id (must be non-null)
-  final String courseId = _resolveCourseId(event);
-  final String title = event.subject.isNotEmpty ? event.subject : 'Lecture';
-  final DateTime start = event.start ?? DateTime.now();
-  final DateTime end = event.end ?? start.add(const Duration(minutes: 1));
-
-  showDialog(
-    context: context,
-    builder: (_) => AlertDialog(
-      title: const Text('Record absence'),
-      content: Text(title),
-      actions: [
-        TextButton(
-          child: const Text('Absent'),
-          onPressed: () async {
-            await AttendanceService.mark(
-              courseId: courseId,
-              eventId: eventId,
-              status: 'absent',
-              title: title,
-              start: start,
-              end: end,
-            );
-            await _recomputeAndWarn(courseId);
-            if (mounted) Navigator.pop(context);
-          },
-        ),
-        TextButton(
-          child: const Text('Cancelled'),
-          onPressed: () async {
-            await AttendanceService.mark(
-              courseId: courseId,
-              eventId: eventId,
-              status: 'cancelled',
-              title: title,
-              start: start,
-              end: end,
-            );
-            await _recomputeAndWarn(courseId);
-            if (mounted) Navigator.pop(context);
-          },
-        ),
-        TextButton(
-          child: const Text('Clear'),
-          onPressed: () async {
-            await AttendanceService.mark(
-              courseId: courseId,
-              eventId: eventId,
-              status: 'present', // removes exception doc
-              title: title,
-              start: start,
-              end: end,
-            );
-            await _recomputeAndWarn(courseId);
-            if (mounted) Navigator.pop(context);
-          },
-        ),
-      ],
-    ),
-  );
-}*/
-/// Recompute absence % for a course and show a SnackBar warning if > 20%.
-///
-/// Rule:
-/// - Present = default (no doc in Firestore)
-/// - We only store exceptions: 'absent' or 'cancelled'
-/// - Percentage = ABSENT / (TOTAL_EVENTS - CANCELLED) * 100
-/*Future<void> _recomputeAndWarn(String courseId) async {
-  final uid = FirebaseAuth.instance.currentUser?.uid;
-  if (uid == null) return; // must be signed in with FirebaseAuth
-
-  // 1) Events currently loaded for that course
-  final courseEvents = _events.where((e) => _resolveCourseId(e) == courseId).toList();
-  if (courseEvents.isEmpty) return;
-
-  // 2) Load exceptions for this course from Firestore
-  final q = await FirebaseFirestore.instance
-      .collection('users')
-      .doc(uid)
-      .collection('absences')
-      .where('courseCode', isEqualTo: courseId)
-      .get();
-
-  // Map eventId -> status
-  final byEvent = <String, String>{};
-  for (final d in q.docs) {
-    final status = (d.data()['status'] ?? '').toString();
-    byEvent[d.id] = status;
-  }
-
-  // 3) Count for events that exist in the schedule
-  int absent = 0, cancelled = 0;
-  for (final e in courseEvents) {
-    final st = byEvent[e.id];
-    if (st == 'absent') absent++;
-    if (st == 'cancelled') cancelled++;
-  }
-
-  final total = courseEvents.length;
-  final effective = total - cancelled;
-  if (effective <= 0) return;
-
-  final pct = absent * 100.0 / effective;
-
-  if (!mounted) return;
-  final msg = '$courseId absence: ${pct.toStringAsFixed(1)}% '
-              '(absent $absent of $effective, cancelled $cancelled)';
-
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(pct > 20 ? '⚠️ $msg — over 20%!' : msg),
-      backgroundColor: pct > 20 ? Colors.red : null,
-      duration: const Duration(seconds: 3),
-    ),
-  );
-}*/
-
-}
 class _ErrorView extends StatelessWidget {
   const _ErrorView({required this.message, required this.onRetry});
 
@@ -553,6 +379,7 @@ class _ErrorView extends StatelessWidget {
     );
   }
 }
+
 class _SignInPrompt extends StatelessWidget {
   const _SignInPrompt({required this.onPressed});
 

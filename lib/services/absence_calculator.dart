@@ -1,4 +1,4 @@
-// lib/services/absence_calculator.dart
+// lib/services/absence_calculator.dart 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -7,8 +7,8 @@ import '../models/lecture.dart';
 /// Computes absence percentage for a course using your Lecture model.
 /// We count only lectures that exist in the schedule.
 /// - Present is default (no Firestore doc).
-/// - We store exceptions: 'absent' or 'cancelled'.
-/// - Percentage = ABSENT / (TOTAL_SCHEDULED - CANCELLED) * 100
+/// - We store exceptions: 'absent'.
+/// - Percentage = ABSENT / TOTAL_SCHEDULED * 100
 class AbsenceCalculator {
   /// Compute absence % and (optionally) show a local notification if > 20%.
   static Future<double> computeAndNotify({
@@ -32,19 +32,18 @@ class AbsenceCalculator {
     // 2) Load exceptions from Firestore (users/{uid}/absences)
     final exceptions = await _loadExceptions(uid, norm);
 
-    // 3) Count absent/cancelled for existing schedule items only
-    int absent = 0, cancelled = 0;
+    // 3) Count absent for existing schedule items only
+    int absent = 0;
     for (final lec in courseLectures) {
       final status = exceptions[lec.id];
       if (status == 'absent') absent++;
-      if (status == 'cancelled') cancelled++;
     }
 
-    // 4) Effective denominator excludes cancelled sessions
-    final effective = courseLectures.length - cancelled;
-    if (effective <= 0) return 0.0;
+    // 4) Denominator = total scheduled sessions
+    final total = courseLectures.length;
+    if (total <= 0) return 0.0;
 
-    final pct = absent * 100.0 / effective;
+    final pct = absent * 100.0 / total;
 
     // 5) Optional local notification
 
@@ -63,7 +62,7 @@ class AbsenceCalculator {
   static String _normalizeCourse(String value) =>
       value.toUpperCase().replaceAll(' ', '');
 
-  /// Returns map of eventId -> status ('absent' | 'cancelled'), scoped to course.
+  /// Returns map of eventId -> status ('absent'), scoped to course.
   static Future<Map<String, String>> _loadExceptions(
       String uid, String courseIdNormalized) async {
     final snap = await FirebaseFirestore.instance
