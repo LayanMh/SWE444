@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../services/microsoft_auth_service.dart';
@@ -85,6 +85,18 @@ class _CalendarScreenState extends State<CalendarScreen> {
         _isLoading = false;
       });
     }
+      // ✅ Use existing session
+  final account = MicrosoftAuthService.currentAccount ??
+      await MicrosoftAuthService.ensureSignedIn(interactive: interactive);
+  
+  if (account == null) {
+    setState(() {
+      _account = null;
+      _events = <MicrosoftCalendarEvent>[];
+      _isLoading = false;
+    });
+    return;
+  }
   }
 
   Future<void> _handleRefresh() {
@@ -168,7 +180,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
             Padding(
               padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               child: Text(
-                'No upcoming events on your Microsoft Calendar. Tap "Add Section" to add your class section.',
+                'Go ahead and build your calendar 🎉\nTap "Add Section" to start adding your class schedule.',
                 textAlign: TextAlign.center,
               ),
             ),
@@ -263,6 +275,52 @@ class _CalendarScreenState extends State<CalendarScreen> {
     return '$startLabel - ${formatter.format(end)}';
   }
 
+  Future<void> _confirmDelete(MicrosoftCalendarEvent event) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Lecture'),
+        content: Text('Are you sure you want to delete "${event.subject}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      if (_account == null) return;
+
+      // Delete from Microsoft Calendar
+      await MicrosoftCalendarService.deleteLecture(
+        account: _account!,
+        eventId: event.id,
+      );
+
+      // Update local UI (remove event)
+      setState(() {
+        _events.removeWhere((e) => e.id == event.id);
+      });
+
+      messenger.showSnackBar(
+        SnackBar(content: Text('${event.subject} deleted successfully.')),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Error deleting event: $e')),
+      );
+    }
+  }
  /// Extract a course code from the event subject, e.g. "CS101 – Lecture 5".
 String _resolveCourseId(MicrosoftCalendarEvent e) {
   final s = (e.subject).toUpperCase();

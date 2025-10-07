@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
@@ -7,6 +7,9 @@ import '../providers/schedule_provider.dart';
 import '../services/microsoft_auth_service.dart';
 import '../services/microsoft_calendar_service.dart';
 import '../services/firebase_lecture_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 
 
 
@@ -63,6 +66,32 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
       // Add to provider state
       Provider.of<ScheduleProvider>(context, listen: false)
           .addLecture(newLecture);
+
+             // Save lecture under current user's schedule in Firestore
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final userScheduleRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('schedule')
+          .doc(section);
+
+      await userScheduleRef.set({
+        'courseCode': lecture.courseCode,
+        'courseName': lecture.courseName,
+        'section': lecture.section,
+        'classroom': lecture.classroom,
+        'dayOfWeek': lecture.dayOfWeek,
+        'startTime': lecture.startTime,
+        'endTime': lecture.endTime,
+        'addedAt': FieldValue.serverTimestamp(),
+        'status': 'active',
+      });
+
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Lecture added to your schedule.')),
+      );
+    }
 
       // Add to Microsoft Calendar
       final account = await MicrosoftAuthService.ensureSignedIn();
