@@ -53,6 +53,8 @@ class MicrosoftAuthService {
     'Calendars.ReadWrite',
   ];
 
+  static List<String> get scopes => _scopes;
+
   static MicrosoftAccount? _account;
   static String? _refreshToken;
   static DateTime? _accessTokenExpiry;
@@ -297,7 +299,29 @@ class MicrosoftAuthService {
 
     throw Exception('Unexpected profile response shape');
   }
+
+    /// Public helper to update session after external sign-in (e.g. SignInScreen)
+  static Future<void> updateSessionFromSignIn({
+    required String accessToken,
+    String? refreshToken,
+    DateTime? expiry,
+    required Map<String, dynamic> profile,
+  }) async {
+    _refreshToken = refreshToken ?? _refreshToken;
+    _accessTokenExpiry = expiry ?? DateTime.now().add(const Duration(hours: 1));
+
+    _account = MicrosoftAccount(
+      id: profile['microsoftId'] ?? '',
+      displayName: profile['displayName'] ?? '',
+      email: profile['email'] ?? '',
+      accessToken: accessToken,
+    );
+
+    await _persistSession();
+  }
 }
+
+
 
 
 

@@ -1,3 +1,4 @@
+import 'package:absherk/services/microsoft_auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -116,7 +117,7 @@ Future<void> _handleMicrosoftSignIn() async {
           tokenEndpoint:
               'https://login.microsoftonline.com/$_msTenantId/oauth2/v2.0/token',
         ),
-        scopes: ['openid', 'profile', 'email', 'User.Read'],
+        scopes: MicrosoftAuthService.scopes,
         promptValues: ['login'],
         additionalParameters: {
           'domain_hint': 'student.ksu.edu.sa',
@@ -127,6 +128,18 @@ Future<void> _handleMicrosoftSignIn() async {
     if (result != null) {
       final userInfo = await _getUserInfoFromMicrosoft(result.accessToken!);
       userInfo['accessToken'] = result.accessToken!;
+
+      // ✅ Save Microsoft session globally so Calendar can reuse it
+      await MicrosoftAuthService.updateSessionFromSignIn(
+      accessToken: result.accessToken!,
+      refreshToken: result.refreshToken,
+      expiry: result.accessTokenExpirationDateTime,
+      profile: {
+      'microsoftId': userInfo['microsoftId'],
+       'displayName': userInfo['displayName'],
+        'email': userInfo['email'],
+  },
+);
       
       // **NEW: Check if user exists with ANY auth provider**
       final existingUser = await _findExistingUserByEmail(userInfo['email']);
