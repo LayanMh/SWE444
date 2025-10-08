@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../services/microsoft_auth_service.dart';
@@ -79,18 +79,19 @@ class _CalendarScreenState extends State<CalendarScreen> {
         _isLoading = false;
       });
     }
-      // ✅ Use existing session
-  final account = MicrosoftAuthService.currentAccount ??
-      await MicrosoftAuthService.ensureSignedIn(interactive: interactive);
-  
-  if (account == null) {
-    setState(() {
-      _account = null;
-      _events = <MicrosoftCalendarEvent>[];
-      _isLoading = false;
-    });
-    return;
-  }
+    // ✅ Use existing session
+    final account =
+        MicrosoftAuthService.currentAccount ??
+        await MicrosoftAuthService.ensureSignedIn(interactive: interactive);
+
+    if (account == null) {
+      setState(() {
+        _account = null;
+        _events = <MicrosoftCalendarEvent>[];
+        _isLoading = false;
+      });
+      return;
+    }
   }
 
   Future<void> _handleRefresh() {
@@ -125,6 +126,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
       appBar: AppBar(
         title: const Text('Microsoft Calendar'),
         actions: [
+          if (_account != null && _events.isNotEmpty && !_isLoading)
+            IconButton(
+              icon: const Icon(Icons.delete_forever),
+              onPressed: _confirmDeleteAll,
+              tooltip: 'Delete all sections',
+            ),
           if (_account != null && !_isLoading)
             IconButton(
               icon: const Icon(Icons.refresh),
@@ -206,29 +213,29 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                 ),
-             Card(
-  child: ListTile(
-    title: Text(
-      event.subject.isNotEmpty ? event.subject : 'Untitled event',
-    ),
-    subtitle: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(_formatEventTime(event)),
-        if ((event.location ?? '').isNotEmpty) ...[
-          const SizedBox(height: 4),
-          Text(event.location!),
-        ],
-      ],
-    ),
-    trailing: IconButton(
-      icon: const Icon(Icons.delete, color: Colors.red),
-      tooltip: 'Delete',
-      onPressed: () => _confirmDelete(event), // ✅ call delete function
-    ),
-  ),
-),
-
+              Card(
+                child: ListTile(
+                  title: Text(
+                    event.subject.isNotEmpty ? event.subject : 'Untitled event',
+                  ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(_formatEventTime(event)),
+                      if ((event.location ?? '').isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(event.location!),
+                      ],
+                    ],
+                  ),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.red),
+                    tooltip: 'Delete',
+                    onPressed: () =>
+                        _confirmDelete(event), // ✅ call delete function
+                  ),
+                ),
+              ),
             ],
           );
         },
@@ -248,6 +255,18 @@ class _CalendarScreenState extends State<CalendarScreen> {
       return 'Unknown date';
     }
     return DateFormat('EEEE, MMM d').format(date);
+  }
+
+  String? _resolveSeriesId(MicrosoftCalendarEvent event) {
+    final candidate = event.seriesMasterId?.trim();
+    if (candidate != null && candidate.isNotEmpty) {
+      return candidate;
+    }
+    final type = event.eventType?.toLowerCase();
+    if (type == 'seriesmaster') {
+      return event.id;
+    }
+    return null;
   }
 
   String _formatEventTime(MicrosoftCalendarEvent event) {
@@ -272,12 +291,122 @@ class _CalendarScreenState extends State<CalendarScreen> {
     return '$startLabel - ${formatter.format(end)}';
   }
 
+  Future<void> _confirmDeleteAll() async {
+    if (_events.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('No sections to delete.')));
+      return;
+    }
+
+    final total = _events.length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete All Sections'),
+        content: Text(
+          'This will remove $total section${total == 1 ? '' : 's'} from your calendar. This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              'Delete all',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    if (_account == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please sign in with Microsoft first.')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    final snapshot = List<MicrosoftCalendarEvent>.from(_events);
+    final processedSeries = <String>{};
+    final processedSingles = <String>{};
+    Object? firstError;
+
+    for (final event in snapshot) {
+      try {
+        final seriesId = _resolveSeriesId(event);
+        if (seriesId != null) {
+          if (!processedSeries.add(seriesId)) {
+            continue;
+          }
+          await MicrosoftCalendarService.deleteLecture(
+            account: _account!,
+            eventId: event.id,
+            seriesMasterId: seriesId,
+          );
+        } else {
+          if (!processedSingles.add(event.id)) {
+            continue;
+          }
+          await MicrosoftCalendarService.deleteLecture(
+            account: _account!,
+            eventId: event.id,
+          );
+        }
+      } catch (error) {
+        firstError ??= error;
+      }
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    final messenger = ScaffoldMessenger.of(context);
+
+    if (firstError == null) {
+      setState(() {
+        _events = <MicrosoftCalendarEvent>[];
+        _isLoading = false;
+      });
+      messenger.showSnackBar(
+        const SnackBar(content: Text('All sections deleted.')),
+      );
+    } else {
+      setState(() {
+        _isLoading = false;
+      });
+      await _loadCalendar(interactive: false, showSpinner: false);
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Some sections could not be deleted: $firstError'),
+        ),
+      );
+    }
+  }
+
   Future<void> _confirmDelete(MicrosoftCalendarEvent event) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Lecture'),
-        content: Text('Are you sure you want to delete "${event.subject}"?'),
+        content: Text(
+          'Are you sure you want to delete "${event.subject}" for all upcoming occurrences?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -298,19 +427,31 @@ class _CalendarScreenState extends State<CalendarScreen> {
     try {
       if (_account == null) return;
 
-      // Delete from Microsoft Calendar
+      final seriesId = _resolveSeriesId(event);
+
       await MicrosoftCalendarService.deleteLecture(
         account: _account!,
         eventId: event.id,
+        seriesMasterId: seriesId,
       );
 
-      // Update local UI (remove event)
       setState(() {
-        _events.removeWhere((e) => e.id == event.id);
+        if (seriesId != null) {
+          _events.removeWhere((e) {
+            final candidateSeriesId = _resolveSeriesId(e);
+            return e.id == event.id ||
+                e.id == seriesId ||
+                candidateSeriesId == seriesId;
+          });
+        } else {
+          _events.removeWhere((e) => e.id == event.id);
+        }
       });
 
       messenger.showSnackBar(
-        SnackBar(content: Text('${event.subject} deleted successfully.')),
+        SnackBar(
+          content: Text('${event.subject} deleted for all occurrences.'),
+        ),
       );
     } catch (e) {
       messenger.showSnackBar(
