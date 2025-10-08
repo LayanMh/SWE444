@@ -7,6 +7,8 @@ import 'calendar_screen.dart';
 import 'experience.dart';
 import 'community.dart';
 import 'profile.dart';
+import 'swapping_main.dart';
+import 'MySwapRequestPage.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -63,7 +65,6 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-
 class _HomeTab extends StatefulWidget {
   const _HomeTab();
 
@@ -83,12 +84,11 @@ class _HomeTabState extends State<_HomeTab> {
 
 Future<void> _fetchUserName() async {
   try {
-    // First check SharedPreferences for Microsoft user
     final prefs = await SharedPreferences.getInstance();
     final microsoftDocId = prefs.getString('microsoft_user_doc_id');
-    
+
     DocumentSnapshot<Map<String, dynamic>>? doc;
-    
+
     if (microsoftDocId != null) {
       // Microsoft user
       doc = await FirebaseFirestore.instance
@@ -105,10 +105,11 @@ Future<void> _fetchUserName() async {
             .get();
       }
     }
-    
-    if (doc != null && doc.exists && doc.data() != null) {
+
+    if (doc != null && doc.exists) {
+      final data = doc.data();
       setState(() {
-        firstName = doc!.data()!['FName'] ?? "User";
+        firstName = data?['FName'] ?? "User";
         _loading = false;
       });
     } else {
@@ -118,12 +119,15 @@ Future<void> _fetchUserName() async {
       });
     }
   } catch (e) {
+    debugPrint("❌ Error fetching user name: $e");
     setState(() {
       firstName = "User";
       _loading = false;
     });
   }
 }
+
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -208,8 +212,47 @@ Future<void> _fetchUserName() async {
                     title: 'Swapping',
                     subtitle: 'Post a request',
                     icon: Icons.swap_horiz_rounded,
-                    onTapRoute: '/swapping',
                     accent: const Color(0xFF4ECDC4),
+                    onTap: () async {
+                      final uid = FirebaseAuth.instance.currentUser?.uid;
+                      if (uid == null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text("Please log in first.")),
+                        );
+                        return;
+                      }
+
+                      try {
+                        final snapshot = await FirebaseFirestore.instance
+                            .collection("swap_requests")
+                            .where("userId", isEqualTo: uid)
+                            .limit(1)
+                            .get();
+
+                        if (snapshot.docs.isEmpty) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const SwapRequestPage()),
+                          );
+                        } else {
+  final doc = snapshot.docs.first;
+  final requestId = doc.id;
+
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => MySwapRequestPage(requestId: requestId),
+    ),
+  );
+}
+
+                      } catch (e) {
+                        debugPrint("❌ Error checking swap requests: $e");
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text("Error loading swapping data: $e")),
+                        );
+                      }
+                    },
                   ),
                   _FeatureCard(
                     title: 'GPA Calculator',
@@ -239,14 +282,16 @@ class _FeatureCard extends StatelessWidget {
   final String title;
   final String subtitle;
   final IconData icon;
-  final String onTapRoute;
+  final String? onTapRoute;
+  final VoidCallback? onTap;
   final Color accent;
 
   const _FeatureCard({
     required this.title,
     required this.subtitle,
     required this.icon,
-    required this.onTapRoute,
+    this.onTapRoute,
+    this.onTap,
     required this.accent,
   });
 
@@ -254,7 +299,11 @@ class _FeatureCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       borderRadius: BorderRadius.circular(18),
-      onTap: () => Navigator.pushNamed(context, onTapRoute),
+      onTap: onTap ?? () {
+        if (onTapRoute != null) {
+          Navigator.pushNamed(context, onTapRoute!);
+        }
+      },
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
@@ -310,4 +359,4 @@ class _FeatureCard extends StatelessWidget {
       ),
     );
   }
-} 
+}
