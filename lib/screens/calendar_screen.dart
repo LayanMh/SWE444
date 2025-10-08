@@ -6,6 +6,7 @@ import '../services/microsoft_calendar_service.dart';
 import 'add_lecture_screen.dart';
 
 import '../services/attendance_service.dart'; // for attendance
+import '../services/attendance_totals.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -56,6 +57,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           _events = <MicrosoftCalendarEvent>[];
           _isLoading = false;
         });
+        AttendanceTotals.instance.clear();
         return;
       }
 
@@ -67,6 +69,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
         _events = events;
         _isLoading = false;
       });
+      _publishTotals();
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -100,6 +103,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       _account = null;
       _events = <MicrosoftCalendarEvent>[];
     });
+    AttendanceTotals.instance.clear();
   }
 
   Future<void> _openAddLecture() async {
@@ -429,6 +433,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           _events.removeWhere((e) => e.id == event.id);
         }
       });
+      _publishTotals();
 
       messenger.showSnackBar(
         SnackBar(
@@ -548,6 +553,17 @@ class _CalendarScreenState extends State<CalendarScreen> {
         duration: const Duration(seconds: 3),
       ),
     );
+  }
+
+  /// Compute totals per normalized course code and publish to shared state
+  /// so AbsencePage can use the same denominators as CalendarScreen.
+  void _publishTotals() {
+    final Map<String, int> totals = <String, int>{};
+    for (final e in _events) {
+      final code = _resolveCourseId(e);
+      totals[code] = (totals[code] ?? 0) + 1;
+    }
+    AttendanceTotals.instance.setTotals(totals);
   }
 }
 

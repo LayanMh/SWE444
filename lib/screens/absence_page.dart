@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/attendance_service.dart';
+import '../services/attendance_totals.dart';
 
 enum DateScope { all, today, thisWeek }
 
@@ -190,56 +191,70 @@ class _PercentBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<_Denom>(
-      future: _computeDenominator(courseCode),
-      builder: (context, snap) {
-        // While loading, show a faint bar placeholder
-        if (snap.connectionState == ConnectionState.waiting) {
-          return _placeholderBar();
+    // Prefer CalendarScreen-provided totals if available; otherwise, fall back
+    // to computing from Firestore lectures via _computeDenominator.
+    return ValueListenableBuilder<Map<String, int>>(
+      valueListenable: AttendanceTotals.instance.totalsByCourse,
+      builder: (context, totals, _) {
+        final provided = totals[courseCode];
+        if (provided != null && provided > 0) {
+          return _renderBar(total: provided);
         }
-        final denom = snap.data ?? _Denom(totalSoFar: absences);
-        final total = denom.totalSoFar <= 0 ? absences : denom.totalSoFar;
-        final pct = total == 0 ? 0.0 : (absences * 100.0 / total);
-        final level = (pct / 25).clamp(0, 1).toDouble(); // 0..1 of 25%
-
-        Color barColor;
-        if (level >= 1.0) {
-          barColor = Colors.red;
-        } else if (level >= 0.5) {
-          barColor = Colors.orange;
-        } else {
-          barColor = Colors.green;
-        }
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: TweenAnimationBuilder<double>(
-                tween: Tween<double>(begin: 0, end: level),
-                duration: const Duration(milliseconds: 350),
-                curve: Curves.easeInOut,
-                builder: (context, value, _) => LinearProgressIndicator(
-                  value: value,
-                  minHeight: 8,
-                  color: barColor,
-                  backgroundColor: Colors.grey.shade200,
-                ),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Absence: ${pct.toStringAsFixed(1)}% of classes ($absences/$total)',
-              style: TextStyle(
-                fontSize: 12,
-                color: barColor,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
+        return FutureBuilder<_Denom>(
+          future: _computeDenominator(courseCode),
+          builder: (context, snap) {
+            if (snap.connectionState == ConnectionState.waiting) {
+              return _placeholderBar();
+            }
+            final denom = snap.data ?? const _Denom(totalSoFar: 0);
+            final fallbackTotal = denom.totalSoFar > 0 ? denom.totalSoFar : absences;
+            return _renderBar(total: fallbackTotal);
+          },
         );
       },
+    );
+  }
+
+  Widget _renderBar({required int total}) {
+    final pct = total == 0 ? 0.0 : (absences * 100.0 / total);
+    final level = (pct / 25).clamp(0, 1).toDouble();
+
+    Color barColor;
+    if (level >= 1.0) {
+      barColor = Colors.red;
+    } else if (level >= 0.5) {
+      barColor = Colors.orange;
+    } else {
+      barColor = Colors.green;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0, end: level),
+            duration: const Duration(milliseconds: 350),
+            curve: Curves.easeInOut,
+            builder: (context, value, _) => LinearProgressIndicator(
+              value: value,
+              minHeight: 8,
+              color: barColor,
+              backgroundColor: Colors.grey.shade200,
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Absence: ${pct.toStringAsFixed(1)}% of classes ($absences/$total)',
+          style: TextStyle(
+            fontSize: 12,
+            color: barColor,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 
