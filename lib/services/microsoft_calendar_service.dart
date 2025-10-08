@@ -14,6 +14,8 @@ class MicrosoftCalendarEvent {
     required this.end,
     required this.isAllDay,
     this.location,
+    this.seriesMasterId,
+    this.eventType,
   });
 
   final String id;
@@ -22,11 +24,15 @@ class MicrosoftCalendarEvent {
   final DateTime? end;
   final bool isAllDay;
   final String? location;
+  final String? seriesMasterId;
+  final String? eventType;
 
   factory MicrosoftCalendarEvent.fromJson(Map<String, dynamic> json) {
     final rawLocation =
         (json['location'] as Map<String, dynamic>?)?['displayName'] as String?;
     final trimmedLocation = rawLocation?.trim();
+    final masterId = (json['seriesMasterId'] as String?)?.trim();
+    final type = (json['type'] as String?)?.trim();
 
     return MicrosoftCalendarEvent(
       id: json['id'] as String? ?? '',
@@ -34,8 +40,11 @@ class MicrosoftCalendarEvent {
       start: _parseGraphDateTime(json['start'] as Map<String, dynamic>?),
       end: _parseGraphDateTime(json['end'] as Map<String, dynamic>?),
       isAllDay: json['isAllDay'] as bool? ?? false,
-      location:
-          (trimmedLocation == null || trimmedLocation.isEmpty) ? null : trimmedLocation,
+      location: (trimmedLocation == null || trimmedLocation.isEmpty)
+          ? null
+          : trimmedLocation,
+      seriesMasterId: (masterId == null || masterId.isEmpty) ? null : masterId,
+      eventType: type,
     );
   }
 }
@@ -44,7 +53,7 @@ class MicrosoftCalendarService {
   MicrosoftCalendarService._();
 
   static const String _host = 'graph.microsoft.com';
-  static const Duration _defaultRange = Duration(days: 30);
+  static const Duration _defaultRange = Duration(days: 120);
 
   static Future<List<MicrosoftCalendarEvent>> fetchUpcomingEvents(
     MicrosoftAccount account, {
@@ -53,16 +62,13 @@ class MicrosoftCalendarService {
     final nowUtc = DateTime.now().toUtc();
     final endUtc = nowUtc.add(range);
 
-    final uri = Uri.https(
-      _host,
-      '/v1.0/me/calendarView',
-      <String, String>{
-        'startDateTime': nowUtc.toIso8601String(),
-        'endDateTime': endUtc.toIso8601String(),
-        r'$orderby': 'start/dateTime',
-        r'$top': '50',
-      },
-    );
+    final uri = Uri.https(_host, '/v1.0/me/calendarView', <String, String>{
+      'startDateTime': nowUtc.toIso8601String(),
+      'endDateTime': endUtc.toIso8601String(),
+      r'$orderby': 'start/dateTime',
+      r'$top': '50',
+      r'$select': 'id,subject,start,end,isAllDay,location,seriesMasterId,type',
+    });
 
     final response = await http.get(
       uri,
@@ -84,8 +90,10 @@ class MicrosoftCalendarService {
       }
 
       final events = items
-          .map((dynamic item) =>
-              MicrosoftCalendarEvent.fromJson(item as Map<String, dynamic>))
+          .map(
+            (dynamic item) =>
+                MicrosoftCalendarEvent.fromJson(item as Map<String, dynamic>),
+          )
           .toList();
 
       events.sort((a, b) {
@@ -110,7 +118,8 @@ class MicrosoftCalendarService {
     } else {
       // ❌ Real error (bad token, server issue, etc.)
       throw Exception(
-          'Failed to load events (${response.statusCode}): ${response.body}');
+        'Failed to load events (${response.statusCode}): ${response.body}',
+      );
     }
   }
 
@@ -123,10 +132,11 @@ class MicrosoftCalendarService {
       minutes: lecture.startMinutes,
     );
 
-    final durationMinutes =
-        math.max(1, lecture.endMinutes - lecture.startMinutes);
-    final endLocal =
-        startLocal.add(Duration(minutes: durationMinutes));
+    final durationMinutes = math.max(
+      1,
+      lecture.endMinutes - lecture.startMinutes,
+    );
+    final endLocal = startLocal.add(Duration(minutes: durationMinutes));
     final startUtc = startLocal.toUtc();
     final endUtc = endLocal.toUtc();
 
@@ -176,12 +186,16 @@ class MicrosoftCalendarService {
     }
   }
 
-
   static Future<void> deleteLecture({
     required MicrosoftAccount account,
     required String eventId,
+    String? seriesMasterId,
   }) async {
-    final uri = Uri.https(_host, '/v1.0/me/events/$eventId');
+    final masterId = seriesMasterId?.trim();
+    final targetId = (masterId != null && masterId.isNotEmpty)
+        ? masterId
+        : eventId;
+    final uri = Uri.https(_host, '/v1.0/me/events/$targetId');
 
     final response = await http.delete(
       uri,
@@ -204,13 +218,15 @@ class MicrosoftCalendarService {
     final now = DateTime.now();
     final today = now.weekday % 7;
     final diff = (dayOfWeek - today + 7) % 7;
-    final base =
-        DateTime(now.year, now.month, now.day).add(Duration(days: diff));
+    final base = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).add(Duration(days: diff));
 
     final hours = minutes ~/ 60;
     final mins = minutes % 60;
-    var start =
-        DateTime(base.year, base.month, base.day, hours, mins);
+    var start = DateTime(base.year, base.month, base.day, hours, mins);
 
     if (!start.isAfter(now)) {
       start = start.add(const Duration(days: 7));
@@ -271,7 +287,8 @@ DateTime? _parseGraphDateTime(Map<String, dynamic>? value) {
 }
 
 String _normalizeGraphDateTime(String raw, String? timeZone) {
-  final hasExplicitOffset = raw.endsWith('Z') ||
+  final hasExplicitOffset =
+      raw.endsWith('Z') ||
       (raw.length >= 6 &&
           (raw[raw.length - 6] == '+' || raw[raw.length - 6] == '-') &&
           raw[raw.length - 3] == ':');
