@@ -6,6 +6,24 @@ class ScheduleProvider with ChangeNotifier {
 
   List<Lecture> get lectures => List.unmodifiable(_lectures);
 
+  bool containsSection(String section) {
+    return _lectures.any((lecture) => lecture.section == section);
+  }
+
+  Lecture? findTimeConflict(Lecture candidate) {
+    for (final lecture in _lectures) {
+      if (candidate.dayOfWeek != lecture.dayOfWeek) {
+        continue;
+      }
+      final bool overlap = candidate.startTime < lecture.endTime &&
+          candidate.endTime > lecture.startTime;
+      if (overlap) {
+        return lecture;
+      }
+    }
+    return null;
+  }
+
   /// Add a lecture to the schedule
   void addLecture(Lecture lecture) {
     _lectures.add(lecture);
@@ -33,3 +51,4 @@ class ScheduleProvider with ChangeNotifier {
     notifyListeners();
   }
 }
+
