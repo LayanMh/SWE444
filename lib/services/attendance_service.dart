@@ -27,7 +27,7 @@ class AttendanceService {
   static Future<void> mark({
     required String courseId,
     required String eventId,
-    required String status, // 'absent' | 'cancelled' | 'present'
+    required String status, // 'absent' | 'present'
     required String title,
     required DateTime start,
     required DateTime end,
@@ -42,32 +42,10 @@ class AttendanceService {
 
     await ref.set({
       'courseCode': normalizeCourseCode(courseId),
-      'status': status,
+      'status': status, // 'absent'
       'eventSummary': title,
       'start': Timestamp.fromDate(start),
       'end': Timestamp.fromDate(end),
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-  }
-
-  /// Persist schedule stats so UI can compute consistent %:
-  /// users/{uid}/course_stats/{COURSE} -> { totalEvents, cancelled, effectiveEvents?, updatedAt }
-  static Future<void> upsertCourseStats({
-    required String courseId,
-    required int totalEvents,
-    required int cancelled,
-    int? effectiveEvents, // optional convenience
-  }) async {
-    final uid = _requireUid();
-    await _db
-        .collection('users')
-        .doc(uid)
-        .collection('course_stats')
-        .doc(normalizeCourseCode(courseId))
-        .set({
-      'totalEvents': totalEvents,
-      'cancelled': cancelled,
-      if (effectiveEvents != null) 'effectiveEvents': effectiveEvents,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
@@ -104,18 +82,6 @@ class AttendanceService {
         .where('courseCode', isEqualTo: norm)
         .orderBy('start', descending: true)
         .snapshots();
-  }
-
-  /// Stream per-course stats used as denominator for %.
-  /// Map: { 'CSC227': {'totalEvents': 12, 'cancelled': 2, ...}, ... }
-  static Stream<Map<String, Map<String, dynamic>>> streamCourseStats() {
-    final uid = _requireUid();
-    return _db
-        .collection('users')
-        .doc(uid)
-        .collection('course_stats')
-        .snapshots()
-        .map((q) => { for (final d in q.docs) d.id: d.data() });
   }
 
   /// One-off read of exceptions for a course (eventId -> status).

@@ -1,10 +1,11 @@
 // lib/screens/absence_page.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/attendance_service.dart';
 
-enum AbsenceFilter { all, absent, cancelled }
+enum DateScope { all, today, thisWeek }
 
 class AbsencePage extends StatefulWidget {
   const AbsencePage({super.key});
@@ -13,7 +14,7 @@ class AbsencePage extends StatefulWidget {
 }
 
 class _AbsencePageState extends State<AbsencePage> {
-  AbsenceFilter _filter = AbsenceFilter.all;
+  DateScope _scope = DateScope.all;
 
   @override
   Widget build(BuildContext context) {
@@ -21,126 +22,108 @@ class _AbsencePageState extends State<AbsencePage> {
       appBar: AppBar(title: const Text('My Absences')),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: AttendanceService.streamMyAbsences(),
-        builder: (context, absSnap) {
-          if (absSnap.connectionState == ConnectionState.waiting) {
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (absSnap.hasError) {
-            return Center(child: Text('Error: ${absSnap.error}'));
+          if (snap.hasError) {
+            return Center(child: Text('Error: ${snap.error}'));
           }
 
-          final absDocs = absSnap.data?.docs ?? [];
-          if (absDocs.isEmpty) {
+          var docs = snap.data?.docs ?? [];
+
+          // 1) Date scope filter (All / Today / This week)
+          docs = _applyDateScope(docs);
+
+          if (docs.isEmpty) {
             return const Center(child: Text('No absences recorded.'));
           }
 
-          return StreamBuilder<Map<String, Map<String, dynamic>>>(
-            stream: AttendanceService.streamCourseStats(),
-            builder: (context, statsSnap) {
-              final stats = statsSnap.data ?? <String, Map<String, dynamic>>{};
+          // 2) Group by course
+          final Map<String, List<Map<String, dynamic>>> grouped = {};
+          for (final d in docs) {
+            final data = d.data();
+            final code = _normalize((data['courseCode'] ?? '').toString());
+            final key = code.isEmpty ? 'UNKNOWN' : code;
+            grouped.putIfAbsent(key, () => []).add({'id': d.id, ...data});
+          }
 
-              // 1) Group all exception records by course (keep ALL records intact)
-              final Map<String, List<Map<String, dynamic>>> grouped = {};
-              for (final d in absDocs) {
-                final data = d.data();
-                final code = _normalize((data['courseCode'] ?? '').toString());
-                final key = code.isEmpty ? 'UNKNOWN' : code;
-                grouped.putIfAbsent(key, () => []).add({'id': d.id, ...data});
-              }
+          // 3) Build items (sorted by course code)
+          final items = grouped.entries.map((e) {
+            // newest first
+            e.value.sort((a, b) {
+              final da = _asDateTime(a['start']) ?? DateTime(0);
+              final db = _asDateTime(b['start']) ?? DateTime(0);
+              return db.compareTo(da);
+            });
+            return _CourseItem(
+              code: e.key,
+              records: e.value,
+              latest: _asDateTime(e.value.first['start']),
+            );
+          }).toList()
+            ..sort((a, b) => a.code.compareTo(b.code));
 
-              // 2) Build course items with COURSE-LEVEL filtering
-              final items = <_CourseItem>[];
-              grouped.forEach((courseCode, recs) {
-                final absentCount =
-                    recs.where((r) => (r['status'] ?? '') == 'absent').length;
-                final cancelledCount =
-                    recs.where((r) => (r['status'] ?? '') == 'cancelled').length;
-
-                final include = switch (_filter) {
-                  AbsenceFilter.all => true,
-                  AbsenceFilter.absent => absentCount > 0,
-                  AbsenceFilter.cancelled => cancelledCount > 0,
-                };
-                if (!include) return;
-
-                // newest first
-                recs.sort((a, b) {
-                  final da = _asDateTime(a['start']) ?? DateTime(0);
-                  final db = _asDateTime(b['start']) ?? DateTime(0);
-                  return db.compareTo(da);
-                });
-
-                // stats for denominator (preferred)
-                final stat = stats[courseCode] ?? {};
-                final totalEvents = (stat['totalEvents'] as num?)?.toInt();
-                final cancelledStat = (stat['cancelled'] as num?)?.toInt();
-                final cancelled = cancelledStat ?? cancelledCount;
-
-                int effective;
-                if (totalEvents != null) {
-                  effective = (totalEvents - (cancelled)).clamp(0, 100000);
-                } else {
-                  effective = (recs.length - (cancelled)).clamp(0, 100000);
-                }
-                final pct = effective > 0 ? (absentCount / effective) * 100 : 0.0;
-
-                items.add(_CourseItem(
-                  code: courseCode,
-                  records: recs,               // keep ALL records
-                  absent: absentCount,
-                  cancelled: cancelled,
-                  effective: effective,
-                  pct: pct,
-                  latest: _asDateTime(recs.first['start']),
-                ));
-              });
-
-              items.sort((a, b) => a.code.compareTo(b.code));
-
-              return Column(
-                children: [
-                  _AnimatedFilterBar(
-                    value: _filter,
-                    onChanged: (f) => setState(() => _filter = f),
-                  ),
-                  const SizedBox(height: 8),
-                  Expanded(
-                    child: ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      itemCount: items.length,
-                      itemBuilder: (context, i) => _CourseCard(item: items[i]),
-                    ),
-                  ),
-                ],
-              );
-            },
+          return Column(
+            children: [
+              _ScopeBar(
+                value: _scope,
+                onChanged: (v) => setState(() => _scope = v),
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: ListView.builder(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  itemCount: items.length,
+                  itemBuilder: (context, i) => _CourseCard(item: items[i]),
+                ),
+              ),
+            ],
           );
         },
       ),
     );
   }
-}
 
-/* =========================== Models ============================ */
+  // -------- date scope helpers --------
+
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> _applyDateScope(
+      List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) {
+    if (_scope == DateScope.all) return docs;
+
+    final now = DateTime.now();
+    bool inSameDay(DateTime a, DateTime b) =>
+        a.year == b.year && a.month == b.month && a.day == b.day;
+
+    bool inSameWeek(DateTime a, DateTime b) {
+      final monday = b.subtract(Duration(days: b.weekday - 1));
+      final sunday = monday.add(const Duration(days: 6));
+      return !a.isBefore(_atStartOfDay(monday)) &&
+          !a.isAfter(_atEndOfDay(sunday));
+    }
+
+    return docs.where((d) {
+      final start = _asDateTime(d.data()['start']);
+      if (start == null) return false;
+      if (_scope == DateScope.today) return inSameDay(start, now);
+      return inSameWeek(start, now); // thisWeek
+    }).toList();
+  }
+}
 
 class _CourseItem {
   _CourseItem({
     required this.code,
     required this.records,
-    required this.absent,
-    required this.cancelled,
-    required this.effective,
-    required this.pct,
     required this.latest,
   });
 
   final String code;
-  final List<Map<String, dynamic>> records; // absent & cancelled entries
-  final int absent;
-  final int cancelled;
-  final int effective;   // denominator used for %
-  final double pct;      // 0..100
+  final List<Map<String, dynamic>> records; // only 'absent' rows
   final DateTime? latest;
+
+  int get absentCount => records.length;
 }
 
 /* =========================== UI: Course Card ============================ */
@@ -152,18 +135,6 @@ class _CourseCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final courseCode = item.code == 'UNKNOWN' ? 'Unknown course' : item.code;
-
-    // Progress toward 20%
-    final level = (item.pct / 25).clamp(0, 1).toDouble(); // 0..1
-    Color barColor;
-    if (level >= 1.0) {
-      barColor = Colors.red;
-    } else if (level >= 0.5) {
-      barColor = Colors.orange;
-    } else {
-      barColor = Colors.green;
-    }
-
     final latestStr = item.latest == null
         ? null
         : DateFormat('MMM d, yyyy • hh:mm a').format(item.latest!);
@@ -179,54 +150,28 @@ class _CourseCard extends StatelessWidget {
           children: [
             Text(
               courseCode,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 6),
-            Row(
-              children: [
-                if (item.absent > 0)
-                  _Badge(
-                    label: 'Absent ${item.absent}',
-                    color: Colors.red.withOpacity(0.12),
-                    textColor: Colors.red,
-                  ),
-                if (item.absent > 0 && item.cancelled > 0) const SizedBox(width: 6),
-                if (item.cancelled > 0)
-                  _Badge(
-                    label: 'Cancelled ${item.cancelled}',
-                    color: Colors.orange.withOpacity(0.12),
-                    textColor: Colors.orange[900],
-                  ),
-              ],
+            _Badge(
+              label: 'Absent ${item.absentCount}',
+              color: Colors.red.withOpacity(0.12),
+              textColor: Colors.red,
             ),
             const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: LinearProgressIndicator(
-                value: level,
-                minHeight: 8,
-                color: barColor,
-                backgroundColor: Colors.grey.shade200,
-              ),
-            ),
+
+            // Compute total classes so far FROM LECTURES and show %.
+            _PercentBar(courseCode: item.code, absences: item.absentCount),
+
             const SizedBox(height: 4),
-            Text(
-              'Absence: ${item.pct.toStringAsFixed(1)}% of classes '
-              '(${item.absent}/${item.effective})',
-              style: TextStyle(
-                fontSize: 12,
-                color: barColor,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            if (latestStr != null) Text('Latest: $latestStr'),
           ],
         ),
-        subtitle: latestStr == null ? null : Text('Latest: $latestStr'),
         children: [
           const Divider(height: 1),
-          // Show ALL records (with delete affordance per record)
           ...item.records.map((r) => _AbsenceRow(record: r)),
           const SizedBox(height: 6),
         ],
@@ -235,7 +180,160 @@ class _CourseCard extends StatelessWidget {
   }
 }
 
-/* =========================== UI: Absence Row (with delete) ============================ */
+/* =========================== % Bar (denominator from lectures) ============================ */
+
+class _PercentBar extends StatelessWidget {
+  const _PercentBar({required this.courseCode, required this.absences});
+
+  final String courseCode; // normalized
+  final int absences;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<_Denom>(
+      future: _computeDenominator(courseCode),
+      builder: (context, snap) {
+        // While loading, show a faint bar placeholder
+        if (snap.connectionState == ConnectionState.waiting) {
+          return _placeholderBar();
+        }
+        final denom = snap.data ?? _Denom(totalSoFar: absences);
+        final total = denom.totalSoFar <= 0 ? absences : denom.totalSoFar;
+        final pct = total == 0 ? 0.0 : (absences * 100.0 / total);
+        final level = (pct / 25).clamp(0, 1).toDouble(); // 0..1 of 25%
+
+        Color barColor;
+        if (level >= 1.0) {
+          barColor = Colors.red;
+        } else if (level >= 0.5) {
+          barColor = Colors.orange;
+        } else {
+          barColor = Colors.green;
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: TweenAnimationBuilder<double>(
+                tween: Tween<double>(begin: 0, end: level),
+                duration: const Duration(milliseconds: 350),
+                curve: Curves.easeInOut,
+                builder: (context, value, _) => LinearProgressIndicator(
+                  value: value,
+                  minHeight: 8,
+                  color: barColor,
+                  backgroundColor: Colors.grey.shade200,
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Absence: ${pct.toStringAsFixed(1)}% of classes ($absences/$total)',
+              style: TextStyle(
+                fontSize: 12,
+                color: barColor,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _placeholderBar() => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(
+              value: 0.15,
+              minHeight: 8,
+              color: Colors.grey.shade400,
+              backgroundColor: Colors.grey.shade200,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Absence: …',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey.shade600,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      );
+}
+
+// Denominator = number of scheduled class occurrences up to now
+class _Denom {
+  const _Denom({required this.totalSoFar});
+  final int totalSoFar;
+}
+
+Future<_Denom> _computeDenominator(String normalizedCourseCode) async {
+  final uid = FirebaseAuth.instance.currentUser?.uid;
+  if (uid == null) return const _Denom(totalSoFar: 0);
+
+  // 1) Read user's lectures for this course.
+  //    Expected doc fields (based on your Lecture model):
+  //    courseCode (String), dayOfWeek (0..6, Mon=1? adjust below), startTime/endTime (minutes)
+  final userLects = await FirebaseFirestore.instance
+      .collection('users')
+      .doc(uid)
+      .collection('lectures')
+      .where('courseCode', isEqualTo: normalizedCourseCode)
+      .get();
+
+  // If nothing in users/{uid}/lectures, try a fallback root collection (optional).
+  var lectDocs = userLects.docs;
+  if (lectDocs.isEmpty) {
+    final root = await FirebaseFirestore.instance
+        .collection('lectures')
+        .where('courseCode', isEqualTo: normalizedCourseCode)
+        .get();
+    lectDocs = root.docs;
+  }
+
+  if (lectDocs.isEmpty) {
+    // No schedule → we can’t know total; fall back to absences-only elsewhere.
+    return const _Denom(totalSoFar: 0);
+  }
+
+  // 2) Generate occurrences from semester start to today.
+  //    We’ll assume semester started on Sep 1 of the current academic year,
+  //    change if you already store semesterStart in lecture docs.
+  final now = DateTime.now();
+  final startOfYear = DateTime(now.year, 9, 1); // simple default
+  int total = 0;
+
+  for (final d in lectDocs) {
+    final data = d.data();
+    final int dayOfWeek = (data['dayOfWeek'] as num).toInt(); // 0..6
+    // count each week’s occurrence from startOfYear..today for that weekday
+    total += _countWeekdayOccurrences(startOfYear, now, dayOfWeek);
+  }
+
+  return _Denom(totalSoFar: total);
+}
+
+int _countWeekdayOccurrences(DateTime from, DateTime to, int weekdayZeroBased) {
+  // Convert to DateTime.weekday (1=Mon..7=Sun). Your model is 0..6.
+  final target = ((weekdayZeroBased % 7) + 1);
+  // Find first target weekday >= from
+  var first = from;
+  while (first.weekday != target) {
+    first = first.add(const Duration(days: 1));
+  }
+  if (first.isAfter(to)) return 0;
+  final days = to.difference(first).inDays;
+  return (days ~/ 7) + 1;
+}
+
+/* =========================== Absence Row (with delete) ============================ */
 
 class _AbsenceRow extends StatelessWidget {
   const _AbsenceRow({required this.record});
@@ -243,7 +341,6 @@ class _AbsenceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final status = (record['status'] ?? 'present').toString();
     final start = _asDateTime(record['start']);
     final title = (record['eventSummary'] ??
             record['title'] ??
@@ -257,22 +354,6 @@ class _AbsenceRow extends StatelessWidget {
         : 'No date';
     final eventId = (record['id'] ?? '').toString();
 
-    IconData icon;
-    Color color;
-    switch (status) {
-      case 'absent':
-        icon = Icons.remove_circle_rounded; // changed icon
-        color = Colors.red;
-        break;
-      case 'cancelled':
-        icon = Icons.event_busy_rounded; // changed icon
-        color = Colors.orange;
-        break;
-      default:
-        icon = Icons.check_circle_rounded;
-        color = Colors.green;
-    }
-
     return Dismissible(
       key: ValueKey('abs_row_$eventId'),
       direction: DismissDirection.endToStart,
@@ -282,9 +363,7 @@ class _AbsenceRow extends StatelessWidget {
         color: Colors.red.withOpacity(0.12),
         child: const Icon(Icons.delete_forever_rounded, color: Colors.red),
       ),
-      confirmDismiss: (_) async {
-        return await _confirmDelete(context, title);
-      },
+      confirmDismiss: (_) async => await _confirmDelete(context, title),
       onDismissed: (_) async {
         await AttendanceService.clearEvent(eventId);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -295,9 +374,9 @@ class _AbsenceRow extends StatelessWidget {
         );
       },
       child: ListTile(
-        leading: Icon(icon, color: color),
+        leading: const Icon(Icons.remove_circle_rounded, color: Colors.red),
         title: Text(title),
-        subtitle: Text('$status • $when'),
+        subtitle: Text('absent • $when'),
         dense: true,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16),
         trailing: IconButton(
@@ -345,24 +424,22 @@ class _AbsenceRow extends StatelessWidget {
   }
 }
 
-/* =========================== UI: Animated Filter Bar ============================ */
+/* =========================== Scope Bar ============================ */
 
-class _AnimatedFilterBar extends StatelessWidget {
-  const _AnimatedFilterBar({required this.value, required this.onChanged});
-
-  final AbsenceFilter value;
-  final ValueChanged<AbsenceFilter> onChanged;
+class _ScopeBar extends StatelessWidget {
+  const _ScopeBar({required this.value, required this.onChanged});
+  final DateScope value;
+  final ValueChanged<DateScope> onChanged;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-
     const tabs = [
-      _Seg(label: 'All', filter: AbsenceFilter.all),
-      _Seg(label: 'Absent', filter: AbsenceFilter.absent),
-      _Seg(label: 'Cancelled', filter: AbsenceFilter.cancelled),
+      _Seg(label: 'All', value: DateScope.all),
+      _Seg(label: 'Today', value: DateScope.today),
+      _Seg(label: 'This week', value: DateScope.thisWeek),
     ];
-    final index = tabs.indexWhere((t) => t.filter == value);
+    final index = tabs.indexWhere((t) => t.value == value);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -374,17 +451,16 @@ class _AnimatedFilterBar extends StatelessWidget {
       ),
       child: Stack(
         children: [
-          // Animated thumb
           AnimatedAlign(
             alignment: switch (index) {
               0 => Alignment.centerLeft,
               1 => Alignment.center,
               _ => Alignment.centerRight,
             },
-            duration: const Duration(milliseconds: 200),
+            duration: const Duration(milliseconds: 220),
             curve: Curves.easeInOut,
             child: Container(
-              width: (MediaQuery.of(context).size.width - 24) / 3, // 3 tabs
+              width: (MediaQuery.of(context).size.width - 24) / 3,
               height: 44,
               decoration: BoxDecoration(
                 color: cs.primary.withOpacity(0.12),
@@ -392,14 +468,13 @@ class _AnimatedFilterBar extends StatelessWidget {
               ),
             ),
           ),
-          // Labels
           Row(
             children: tabs.map((t) {
-              final selected = t.filter == value;
+              final selected = t.value == value;
               return Expanded(
                 child: InkWell(
                   borderRadius: BorderRadius.circular(28),
-                  onTap: () => onChanged(t.filter),
+                  onTap: () => onChanged(t.value),
                   child: AnimatedDefaultTextStyle(
                     duration: const Duration(milliseconds: 180),
                     style: TextStyle(
@@ -419,12 +494,12 @@ class _AnimatedFilterBar extends StatelessWidget {
 }
 
 class _Seg {
-  const _Seg({required this.label, required this.filter});
+  const _Seg({required this.label, required this.value});
   final String label;
-  final AbsenceFilter filter;
+  final DateScope value;
 }
 
-/* =========================== Badges & Helpers ============================ */
+/* =========================== Small helpers ============================ */
 
 class _Badge extends StatelessWidget {
   const _Badge({required this.label, required this.color, this.textColor});
@@ -465,3 +540,5 @@ DateTime? _asDateTime(dynamic v) {
 }
 
 String _normalize(String s) => s.toUpperCase().replaceAll(' ', '');
+DateTime _atStartOfDay(DateTime d) => DateTime(d.year, d.month, d.day);
+DateTime _atEndOfDay(DateTime d) => DateTime(d.year, d.month, d.day, 23, 59, 59);
