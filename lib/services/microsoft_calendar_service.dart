@@ -54,16 +54,37 @@ class MicrosoftCalendarService {
 
   static const String _host = 'graph.microsoft.com';
   static const Duration _defaultRange = Duration(days: 120);
+  static const int _semesterStartMonth = 8;
+  static const int _semesterStartDay = 24;
+
+  static DateTime resolveSemesterStart([DateTime? reference]) {
+    final now = reference ?? DateTime.now();
+    final anchor = DateTime(now.year, _semesterStartMonth, _semesterStartDay);
+    if (now.isBefore(anchor)) {
+      return DateTime(now.year - 1, _semesterStartMonth, _semesterStartDay);
+    }
+    return anchor;
+  }
 
   static Future<List<MicrosoftCalendarEvent>> fetchUpcomingEvents(
     MicrosoftAccount account, {
     Duration range = _defaultRange,
+    DateTime? start,
   }) async {
     final nowUtc = DateTime.now().toUtc();
-    final endUtc = nowUtc.add(range);
+    final startUtc = (start ?? resolveSemesterStart()).toUtc();
+    final Duration effectiveRange = range <= Duration.zero
+        ? _defaultRange
+        : range;
+    final DateTime proposedEnd = startUtc.add(effectiveRange);
+    final DateTime minEnd = nowUtc.add(const Duration(days: 30));
+    var endUtc = proposedEnd.isAfter(minEnd) ? proposedEnd : minEnd;
+    if (!endUtc.isAfter(startUtc)) {
+      endUtc = startUtc.add(_defaultRange);
+    }
 
     final uri = Uri.https(_host, '/v1.0/me/calendarView', <String, String>{
-      'startDateTime': nowUtc.toIso8601String(),
+      'startDateTime': startUtc.toIso8601String(),
       'endDateTime': endUtc.toIso8601String(),
       r'$orderby': 'start/dateTime',
       r'$top': '50',
@@ -127,10 +148,19 @@ class MicrosoftCalendarService {
     required MicrosoftAccount account,
     required RecurringLecture lecture,
   }) async {
-    final startLocal = _nextOccurrenceLocal(
+    final semesterStart = resolveSemesterStart();
+    var startLocal = _nextOccurrenceLocal(
       dayOfWeek: lecture.dayOfWeek,
       minutes: lecture.startMinutes,
+      from: semesterStart,
     );
+
+    if (startLocal.isAfter(lecture.semesterEnd)) {
+      startLocal = _nextOccurrenceLocal(
+        dayOfWeek: lecture.dayOfWeek,
+        minutes: lecture.startMinutes,
+      );
+    }
 
     final durationMinutes = math.max(
       1,
@@ -214,21 +244,28 @@ class MicrosoftCalendarService {
   static DateTime _nextOccurrenceLocal({
     required int dayOfWeek,
     required int minutes,
+    DateTime? from,
   }) {
-    final now = DateTime.now();
-    final today = now.weekday % 7;
-    final diff = (dayOfWeek - today + 7) % 7;
-    final base = DateTime(
-      now.year,
-      now.month,
-      now.day,
-    ).add(Duration(days: diff));
-
+    final baseDate = from ?? DateTime.now();
+    final normalizedBase = DateTime(
+      baseDate.year,
+      baseDate.month,
+      baseDate.day,
+    );
+    final baseWeekday = normalizedBase.weekday % 7;
+    final diff = (dayOfWeek - baseWeekday + 7) % 7;
+    final targetDate = normalizedBase.add(Duration(days: diff));
     final hours = minutes ~/ 60;
     final mins = minutes % 60;
-    var start = DateTime(base.year, base.month, base.day, hours, mins);
+    var start = DateTime(
+      targetDate.year,
+      targetDate.month,
+      targetDate.day,
+      hours,
+      mins,
+    );
 
-    if (!start.isAfter(now)) {
+    if (!start.isAfter(baseDate)) {
       start = start.add(const Duration(days: 7));
     }
 

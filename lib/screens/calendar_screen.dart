@@ -1,4 +1,5 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:intl/intl.dart';
 
 import '../services/microsoft_auth_service.dart';
@@ -18,8 +19,14 @@ class CalendarScreen extends StatefulWidget {
 }
 
 class _CalendarScreenState extends State<CalendarScreen> {
+  static const Duration _calendarWindowRange = Duration(days: 210);
+
+  late final DateTime _calendarWindowStart = MicrosoftCalendarService.resolveSemesterStart();
   MicrosoftAccount? _account;
   List<MicrosoftCalendarEvent> _events = <MicrosoftCalendarEvent>[];
+  List<DateTime> _dayKeys = <DateTime>[];
+  PageController? _pageController;
+  int _currentPage = 0;
   bool _isLoading = false;
   String? _error;
 
@@ -28,6 +35,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
     super.initState();
     _loadCalendar(interactive: false);
   }
+
+  @override
+  void dispose() {
+    _pageController?.dispose();
+    super.dispose();
+  }
+
+
 
   Future<void> _loadCalendar({
     bool interactive = false,
@@ -45,30 +60,59 @@ class _CalendarScreenState extends State<CalendarScreen> {
     }
 
     try {
-      // use existing account if available, otherwise sign in if allowed
-      final account = MicrosoftAuthService.currentAccount ??
+      final account =
+          MicrosoftAuthService.currentAccount ??
           await MicrosoftAuthService.ensureSignedIn(interactive: interactive);
 
       if (!mounted) return;
 
       if (account == null) {
+        final previousController = _pageController;
         setState(() {
           _account = null;
           _events = <MicrosoftCalendarEvent>[];
+          _dayKeys = <DateTime>[];
+          _currentPage = 0;
+          _pageController = null;
           _isLoading = false;
         });
+        previousController?.dispose();
         AttendanceTotals.instance.clear();
         return;
       }
 
-      final events = await MicrosoftCalendarService.fetchUpcomingEvents(account);
+      final fetchedEvents = await MicrosoftCalendarService.fetchUpcomingEvents(
+        account,
+        start: _calendarWindowStart,
+        range: _calendarWindowRange,
+      );
+
       if (!mounted) return;
+
+      final events = List<MicrosoftCalendarEvent>.from(fetchedEvents);
+      events.sort((a, b) {
+        final aStart = a.start ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bStart = b.start ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return aStart.compareTo(bStart);
+      });
+
+      final dayKeys = _extractDayKeys(events);
+      final initialIndex = dayKeys.isEmpty ? 0 : _resolveInitialPage(dayKeys);
+      final previousController = _pageController;
+      final newController = dayKeys.isEmpty
+          ? null
+          : PageController(initialPage: initialIndex);
 
       setState(() {
         _account = account;
         _events = events;
+        _dayKeys = dayKeys;
+        _currentPage = dayKeys.isEmpty ? 0 : initialIndex;
+        _pageController = newController;
         _isLoading = false;
       });
+
+      previousController?.dispose();
       _publishTotals();
     } catch (error) {
       if (!mounted) return;
@@ -99,10 +143,15 @@ class _CalendarScreenState extends State<CalendarScreen> {
   Future<void> _handleSignOut() async {
     await MicrosoftAuthService.signOut();
     if (!mounted) return;
+    final previousController = _pageController;
     setState(() {
       _account = null;
       _events = <MicrosoftCalendarEvent>[];
+      _dayKeys = <DateTime>[];
+      _currentPage = 0;
+      _pageController = null;
     });
+    previousController?.dispose();
     AttendanceTotals.instance.clear();
   }
 
@@ -119,13 +168,27 @@ class _CalendarScreenState extends State<CalendarScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Microsoft Calendar'),
+        title: const Text('My Schedule'),
         actions: [
           if (_account != null && _events.isNotEmpty && !_isLoading)
-            IconButton(
-              icon: const Icon(Icons.delete_forever),
-              onPressed: _confirmDeleteAll,
-              tooltip: 'Delete all sections',
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: TextButton.icon(
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  backgroundColor: Colors.white.withValues(alpha: 0.16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+                onPressed: _confirmDeleteAll,
+                icon: const Icon(Icons.delete_sweep_rounded),
+                label: const Text('Clear all'),
+              ),
             ),
           if (_account != null && !_isLoading)
             IconButton(
@@ -141,12 +204,54 @@ class _CalendarScreenState extends State<CalendarScreen> {
             ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openAddLecture,
-        icon: const Icon(Icons.school),
-        label: const Text('Add Section'),
-      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      floatingActionButton: (_account != null && _events.isNotEmpty && !_isLoading)
+          ? _buildAddSectionButton()
+          : null,
       body: _buildBody(),
+    );
+  }
+
+  Widget _buildAddSectionButton({EdgeInsetsGeometry padding = const EdgeInsets.only(right: 16, bottom: 8), double width = 170}) {
+    return Padding(
+      padding: padding,
+      child: Material(
+        color: Colors.transparent,
+        elevation: 8,
+        shadowColor: const Color(0x334C6EF5),
+        borderRadius: BorderRadius.circular(24),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(24),
+          onTap: _openAddLecture,
+          child: Ink(
+            height: 54,
+            width: width,
+            decoration: const BoxDecoration(
+              borderRadius: BorderRadius.all(Radius.circular(24)),
+              gradient: LinearGradient(
+                colors: [Color(0xFF4C6EF5), Color(0xFF5AD7C0)],
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+              ),
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.school_rounded, color: Colors.white, size: 22),
+                SizedBox(width: 10),
+                Text(
+                  'Add Section',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -167,18 +272,227 @@ class _CalendarScreenState extends State<CalendarScreen> {
     }
 
     if (_events.isEmpty) {
+      return _buildEmptyState();
+    }
+
+    return _buildCalendarPager();
+  }
+
+  Widget _buildEmptyState() {
+    final theme = Theme.of(context);
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFFE8F1FF), Color(0xFFF8F5FF)],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+      ),
+      child: RefreshIndicator(
+        onRefresh: _handleRefresh,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.calendar_today_rounded,
+                size: 64,
+                color: Color(0xFF4C6EF5),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Build your calendar',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF1B2559),
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Tap "Add Section" to start crafting your schedule.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: const Color(0xFF4F5D9A),
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 32),
+              Align(
+                alignment: Alignment.center,
+                child: _buildAddSectionButton(
+                  padding: EdgeInsets.zero,
+                  width: 200,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCalendarPager() {
+    final controller = _pageController;
+    if (controller == null || _dayKeys.isEmpty) {
+      return _buildEmptyState();
+    }
+
+    var pageIndex = _currentPage;
+    if (pageIndex < 0) {
+      pageIndex = 0;
+    } else if (pageIndex >= _dayKeys.length) {
+      pageIndex = _dayKeys.length - 1;
+    }
+
+    final currentDay = _dayKeys[pageIndex];
+    final theme = Theme.of(context);
+    final isToday = _isSameDay(currentDay, DateTime.now());
+
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFFE8F1FF), Color(0xFFFDF7FF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: SafeArea(
+        bottom: true,
+        minimum: const EdgeInsets.only(bottom: 24),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
+              child: Row(
+                children: [
+                  IconButton(
+                    onPressed: pageIndex > 0
+                        ? () => _goToPage(pageIndex - 1)
+                        : null,
+                    icon: const Icon(Icons.chevron_left_rounded),
+                    splashRadius: 24,
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text(
+                          DateFormat('EEEE').format(currentDay),
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF1B2559),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          DateFormat('MMMM d, yyyy').format(currentDay),
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: const Color(0xFF4F5D9A),
+                          ),
+                        ),
+                        if (isToday)
+                          Container(
+                            margin: const EdgeInsets.only(top: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(
+                                0xFF4C6EF5,
+                              ).withValues(alpha: 0.14),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Text(
+                              'Today',
+                              style: TextStyle(
+                                color: Color(0xFF4C6EF5),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: pageIndex < _dayKeys.length - 1
+                        ? () => _goToPage(pageIndex + 1)
+                        : null,
+                    icon: const Icon(Icons.chevron_right_rounded),
+                    splashRadius: 24,
+                  ),
+                ],
+              ),
+            ),
+            if (!isToday &&
+                _dayKeys.any((day) => _isSameDay(day, DateTime.now())))
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: _jumpToToday,
+                    icon: const Icon(Icons.today_rounded),
+                    label: const Text('Jump to today'),
+                  ),
+                ),
+              ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: PageView.builder(
+                controller: controller,
+                itemCount: _dayKeys.length,
+                onPageChanged: (page) => setState(() => _currentPage = page),
+                itemBuilder: (context, pageIndex) {
+                  final day = _dayKeys[pageIndex];
+                  final dailyEvents = _eventsForDay(day);
+                  return _buildDayPage(day, dailyEvents);
+                },
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildPageIndicators(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDayPage(DateTime day, List<MicrosoftCalendarEvent> events) {
+    final theme = Theme.of(context);
+    final storageKey = 'day-${day.toIso8601String()}';
+
+    if (events.isEmpty) {
       return RefreshIndicator(
         onRefresh: _handleRefresh,
         child: ListView(
+          key: PageStorageKey(storageKey),
           physics: const AlwaysScrollableScrollPhysics(),
-          children: const [
-            SizedBox(height: 120),
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              child: Text(
-                'Go ahead and build your calendar 🎉\nTap "Add Section" to start adding your class schedule.',
-                textAlign: TextAlign.center,
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
+          children: [
+            const Icon(
+              Icons.emoji_emotions_outlined,
+              size: 52,
+              color: Color(0xFF4C6EF5),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              'No classes scheduled',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF1B2559),
               ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Enjoy your day or add a new section to stay ahead.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: const Color(0xFF4F5D9A),
+              ),
+              textAlign: TextAlign.center,
             ),
           ],
         ),
@@ -187,69 +501,221 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
     return RefreshIndicator(
       onRefresh: _handleRefresh,
-      child: ListView.builder(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        itemCount: _events.length,
-        itemBuilder: (context, index) {
-          final event = _events[index];
-          final start = event.start;
-          final previousStart = index > 0 ? _events[index - 1].start : null;
-          final showHeader = !_isSameDay(start, previousStart);
+      child: ListView.separated(
+        key: PageStorageKey(storageKey),
+        physics: const BouncingScrollPhysics(
+          parent: AlwaysScrollableScrollPhysics(),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+        itemCount: events.length,
+        itemBuilder: (context, index) => _buildEventCard(events[index]),
+        separatorBuilder: (context, index) => const SizedBox(height: 16),
+      ),
+    );
+  }
 
-          return Column(
+  Widget _buildEventCard(MicrosoftCalendarEvent event) {
+    final theme = Theme.of(context);
+    final subject = event.subject.isNotEmpty ? event.subject : 'Untitled event';
+    final location = event.location?.trim() ?? '';
+    final timeLabel = _formatEventTime(event);
+
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(22),
+      elevation: 6,
+      shadowColor: Colors.black12,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(22),
+        onTap: () => _openAbsenceDialog(event),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 18, 8, 18),
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (showHeader)
-                Padding(
-                  padding: const EdgeInsets.only(top: 16, bottom: 8),
-                  child: Text(
-                    _formatHeader(start),
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
-              Card(
-                child: InkWell(
-                  onTap: () => _openAbsenceDialog(event),
-                  child: ListTile(
-                    title: Text(
-                      event.subject.isNotEmpty
-                          ? event.subject
-                          : 'Untitled event',
-                    ),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(_formatEventTime(event)),
-                        if ((event.location ?? '').isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Text(event.location!),
-                        ],
-                      ],
-                    ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete, color: Colors.red),
-                      tooltip: 'Delete',
-                      onPressed: () => _confirmDelete(event),
-                    ),
+              Container(
+                width: 6,
+                height: 72,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF4C6EF5), Color(0xFF5AD7C0)],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
                   ),
                 ),
               ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      subject,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF1B2559),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.schedule_rounded,
+                          size: 18,
+                          color: Color(0xFF4F5D9A),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          timeLabel,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: const Color(0xFF4F5D9A),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (location.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE9F1FF),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.location_on_outlined,
+                              size: 16,
+                              color: Color(0xFF1B74E4),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              location,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: const Color(0xFF1B74E4),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed: () => _confirmDelete(event),
+                icon: const Icon(
+                  Icons.delete_outline_rounded,
+                  color: Color(0xFFE63946),
+                ),
+                tooltip: 'Delete',
+              ),
             ],
-          );
-        },
+          ),
+        ),
       ),
     );
+  }
+
+  Widget _buildPageIndicators() {
+    if (_dayKeys.length <= 1) {
+      return const SizedBox(height: 8);
+    }
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(_dayKeys.length, (index) {
+        final isActive = index == _currentPage;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          height: 8,
+          width: isActive ? 20 : 8,
+          decoration: BoxDecoration(
+            color: isActive ? const Color(0xFF4C6EF5) : const Color(0xFFE0E5FF),
+            borderRadius: BorderRadius.circular(4),
+          ),
+        );
+      }),
+    );
+  }
+
+  List<DateTime> _extractDayKeys(List<MicrosoftCalendarEvent> events) {
+    final days = <DateTime>{};
+    for (final event in events) {
+      final start = event.start;
+      if (start != null) {
+        days.add(_normalizeDate(start));
+      }
+    }
+    final result = days.toList()..sort();
+    return result;
+  }
+
+  int _resolveInitialPage(List<DateTime> days) {
+    if (days.isEmpty) {
+      return 0;
+    }
+    final today = _normalizeDate(DateTime.now());
+    final todayIndex = days.indexWhere((day) => _isSameDay(day, today));
+    if (todayIndex != -1) {
+      return todayIndex;
+    }
+    for (var i = 0; i < days.length; i++) {
+      if (days[i].isAfter(today)) {
+        return i;
+      }
+    }
+    return days.length - 1;
+  }
+
+  DateTime _normalizeDate(DateTime date) =>
+      DateTime(date.year, date.month, date.day);
+
+  List<MicrosoftCalendarEvent> _eventsForDay(DateTime day) {
+    final normalized = _normalizeDate(day);
+    final events = _events.where((event) {
+      final start = event.start;
+      if (start == null) return false;
+      return _isSameDay(start, normalized);
+    }).toList();
+    events.sort((a, b) {
+      final aStart = a.start ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final bStart = b.start ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return aStart.compareTo(bStart);
+    });
+    return events;
+  }
+
+  void _goToPage(int index) {
+    final controller = _pageController;
+    if (controller == null) return;
+    if (index < 0 || index >= _dayKeys.length) return;
+    controller.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  void _jumpToToday() {
+    final todayIndex = _dayKeys.indexWhere(
+      (day) => _isSameDay(day, DateTime.now()),
+    );
+    if (todayIndex != -1) {
+      _goToPage(todayIndex);
+    }
   }
 
   bool _isSameDay(DateTime? a, DateTime? b) {
     if (a == null || b == null) return false;
     return a.year == b.year && a.month == b.month && a.day == b.day;
-  }
-
-  String _formatHeader(DateTime? date) {
-    if (date == null) return 'Unknown date';
-    return DateFormat('EEEE, MMM d').format(date);
   }
 
   String? _resolveSeriesId(MicrosoftCalendarEvent event) {
@@ -308,6 +774,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
         ],
       ),
     );
+
+    if (!mounted) {
+      return;
+    }
 
     if (confirmed != true) {
       return;
@@ -406,6 +876,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       ),
     );
 
+    if (!mounted) return;
     if (confirmed != true) return;
 
     final messenger = ScaffoldMessenger.of(context);
@@ -420,6 +891,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
         eventId: event.id,
         seriesMasterId: seriesId,
       );
+
+      if (!mounted) return;
 
       setState(() {
         if (seriesId != null) {
@@ -441,13 +914,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
         ),
       );
     } catch (e) {
+      if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(content: Text('Error deleting event: $e')),
       );
     }
   }
 
-  /// Extract a course code from the event subject, e.g. "CS101 – Lecture 5".
+  /// Extract a course code from the event subject, e.g. "CS101 � Lecture 5".
   String _resolveCourseId(MicrosoftCalendarEvent e) {
     final s = (e.subject).toUpperCase();
     final m = RegExp(r'[A-Z]{2,}\s?\d{2,}').firstMatch(s); // CS101 or CS 101
@@ -458,8 +932,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
   void _openAbsenceDialog(MicrosoftCalendarEvent event) {
     final String eventId = event.id; // Microsoft event id (must be non-null)
     final String courseId = _resolveCourseId(event);
-    final String title =
-        event.subject.isNotEmpty ? event.subject : 'Lecture';
+    final String title = event.subject.isNotEmpty ? event.subject : 'Lecture';
     final DateTime start = event.start ?? DateTime.now();
     final DateTime end = event.end ?? start.add(const Duration(minutes: 1));
 
@@ -511,44 +984,40 @@ class _CalendarScreenState extends State<CalendarScreen> {
   /// - We only store exceptions: 'absent'
   /// - Percentage = ABSENT / TOTAL_EVENTS * 100
   Future<void> _recomputeAndWarn(String courseId) async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-
-    final courseEvents =
-        _events.where((e) => _resolveCourseId(e) == courseId).toList();
-    if (courseEvents.isEmpty) return;
-
-    final q = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .collection('absences')
-        .where('courseCode', isEqualTo: courseId)
-        .get();
-
-    final byEvent = <String, String>{};
-    for (final d in q.docs) {
-      final status = (d.data()['status'] ?? '').toString();
-      byEvent[d.id] = status;
+    final courseEvents = _events
+        .where((e) => _resolveCourseId(e) == courseId)
+        .toList();
+    if (courseEvents.isEmpty) {
+      return;
     }
 
-    int absent = 0;
-    for (final e in courseEvents) {
-      final st = byEvent[e.id];
-      if (st == 'absent') absent++;
+    Map<String, String> byEvent;
+    try {
+      byEvent = await AttendanceService.getCourseExceptions(courseId);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Unable to update absence for $courseId: $error'),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
     }
 
+    final absent = courseEvents.where((e) => byEvent[e.id] == 'absent').length;
     final total = courseEvents.length;
-    if (total <= 0) return;
+    if (total == 0 || !mounted) {
+      return;
+    }
 
     final pct = absent * 100.0 / total;
-
-    if (!mounted) return;
     final msg =
         '$courseId absence: ${pct.toStringAsFixed(1)}% (absent $absent of $total)';
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(pct > 20 ? '⚠️ $msg — over 20%!' : msg),
+        content: Text(pct > 20 ? 'Warning: $msg - over 20%!' : msg),
         backgroundColor: pct > 20 ? Colors.red : null,
         duration: const Duration(seconds: 3),
       ),
@@ -619,3 +1088,8 @@ class _SignInPrompt extends StatelessWidget {
     );
   }
 }
+
+
+
+
+

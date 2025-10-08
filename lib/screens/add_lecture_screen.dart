@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
@@ -10,9 +11,6 @@ import '../services/firebase_lecture_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-
-
 
 class AddLectureScreen extends StatefulWidget {
   const AddLectureScreen({super.key});
@@ -37,12 +35,22 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     final messenger = ScaffoldMessenger.of(context);
+    final scheduleProvider =
+        Provider.of<ScheduleProvider>(context, listen: false);
     setState(() => _isLoading = true);
 
     try {
       final section = _controller.text.trim();
 
-      // Fetch from Firestore
+      if (scheduleProvider.containsSection(section)) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('This section is already in your schedule.'),
+          ),
+        );
+        return;
+      }
+
       final lecture = await FirebaseLectureService.getLectureBySection(section);
       if (!mounted) return;
 
@@ -54,7 +62,7 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
       }
 
       final newLecture = Lecture(
-        id: _uuid.v4(), // local unique ID
+        id: _uuid.v4(),
         courseCode: lecture.courseCode,
         courseName: lecture.courseName,
         section: lecture.section,
@@ -64,9 +72,20 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
         endTime: lecture.endTime,
       );
 
-      // Add to provider state
-      Provider.of<ScheduleProvider>(context, listen: false)
-          .addLecture(newLecture);
+      final conflictingLecture =
+          scheduleProvider.findTimeConflict(newLecture);
+      if (conflictingLecture != null) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              'Time conflict with ${conflictingLecture.courseCode} section ${conflictingLecture.section}.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      scheduleProvider.addLecture(newLecture);
 
       // Save lecture under current user's schedule in Firestore
       final firebaseUser = FirebaseAuth.instance.currentUser;
@@ -112,7 +131,7 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
       messenger.showSnackBar(
         const SnackBar(content: Text('Lecture added to your schedule.')),
       );
-      // Add to Microsoft Calendar
+
       final account = await MicrosoftAuthService.ensureSignedIn();
       if (!mounted) return;
 
@@ -128,7 +147,9 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
           );
           if (!mounted) return;
           messenger.showSnackBar(
-            const SnackBar(content: Text('Lecture added to Microsoft Calendar.')),
+            const SnackBar(
+              content: Text('Lecture added to Microsoft Calendar.'),
+            ),
           );
         } catch (error) {
           if (!mounted) return;
@@ -157,11 +178,25 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
             children: [
               TextFormField(
                 controller: _controller,
+                keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.done,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(5),
+                ],
                 decoration: const InputDecoration(
                   labelText: 'Enter Section Number',
                 ),
-                validator: (value) =>
-                    value == null || value.isEmpty ? 'Required' : null,
+                validator: (value) {
+                  final trimmed = value?.trim() ?? '';
+                  if (trimmed.isEmpty) {
+                    return 'Section number is required';
+                  }
+                  if (!RegExp(r'^\d{5}$').hasMatch(trimmed)) {
+                    return 'Section number must be 5 digits';
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 20),
               _isLoading

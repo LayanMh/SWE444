@@ -1,19 +1,27 @@
 // lib/services/attendance_service.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AttendanceService {
   AttendanceService._();
 
   static final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  /// Throw if not signed in.
-  static String _requireUid() {
+  /// Determine the Firestore doc id for the current user.
+  static Future<String> _resolveUserDocId() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) {
-      throw StateError('Not signed in (FirebaseAuth.currentUser is null).');
+    if (uid != null && uid.isNotEmpty) {
+      return uid;
     }
-    return uid;
+
+    final prefs = await SharedPreferences.getInstance();
+    final fallbackId = prefs.getString('microsoft_user_doc_id');
+    if (fallbackId != null && fallbackId.isNotEmpty) {
+      return fallbackId;
+    }
+
+    throw StateError('Not signed in (no Firebase or Microsoft session found).');
   }
 
   /// Normalize course codes to a stable key (e.g. "CS 101" -> "CS101").
@@ -32,11 +40,12 @@ class AttendanceService {
     required DateTime start,
     required DateTime end,
   }) async {
-    final uid = _requireUid();
-    final ref = _db.collection('users').doc(uid).collection('absences').doc(eventId);
+    final docId = await _resolveUserDocId();
+    final ref =
+        _db.collection('users').doc(docId).collection('absences').doc(eventId);
 
     if (status == 'present') {
-      await ref.delete(); // default state (present) → no exception doc
+      await ref.delete(); // default state (present) -> no exception doc
       return;
     }
 
@@ -52,8 +61,13 @@ class AttendanceService {
 
   /// Delete a single exception by eventId.
   static Future<void> clearEvent(String eventId) async {
-    final uid = _requireUid();
-    await _db.collection('users').doc(uid).collection('absences').doc(eventId).delete();
+    final docId = await _resolveUserDocId();
+    await _db
+        .collection('users')
+        .doc(docId)
+        .collection('absences')
+        .doc(eventId)
+        .delete();
   }
 
   // ---------------------------------------------------------------------------
@@ -62,35 +76,37 @@ class AttendanceService {
 
   /// Stream ALL absence exceptions (newest first).
   static Stream<QuerySnapshot<Map<String, dynamic>>> streamMyAbsences() {
-    final uid = _requireUid();
-    return _db
-        .collection('users')
-        .doc(uid)
-        .collection('absences')
-        .orderBy('start', descending: true)
-        .snapshots();
+    return Stream.fromFuture(_resolveUserDocId()).asyncExpand((docId) {
+      return _db
+          .collection('users')
+          .doc(docId)
+          .collection('absences')
+          .orderBy('start', descending: true)
+          .snapshots();
+    });
   }
 
   /// Stream exceptions for one course.
   static Stream<QuerySnapshot<Map<String, dynamic>>> streamCourseAbsences(String courseId) {
-    final uid = _requireUid();
     final norm = normalizeCourseCode(courseId);
-    return _db
-        .collection('users')
-        .doc(uid)
-        .collection('absences')
-        .where('courseCode', isEqualTo: norm)
-        .orderBy('start', descending: true)
-        .snapshots();
+    return Stream.fromFuture(_resolveUserDocId()).asyncExpand((docId) {
+      return _db
+          .collection('users')
+          .doc(docId)
+          .collection('absences')
+          .where('courseCode', isEqualTo: norm)
+          .orderBy('start', descending: true)
+          .snapshots();
+    });
   }
 
   /// One-off read of exceptions for a course (eventId -> status).
   static Future<Map<String, String>> getCourseExceptions(String courseId) async {
-    final uid = _requireUid();
+    final docId = await _resolveUserDocId();
     final norm = normalizeCourseCode(courseId);
     final q = await _db
         .collection('users')
-        .doc(uid)
+        .doc(docId)
         .collection('absences')
         .where('courseCode', isEqualTo: norm)
         .get();
@@ -100,9 +116,9 @@ class AttendanceService {
 
   /// Optional: throttle warnings over 20%.
   static Future<bool> shouldWarn(String courseId, double pct) async {
-    final uid = _requireUid();
+    final docId = await _resolveUserDocId();
     final norm = normalizeCourseCode(courseId);
-    final ref = _db.collection('users').doc(uid).collection('alerts').doc('attendance_$norm');
+    final ref = _db.collection('users').doc(docId).collection('alerts').doc('attendance_$norm');
 
     final snap = await ref.get();
     final last = (snap.data()?['lastPct'] ?? 0).toDouble();
