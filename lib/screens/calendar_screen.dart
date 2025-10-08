@@ -480,21 +480,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
             },
           ),
           TextButton(
-            child: const Text('Cancelled'),
-            onPressed: () async {
-              await AttendanceService.mark(
-                courseId: courseId,
-                eventId: eventId,
-                status: 'cancelled',
-                title: title,
-                start: start,
-                end: end,
-              );
-              await _recomputeAndWarn(courseId);
-              if (mounted) Navigator.pop(context);
-            },
-          ),
-          TextButton(
             child: const Text('Clear'),
             onPressed: () async {
               await AttendanceService.mark(
@@ -518,8 +503,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
   ///
   /// Rule:
   /// - Present = default (no doc in Firestore)
-  /// - We only store exceptions: 'absent' or 'cancelled'
-  /// - Percentage = ABSENT / (TOTAL_EVENTS - CANCELLED) * 100
+  /// - We only store exceptions: 'absent'
+  /// - Percentage = ABSENT / TOTAL_EVENTS * 100
   Future<void> _recomputeAndWarn(String courseId) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
@@ -541,22 +526,20 @@ class _CalendarScreenState extends State<CalendarScreen> {
       byEvent[d.id] = status;
     }
 
-    int absent = 0, cancelled = 0;
+    int absent = 0;
     for (final e in courseEvents) {
       final st = byEvent[e.id];
       if (st == 'absent') absent++;
-      if (st == 'cancelled') cancelled++;
     }
 
     final total = courseEvents.length;
-    final effective = total - cancelled;
-    if (effective <= 0) return;
+    if (total <= 0) return;
 
-    final pct = absent * 100.0 / effective;
+    final pct = absent * 100.0 / total;
 
     if (!mounted) return;
     final msg =
-        '$courseId absence: ${pct.toStringAsFixed(1)}% (absent $absent of $effective, cancelled $cancelled)';
+        '$courseId absence: ${pct.toStringAsFixed(1)}% (absent $absent of $total)';
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -565,19 +548,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
         duration: const Duration(seconds: 3),
       ),
     );
-
-    // If you’ve decided to remove course_stats entirely, delete this block.
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .collection('course_stats')
-        .doc(courseId)
-        .set({
-      'totalEvents': total,
-      'cancelled': cancelled,
-      'effectiveEvents': effective,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
   }
 }
 
