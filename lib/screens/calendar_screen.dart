@@ -1,9 +1,13 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../services/microsoft_auth_service.dart';
 import '../services/microsoft_calendar_service.dart';
 import 'add_lecture_screen.dart';
+
+import '../services/attendance_service.dart'; // for attendance
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
@@ -40,13 +44,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
     }
 
     try {
-      final account = await MicrosoftAuthService.ensureSignedIn(
-        interactive: interactive,
-      );
+      // use existing account if available, otherwise sign in if allowed
+      final account = MicrosoftAuthService.currentAccount ??
+          await MicrosoftAuthService.ensureSignedIn(interactive: interactive);
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       if (account == null) {
         setState(() {
@@ -57,13 +59,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
         return;
       }
 
-      final events = await MicrosoftCalendarService.fetchUpcomingEvents(
-        account,
-      );
-
-      if (!mounted) {
-        return;
-      }
+      final events = await MicrosoftCalendarService.fetchUpcomingEvents(account);
+      if (!mounted) return;
 
       setState(() {
         _account = account;
@@ -71,9 +68,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
         _isLoading = false;
       });
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       setState(() {
         _error = error.toString();
         _isLoading = false;
@@ -100,9 +95,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   Future<void> _handleSignOut() async {
     await MicrosoftAuthService.signOut();
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
     setState(() {
       _account = null;
       _events = <MicrosoftCalendarEvent>[];
@@ -114,9 +107,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       context,
       MaterialPageRoute(builder: (_) => const AddLectureScreen()),
     );
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
     await _loadCalendar(interactive: false);
   }
 
@@ -214,25 +205,29 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   ),
                 ),
               Card(
-                child: ListTile(
-                  title: Text(
-                    event.subject.isNotEmpty ? event.subject : 'Untitled event',
-                  ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(_formatEventTime(event)),
-                      if ((event.location ?? '').isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(event.location!),
+                child: InkWell(
+                  onTap: () => _openAbsenceDialog(event),
+                  child: ListTile(
+                    title: Text(
+                      event.subject.isNotEmpty
+                          ? event.subject
+                          : 'Untitled event',
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(_formatEventTime(event)),
+                        if ((event.location ?? '').isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(event.location!),
+                        ],
                       ],
-                    ],
-                  ),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete, color: Colors.red),
-                    tooltip: 'Delete',
-                    onPressed: () =>
-                        _confirmDelete(event), // ✅ call delete function
+                    ),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete, color: Colors.red),
+                      tooltip: 'Delete',
+                      onPressed: () => _confirmDelete(event),
+                    ),
                   ),
                 ),
               ),
@@ -244,16 +239,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 
   bool _isSameDay(DateTime? a, DateTime? b) {
-    if (a == null || b == null) {
-      return false;
-    }
+    if (a == null || b == null) return false;
     return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 
   String _formatHeader(DateTime? date) {
-    if (date == null) {
-      return 'Unknown date';
-    }
+    if (date == null) return 'Unknown date';
     return DateFormat('EEEE, MMM d').format(date);
   }
 
@@ -270,24 +261,15 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 
   String _formatEventTime(MicrosoftCalendarEvent event) {
-    if (event.isAllDay) {
-      return 'All day';
-    }
+    if (event.isAllDay) return 'All day';
 
     final start = event.start;
     final end = event.end;
-
-    if (start == null) {
-      return 'Time not specified';
-    }
+    if (start == null) return 'Time not specified';
 
     final formatter = DateFormat('hh:mm a');
     final startLabel = formatter.format(start);
-
-    if (end == null || start.isAtSameMomentAs(end)) {
-      return startLabel;
-    }
-
+    if (end == null || start.isAtSameMomentAs(end)) return startLabel;
     return '$startLabel - ${formatter.format(end)}';
   }
 
@@ -459,31 +441,143 @@ class _CalendarScreenState extends State<CalendarScreen> {
       );
     }
   }
-}
 
-class _SignInPrompt extends StatelessWidget {
-  const _SignInPrompt({required this.onPressed});
+  /// Extract a course code from the event subject, e.g. "CS101 – Lecture 5".
+  String _resolveCourseId(MicrosoftCalendarEvent e) {
+    final s = (e.subject).toUpperCase();
+    final m = RegExp(r'[A-Z]{2,}\s?\d{2,}').firstMatch(s); // CS101 or CS 101
+    return (m?.group(0)?.replaceAll(' ', '')) ?? 'UNASSIGNED';
+  }
 
-  final VoidCallback onPressed;
+  /// Show dialog to mark Absent / Cancelled / Clear (present).
+  void _openAbsenceDialog(MicrosoftCalendarEvent event) {
+    final String eventId = event.id; // Microsoft event id (must be non-null)
+    final String courseId = _resolveCourseId(event);
+    final String title =
+        event.subject.isNotEmpty ? event.subject : 'Lecture';
+    final DateTime start = event.start ?? DateTime.now();
+    final DateTime end = event.end ?? start.add(const Duration(minutes: 1));
 
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text(
-            'Sign in with your Microsoft account to view your calendar.',
-            textAlign: TextAlign.center,
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Record absence'),
+        content: Text(title),
+        actions: [
+          TextButton(
+            child: const Text('Absent'),
+            onPressed: () async {
+              await AttendanceService.mark(
+                courseId: courseId,
+                eventId: eventId,
+                status: 'absent',
+                title: title,
+                start: start,
+                end: end,
+              );
+              await _recomputeAndWarn(courseId);
+              if (mounted) Navigator.pop(context);
+            },
           ),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: onPressed,
-            child: const Text('Sign in with Microsoft'),
+          TextButton(
+            child: const Text('Cancelled'),
+            onPressed: () async {
+              await AttendanceService.mark(
+                courseId: courseId,
+                eventId: eventId,
+                status: 'cancelled',
+                title: title,
+                start: start,
+                end: end,
+              );
+              await _recomputeAndWarn(courseId);
+              if (mounted) Navigator.pop(context);
+            },
+          ),
+          TextButton(
+            child: const Text('Clear'),
+            onPressed: () async {
+              await AttendanceService.mark(
+                courseId: courseId,
+                eventId: eventId,
+                status: 'present', // removes exception doc
+                title: title,
+                start: start,
+                end: end,
+              );
+              await _recomputeAndWarn(courseId);
+              if (mounted) Navigator.pop(context);
+            },
           ),
         ],
       ),
     );
+  }
+
+  /// Recompute absence % for a course and show a SnackBar warning if > 20%.
+  ///
+  /// Rule:
+  /// - Present = default (no doc in Firestore)
+  /// - We only store exceptions: 'absent' or 'cancelled'
+  /// - Percentage = ABSENT / (TOTAL_EVENTS - CANCELLED) * 100
+  Future<void> _recomputeAndWarn(String courseId) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    final courseEvents =
+        _events.where((e) => _resolveCourseId(e) == courseId).toList();
+    if (courseEvents.isEmpty) return;
+
+    final q = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('absences')
+        .where('courseCode', isEqualTo: courseId)
+        .get();
+
+    final byEvent = <String, String>{};
+    for (final d in q.docs) {
+      final status = (d.data()['status'] ?? '').toString();
+      byEvent[d.id] = status;
+    }
+
+    int absent = 0, cancelled = 0;
+    for (final e in courseEvents) {
+      final st = byEvent[e.id];
+      if (st == 'absent') absent++;
+      if (st == 'cancelled') cancelled++;
+    }
+
+    final total = courseEvents.length;
+    final effective = total - cancelled;
+    if (effective <= 0) return;
+
+    final pct = absent * 100.0 / effective;
+
+    if (!mounted) return;
+    final msg =
+        '$courseId absence: ${pct.toStringAsFixed(1)}% (absent $absent of $effective, cancelled $cancelled)';
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(pct > 20 ? '⚠️ $msg — over 20%!' : msg),
+        backgroundColor: pct > 20 ? Colors.red : null,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+
+    // If you’ve decided to remove course_stats entirely, delete this block.
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('course_stats')
+        .doc(courseId)
+        .set({
+      'totalEvents': total,
+      'cancelled': cancelled,
+      'effectiveEvents': effective,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 }
 
@@ -509,6 +603,32 @@ class _ErrorView extends StatelessWidget {
             ElevatedButton(onPressed: onRetry, child: const Text('Try again')),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SignInPrompt extends StatelessWidget {
+  const _SignInPrompt({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'Sign in with your Microsoft account to view your calendar.',
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: onPressed,
+            child: const Text('Sign in with Microsoft'),
+          ),
+        ],
       ),
     );
   }
