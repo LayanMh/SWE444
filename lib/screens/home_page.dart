@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
+import '../providers/schedule_provider.dart';
+import '../services/notifications_service.dart';
 
 import 'calendar_screen.dart'; 
 import 'experience.dart';
@@ -27,6 +30,19 @@ class _HomePageState extends State<HomePage> {
   ];
 
   void _onTap(int i) => setState(() => _selectedIndex = i);
+
+  @override
+  void initState() {
+    super.initState();
+    // After first frame, schedule daily summary notifications based on current lectures
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final lectures = context.read<ScheduleProvider>().lectures;
+      final noti = NotiService();
+      await noti.initNotification();
+      await noti.cancelDailySummariesForNextDays();
+      await noti.scheduleDailySummariesForNextDays(lectures: lectures, minutesAfterEnd: 10);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -1,3 +1,4 @@
+import 'package:absherk/services/notifications_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:flutter/material.dart';
@@ -22,6 +23,7 @@ import 'screens/add_lecture_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await NotiService().initNotification();
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,

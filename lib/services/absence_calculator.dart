@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../models/lecture.dart';
+import 'notifications_service.dart';
 
 /// Computes absence percentage for a course using your Lecture model.
 /// We count only lectures that exist in the schedule.
@@ -15,6 +16,7 @@ class AbsenceCalculator {
     required String courseId,
     required List<Lecture> allLectures,
     bool notify = true,
+    double threshold = 25.0,
   }) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return 0.0;
@@ -45,7 +47,31 @@ class AbsenceCalculator {
 
     final pct = absent * 100.0 / total;
 
-    // 5) Optional local notification
+    // 5) Optional local notification if threshold reached once per increase
+    if (notify && pct >= threshold) {
+      final alertsRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('alerts')
+          .doc('attendance25_' + norm);
+      final prev = await alertsRef.get();
+      final last = ((prev.data()?['lastPct']) ?? 0).toDouble();
+      if (pct > last + 0.1) {
+        await alertsRef.set({
+          'lastPct': pct,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+
+        final noti = NotiService();
+        await noti.initNotification();
+        final id = 77000000 + (norm.hashCode & 0x7FFFFFFF) % 1000000;
+        await noti.showNotification(
+          id: id,
+          title: 'Absence Alert: ' + courseId,
+          body: 'You are at ' + pct.toStringAsFixed(1) + '% absence. Review attendance.',
+        );
+      }
+    }
 
     return pct;
   }
