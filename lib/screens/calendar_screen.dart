@@ -527,7 +527,49 @@ class _CalendarScreenState extends State<CalendarScreen> {
       shadowColor: Colors.black12,
       child: InkWell(
         borderRadius: BorderRadius.circular(22),
-        onTap: () => _openAbsenceDialog(event),
+        onTap: () async {
+          final start = event.start;
+          if (start == null) return;
+          final now = DateTime.now();
+          final eventDay = DateTime(start.year, start.month, start.day);
+          final today = DateTime(now.year, now.month, now.day);
+          final isFutureDay = eventDay.isAfter(today);
+          if (isFutureDay) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('You can only record absence for today or past classes.'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+            return;
+          }
+
+          // Prevent opening if absence already recorded for this event
+          final uid = FirebaseAuth.instance.currentUser?.uid;
+          if (uid != null) {
+            try {
+              final snap = await FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(uid)
+                  .collection('absences')
+                  .doc(event.id)
+                  .get();
+              final status = (snap.data()?['status'] ?? '').toString();
+              if (snap.exists && status == 'absent') {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Absence already recorded for this class.'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+                return;
+              }
+            } catch (_) {
+              // If check fails, fall through to allow dialog
+            }
+          }
+          _openAbsenceDialog(event);
+        },
         child: Padding(
           padding: const EdgeInsets.fromLTRB(18, 18, 8, 18),
           child: Row(
@@ -832,9 +874,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final messenger = ScaffoldMessenger.of(context);
 
     if (firstError == null) {
-      // Clear absence records for all deleted event IDs
+      // Clear absence records for all deleted event IDs and courses
       final ids = snapshot.map((e) => e.id);
       await _clearAbsencesForEvents(ids);
+      final courseIds = snapshot.map(_resolveCourseId).toSet();
+      for (final c in courseIds) {
+        await _clearAbsencesForCourse(c);
+      }
       setState(() {
         _events = <MicrosoftCalendarEvent>[];
         _isLoading = false;
@@ -898,6 +944,19 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
       if (!mounted) return;
 
+      // Determine event IDs that will be removed so we can clear absences
+      final List<String> removedIds = <String>[];
+      if (seriesId != null) {
+        for (final e in _events) {
+          final candidateSeriesId = _resolveSeriesId(e);
+          if (e.id == event.id || e.id == seriesId || candidateSeriesId == seriesId) {
+            removedIds.add(e.id);
+          }
+        }
+      } else {
+        removedIds.add(event.id);
+      }
+
       setState(() {
         if (seriesId != null) {
           _events.removeWhere((e) {
@@ -908,8 +967,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
           _events.removeWhere((e) => e.id == event.id);
         }
       });
-      // Clear absence records for removed events
+      // Clear absence records for removed events; if deleting a series, also by course
       await _clearAbsencesForEvents(removedIds);
+      if (seriesId != null) {
+        final courseId = _resolveCourseId(event);
+        await _clearAbsencesForCourse(courseId);
+      }
       _publishTotals();
 
       messenger.showSnackBar(
@@ -959,14 +1022,17 @@ class _CalendarScreenState extends State<CalendarScreen> {
           TextButton(
             child: const Text('Absent'),
             onPressed: () async {
-              // Only allow marking absence on the same calendar day as the class
+              // Allow marking absence for today or any past day; block future days.
               final now = DateTime.now();
-              if (!_isSameDay(start, now)) {
+              final eventDay = DateTime(start.year, start.month, start.day);
+              final today = DateTime(now.year, now.month, now.day);
+              final isFutureDay = eventDay.isAfter(today);
+              if (isFutureDay) {
                 if (mounted) {
                   ScaffoldMessenger.of(this.context).showSnackBar(
                     const SnackBar(
                       content: Text(
-                        'You can only record absence on the day of the class.',
+                        'You can only record absence for today or past classes.',
                       ),
                       duration: Duration(seconds: 2),
                     ),
@@ -1057,6 +1123,27 @@ class _CalendarScreenState extends State<CalendarScreen> {
       } catch (_) {
         // Ignore errors per-id to avoid blocking the whole flow.
       }
+    }
+  }
+
+  /// Remove all absence docs for a course code (normalized) for the current user.
+  Future<void> _clearAbsencesForCourse(String courseId) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    try {
+      final q = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('absences')
+          .where('courseCode', isEqualTo: courseId)
+          .get();
+      for (final d in q.docs) {
+        try {
+          await d.reference.delete();
+        } catch (_) {}
+      }
+    } catch (_) {
+      // ignore cleanup errors
     }
   }
 }
