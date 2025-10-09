@@ -832,10 +832,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final messenger = ScaffoldMessenger.of(context);
 
     if (firstError == null) {
+      // Clear absence records for all deleted event IDs
+      final ids = snapshot.map((e) => e.id);
+      await _clearAbsencesForEvents(ids);
       setState(() {
         _events = <MicrosoftCalendarEvent>[];
         _isLoading = false;
       });
+      _publishTotals();
       messenger.showSnackBar(
         const SnackBar(content: Text('All sections deleted.')),
       );
@@ -898,14 +902,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
         if (seriesId != null) {
           _events.removeWhere((e) {
             final candidateSeriesId = _resolveSeriesId(e);
-            return e.id == event.id ||
-                e.id == seriesId ||
-                candidateSeriesId == seriesId;
+            return e.id == event.id || e.id == seriesId || candidateSeriesId == seriesId;
           });
         } else {
           _events.removeWhere((e) => e.id == event.id);
         }
       });
+      // Clear absence records for removed events
+      await _clearAbsencesForEvents(removedIds);
       _publishTotals();
 
       messenger.showSnackBar(
@@ -939,31 +943,41 @@ class _CalendarScreenState extends State<CalendarScreen> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Record absence'),
+        title: Row(
+          children: [
+            const Expanded(child: Text('Record absence')),
+            IconButton(
+              icon: const Icon(Icons.close),
+              tooltip: 'Close',
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
+        ),
         content: Text(title),
+        actionsAlignment: MainAxisAlignment.center,
         actions: [
           TextButton(
             child: const Text('Absent'),
             onPressed: () async {
+              // Only allow marking absence on the same calendar day as the class
+              final now = DateTime.now();
+              if (!_isSameDay(start, now)) {
+                if (mounted) {
+                  ScaffoldMessenger.of(this.context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'You can only record absence on the day of the class.',
+                      ),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                }
+                return;
+              }
               await AttendanceService.mark(
                 courseId: courseId,
                 eventId: eventId,
                 status: 'absent',
-                title: title,
-                start: start,
-                end: end,
-              );
-              await _recomputeAndWarn(courseId);
-              if (mounted) Navigator.pop(context);
-            },
-          ),
-          TextButton(
-            child: const Text('Clear'),
-            onPressed: () async {
-              await AttendanceService.mark(
-                courseId: courseId,
-                eventId: eventId,
-                status: 'present', // removes exception doc
                 title: title,
                 start: start,
                 end: end,
@@ -1033,6 +1047,17 @@ class _CalendarScreenState extends State<CalendarScreen> {
       totals[code] = (totals[code] ?? 0) + 1;
     }
     AttendanceTotals.instance.setTotals(totals);
+  }
+
+  /// Remove absence documents for the given event IDs, ignoring individual errors.
+  Future<void> _clearAbsencesForEvents(Iterable<String> eventIds) async {
+    for (final id in eventIds) {
+      try {
+        await AttendanceService.clearEvent(id);
+      } catch (_) {
+        // Ignore errors per-id to avoid blocking the whole flow.
+      }
+    }
   }
 }
 
