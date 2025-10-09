@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../services/microsoft_auth_service.dart';
@@ -7,6 +7,7 @@ import 'add_lecture_screen.dart';
 
 import '../services/attendance_service.dart'; // for attendance
 import '../services/attendance_totals.dart';
+import '../services/notifications_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
