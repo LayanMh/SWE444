@@ -583,6 +583,27 @@ class _CalendarScreenState extends State<CalendarScreen> {
     if (total <= 0) return;
 
     final pct = absent * 100.0 / total;
+    // Notify at 25%+ (throttled per course)
+    if (pct >= 25.0) {
+      final alertsRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('alerts')
+          .doc('attendance25_' + courseId);
+      final prev = await alertsRef.get();
+      final last = ((prev.data()?['lastPct']) ?? 0).toDouble();
+      if (pct > last + 0.1) {
+        await alertsRef.set({'lastPct': pct, 'updatedAt': FieldValue.serverTimestamp()}, SetOptions(merge: true));
+        final noti = NotiService();
+        await noti.initNotification();
+        final id = 77000000 + (courseId.hashCode & 0x7FFFFFFF) % 1000000;
+        await noti.showNotification(
+          id: id,
+          title: 'Absence Alert: ' + courseId,
+          body: 'You are at ' + pct.toStringAsFixed(1) + '% absence. Review attendance.',
+        );
+      }
+    }
 
     if (!mounted) return;
     final msg =
