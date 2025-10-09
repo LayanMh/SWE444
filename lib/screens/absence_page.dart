@@ -6,8 +6,6 @@ import 'package:intl/intl.dart';
 import '../services/attendance_service.dart';
 import '../services/attendance_totals.dart';
 
-enum DateScope { all, today, thisWeek }
-
 class AbsencePage extends StatefulWidget {
   const AbsencePage({super.key});
   @override
@@ -15,8 +13,6 @@ class AbsencePage extends StatefulWidget {
 }
 
 class _AbsencePageState extends State<AbsencePage> {
-  DateScope _scope = DateScope.all;
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -32,9 +28,6 @@ class _AbsencePageState extends State<AbsencePage> {
           }
 
           var docs = snap.data?.docs ?? [];
-
-          // 1) Date scope filter (All / Today / This week)
-          docs = _applyDateScope(docs);
 
           if (docs.isEmpty) {
             return const Center(child: Text('No absences recorded.'));
@@ -65,51 +58,14 @@ class _AbsencePageState extends State<AbsencePage> {
           }).toList()
             ..sort((a, b) => a.code.compareTo(b.code));
 
-          return Column(
-            children: [
-              _ScopeBar(
-                value: _scope,
-                onChanged: (v) => setState(() => _scope = v),
-              ),
-              const SizedBox(height: 8),
-              Expanded(
-                child: ListView.builder(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  itemCount: items.length,
-                  itemBuilder: (context, i) => _CourseCard(item: items[i]),
-                ),
-              ),
-            ],
+          return ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            itemCount: items.length,
+            itemBuilder: (context, i) => _CourseCard(item: items[i]),
           );
         },
       ),
     );
-  }
-
-  // -------- date scope helpers --------
-
-  List<QueryDocumentSnapshot<Map<String, dynamic>>> _applyDateScope(
-      List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) {
-    if (_scope == DateScope.all) return docs;
-
-    final now = DateTime.now();
-    bool inSameDay(DateTime a, DateTime b) =>
-        a.year == b.year && a.month == b.month && a.day == b.day;
-
-    bool inSameWeek(DateTime a, DateTime b) {
-      final monday = b.subtract(Duration(days: b.weekday - 1));
-      final sunday = monday.add(const Duration(days: 6));
-      return !a.isBefore(_atStartOfDay(monday)) &&
-          !a.isAfter(_atEndOfDay(sunday));
-    }
-
-    return docs.where((d) {
-      final start = _asDateTime(d.data()['start']);
-      if (start == null) return false;
-      if (_scope == DateScope.today) return inSameDay(start, now);
-      return inSameWeek(start, now); // thisWeek
-    }).toList();
   }
 }
 
@@ -439,80 +395,7 @@ class _AbsenceRow extends StatelessWidget {
   }
 }
 
-/* =========================== Scope Bar ============================ */
-
-class _ScopeBar extends StatelessWidget {
-  const _ScopeBar({required this.value, required this.onChanged});
-  final DateScope value;
-  final ValueChanged<DateScope> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    const tabs = [
-      _Seg(label: 'All', value: DateScope.all),
-      _Seg(label: 'Today', value: DateScope.today),
-      _Seg(label: 'This week', value: DateScope.thisWeek),
-    ];
-    final index = tabs.indexWhere((t) => t.value == value);
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      height: 44,
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: Stack(
-        children: [
-          AnimatedAlign(
-            alignment: switch (index) {
-              0 => Alignment.centerLeft,
-              1 => Alignment.center,
-              _ => Alignment.centerRight,
-            },
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeInOut,
-            child: Container(
-              width: (MediaQuery.of(context).size.width - 24) / 3,
-              height: 44,
-              decoration: BoxDecoration(
-                color: cs.primary.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(28),
-              ),
-            ),
-          ),
-          Row(
-            children: tabs.map((t) {
-              final selected = t.value == value;
-              return Expanded(
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(28),
-                  onTap: () => onChanged(t.value),
-                  child: AnimatedDefaultTextStyle(
-                    duration: const Duration(milliseconds: 180),
-                    style: TextStyle(
-                      color: selected ? cs.primary : Colors.black87,
-                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                    ),
-                    child: Center(child: Text(t.label)),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Seg {
-  const _Seg({required this.label, required this.value});
-  final String label;
-  final DateScope value;
-}
+/* (Filter removed) */
 
 /* =========================== Small helpers ============================ */
 
