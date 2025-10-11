@@ -8,6 +8,7 @@ import 'add_lecture_screen.dart';
 
 import '../services/attendance_service.dart'; // for attendance
 import '../services/attendance_totals.dart';
+import 'package:absherk/services/noti_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -1092,8 +1093,16 @@ class _CalendarScreenState extends State<CalendarScreen> {
     }
 
     final pct = absent * 100.0 / total;
-    final msg =
-        '$courseId absence: ${pct.toStringAsFixed(1)}% (absent $absent of $total)';
+    final msg = '$courseId absence: ${pct.toStringAsFixed(1)}% (absent $absent of $total)';
+
+    // Local notification when thresholds exceeded (20%/25%).
+    if (pct > 20) {
+      // Fire-and-forget; NotiService is initialized in main
+      // and handles tiered messages and platform specifics.
+      // Avoid blocking the UI.
+      // ignore: unawaited_futures
+      NotiService.showAbsenceAlert(courseId, pct);
+    }
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
