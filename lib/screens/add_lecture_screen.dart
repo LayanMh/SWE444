@@ -1,16 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart';
-import 'package:uuid/uuid.dart';
-
-import '../models/lecture.dart';
-import '../providers/schedule_provider.dart';
-import '../services/microsoft_auth_service.dart';
-import '../services/microsoft_calendar_service.dart';
-import '../services/firebase_lecture_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../services/schedule_scraper.dart';
+import '../services/providers/ksu_edugate_provider.dart';
 
 class AddLectureScreen extends StatefulWidget {
   const AddLectureScreen({super.key});
@@ -21,13 +15,12 @@ class AddLectureScreen extends StatefulWidget {
 
 class _AddLectureScreenState extends State<AddLectureScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _controller = TextEditingController();
-  final _uuid = const Uuid();
+  final _sectionController = TextEditingController();
   bool _isLoading = false;
 
   @override
   void dispose() {
-    _controller.dispose();
+    _sectionController.dispose();
     super.dispose();
   }
 
@@ -35,132 +28,53 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     final messenger = ScaffoldMessenger.of(context);
-    final scheduleProvider =
-        Provider.of<ScheduleProvider>(context, listen: false);
     setState(() => _isLoading = true);
 
     try {
-      final section = _controller.text.trim();
-
-      if (scheduleProvider.containsSection(section)) {
+      // Resolve uid
+      final firebaseUser = FirebaseAuth.instance.currentUser;
+      String? uid = firebaseUser?.uid;
+      if (uid == null || uid.isEmpty) {
+        final prefs = await SharedPreferences.getInstance();
+        uid = prefs.getString('microsoft_user_doc_id');
+      }
+      if (uid == null || uid.isEmpty) {
         messenger.showSnackBar(
-          const SnackBar(
-            content: Text('This section is already in your schedule.'),
-          ),
+          const SnackBar(content: Text('You must be signed in.')),
         );
         return;
       }
 
-      final lecture = await FirebaseLectureService.getLectureBySection(section);
+      final inputs = ScrapeInputs(
+        uid: uid,
+        section: _sectionController.text.trim(),
+      );
+
+      final summary = await scrapeAndSave(
+        inputs: inputs,
+        provider: KsuEdugateProvider(enableLogging: true),
+      );
+
       if (!mounted) return;
 
-      if (lecture == null) {
+      final total = summary['totalSaved'] ?? 0;
+      if (total == 0) {
         messenger.showSnackBar(
-          const SnackBar(content: Text('Section not found in Firestore.')),
+          const SnackBar(content: Text('No meetings found for this section.')),
         );
         return;
       }
-
-      final newLecture = Lecture(
-        id: _uuid.v4(),
-        courseCode: lecture.courseCode,
-        courseName: lecture.courseName,
-        section: lecture.section,
-        classroom: lecture.classroom,
-        dayOfWeek: lecture.dayOfWeek,
-        startTime: lecture.startTime,
-        endTime: lecture.endTime,
-      );
-
-      final conflictingLecture =
-          scheduleProvider.findTimeConflict(newLecture);
-      if (conflictingLecture != null) {
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              'Time conflict with ${conflictingLecture.courseCode} section ${conflictingLecture.section}.',
-            ),
-          ),
-        );
-        return;
-      }
-
-      scheduleProvider.addLecture(newLecture);
-
-      // Save lecture under current user's schedule in Firestore
-      final firebaseUser = FirebaseAuth.instance.currentUser;
-      String? userDocId;
-
-      if (firebaseUser != null) {
-        userDocId = firebaseUser.uid;
-      } else {
-        final prefs = await SharedPreferences.getInstance();
-        userDocId = prefs.getString('microsoft_user_doc_id');
-      }
-
-      if (userDocId == null || userDocId.isEmpty) {
-        messenger.showSnackBar(
-          const SnackBar(
-            content: Text('You must be signed in to save this section.'),
-          ),
-        );
-        return;
-      }
-
-      final userScheduleRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(userDocId)
-          .collection('schedule')
-          .doc(section);
-
-      await userScheduleRef.set(
-        {
-          'courseCode': lecture.courseCode,
-          'courseName': lecture.courseName,
-          'section': lecture.section,
-          'classroom': lecture.classroom,
-          'dayOfWeek': lecture.dayOfWeek,
-          'startTime': lecture.startTime,
-          'endTime': lecture.endTime,
-          'addedAt': FieldValue.serverTimestamp(),
-          'status': 'active',
-        },
-        SetOptions(merge: true),
-      );
 
       messenger.showSnackBar(
-        const SnackBar(content: Text('Lecture added to your schedule.')),
+        SnackBar(content: Text('Saved $total occurrences to your schedule.')),
       );
 
-      final account = await MicrosoftAuthService.ensureSignedIn();
+      Navigator.pop(context, summary);
+    } catch (e) {
       if (!mounted) return;
-
-      if (account == null) {
-        messenger.showSnackBar(
-          const SnackBar(content: Text('Microsoft sign-in cancelled.')),
-        );
-      } else {
-        try {
-          await MicrosoftCalendarService.addWeeklyRecurringLecture(
-            account: account,
-            lecture: newLecture.toRecurringLecture(),
-          );
-          if (!mounted) return;
-          messenger.showSnackBar(
-            const SnackBar(
-              content: Text('Lecture added to Microsoft Calendar.'),
-            ),
-          );
-        } catch (error) {
-          if (!mounted) return;
-          messenger.showSnackBar(
-            SnackBar(content: Text('Microsoft Calendar error: $error')),
-          );
-        }
-      }
-
-      if (!mounted) return;
-      Navigator.pop(context);
+      messenger.showSnackBar(
+        SnackBar(content: Text('Scrape error: $e')),
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -174,38 +88,31 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
         padding: const EdgeInsets.all(16),
         child: Form(
           key: _formKey,
-          child: Column(
-            children: [
-              TextFormField(
-                controller: _controller,
-                keyboardType: TextInputType.number,
-                textInputAction: TextInputAction.done,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(5),
-                ],
-                decoration: const InputDecoration(
-                  labelText: 'Enter Section Number',
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                // Section
+                TextFormField(
+                  controller: _sectionController,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: 'Section (e.g., 201)',
+                  ),
+                  validator: (v) {
+                    final s = (v ?? '').trim();
+                    if (s.isEmpty) return 'Section is required';
+                    return null;
+                  },
                 ),
-                validator: (value) {
-                  final trimmed = value?.trim() ?? '';
-                  if (trimmed.isEmpty) {
-                    return 'Section number is required';
-                  }
-                  if (!RegExp(r'^\d{5}$').hasMatch(trimmed)) {
-                    return 'Section number must be 5 digits';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 20),
-              _isLoading
-                  ? const CircularProgressIndicator()
-                  : ElevatedButton(
-                      onPressed: _addLecture,
-                      child: const Text('Add Lecture'),
-                    ),
-            ],
+                const SizedBox(height: 20),
+                _isLoading
+                    ? const CircularProgressIndicator()
+                    : ElevatedButton(
+                        onPressed: _addLecture,
+                        child: const Text('Add Section'),
+                      ),
+              ],
+            ),
           ),
         ),
       ),
