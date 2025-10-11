@@ -3,7 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../services/attendance_service.dart';
+import 'package:absherk/services/attendance_service.dart';
+import 'package:absherk/services/noti_service.dart';
 import '../services/attendance_totals.dart';
 
 class AbsencePage extends StatefulWidget {
@@ -184,6 +185,12 @@ class _PercentBar extends StatelessWidget {
       barColor = Colors.green;
     }
 
+    // Fire-and-forget: if threshold is crossed, maybe show a local notif.
+    if (pct > 20) {
+      // Use a microtask to avoid doing async work directly in build.
+      Future.microtask(() => _maybeNotify(courseCode, pct));
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -289,6 +296,18 @@ Future<_Denom> _computeDenominator(String normalizedCourseCode) async {
   }
 
   return _Denom(totalSoFar: total);
+}
+
+// Throttled via AttendanceService.shouldWarn to avoid repeated alerts.
+Future<void> _maybeNotify(String courseCodeNormalized, double pct) async {
+  try {
+    final ok = await AttendanceService.shouldWarn(courseCodeNormalized, pct);
+    if (ok) {
+      await NotiService.showAbsenceAlert(courseCodeNormalized, pct);
+    }
+  } catch (_) {
+    // ignore
+  }
 }
 
 int _countWeekdayOccurrences(DateTime from, DateTime to, int weekdayZeroBased) {
