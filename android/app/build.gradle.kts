@@ -1,13 +1,13 @@
 plugins {
     id("com.android.application")
-    id("kotlin-android")
+    id("org.jetbrains.kotlin.android")
     id("dev.flutter.flutter-gradle-plugin")
-    id("com.google.gms.google-services") // apply here
+    id("com.google.gms.google-services")
 }
 
 android {
     namespace = "com.example.absherk"
-    compileSdk = 36 // or flutter.compileSdkVersion if using Flutter DSL
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.example.absherk"
@@ -16,13 +16,12 @@ android {
         versionCode = 1
         versionName = "1.0.0"
         manifestPlaceholders["appAuthRedirectScheme"] = "msauth"
-        minSdkVersion 21
     }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
-         coreLibraryDesugaringEnabled true
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
@@ -49,5 +48,6 @@ dependencies {
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
 
-    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.0.4"
+    // flutter_local_notifications requires 2.1.4+
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
