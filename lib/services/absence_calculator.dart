@@ -1,6 +1,8 @@
 // lib/services/absence_calculator.dart 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:absherk/services/attendance_service.dart';
+import 'package:absherk/services/noti_service.dart';
 
 import '../models/lecture.dart';
 
@@ -45,7 +47,18 @@ class AbsenceCalculator {
 
     final pct = absent * 100.0 / total;
 
-    // 5) Optional local notification
+    // 5) Optional local notification when over 20%.
+    if (notify && pct > 20) {
+      try {
+        // Throttle to only notify on increases.
+        final ok = await AttendanceService.shouldWarn(courseId, pct);
+        if (ok) {
+          await NotiService.showAbsenceAlert(courseId, pct);
+        }
+      } catch (_) {
+        // No-op on errors; this should not break the flow
+      }
+    }
 
     return pct;
   }
