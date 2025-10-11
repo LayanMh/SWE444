@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import 'firebase_options.dart';
 import 'providers/schedule_provider.dart';
+import 'package:absherk/services/noti_service.dart';
 
 // New
 import 'screens/home_page.dart';
@@ -31,6 +32,8 @@ Future<void> main() async {
     debugPrint('Firebase initialization failed: $e');
     debugPrintStack(stackTrace: st);
   }
+  // Initialize local notifications (Android/iOS)
+  await NotiService.initialize();
   runApp(const MyApp());
 }
 
