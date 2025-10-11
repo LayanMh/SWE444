@@ -4,8 +4,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:absherk/services/attendance_service.dart';
-import 'package:absherk/services/noti_service.dart';
 import '../services/attendance_totals.dart';
+import 'package:absherk/services/absence_calculator.dart';
+import 'package:absherk/services/noti_service.dart';
 
 class AbsencePage extends StatefulWidget {
   const AbsencePage({super.key});
@@ -185,11 +186,7 @@ class _PercentBar extends StatelessWidget {
       barColor = Colors.green;
     }
 
-    // Fire-and-forget: if threshold is crossed, maybe show a local notif.
-    if (pct > 20) {
-      // Use a microtask to avoid doing async work directly in build.
-      Future.microtask(() => _maybeNotify(courseCode, pct));
-    }
+    // UI should be pure: no side effects during build.
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -298,17 +295,6 @@ Future<_Denom> _computeDenominator(String normalizedCourseCode) async {
   return _Denom(totalSoFar: total);
 }
 
-// Throttled via AttendanceService.shouldWarn to avoid repeated alerts.
-Future<void> _maybeNotify(String courseCodeNormalized, double pct) async {
-  try {
-    final ok = await AttendanceService.shouldWarn(courseCodeNormalized, pct);
-    if (ok) {
-      await NotiService.showAbsenceAlert(courseCodeNormalized, pct);
-    }
-  } catch (_) {
-    // ignore
-  }
-}
 
 int _countWeekdayOccurrences(DateTime from, DateTime to, int weekdayZeroBased) {
   // Convert to DateTime.weekday (1=Mon..7=Sun). Your model is 0..6.
@@ -356,6 +342,31 @@ class _AbsenceRow extends StatelessWidget {
       confirmDismiss: (_) async => await _confirmDelete(context, title),
       onDismissed: (_) async {
         await AttendanceService.clearEvent(eventId);
+        // Recompute for this course and notify if still above threshold
+        final code = (record['courseCode'] ?? '').toString();
+        if (code.isNotEmpty) {
+          try {
+            // Count remaining absences quickly
+            final absSnap = await FirebaseFirestore.instance
+                .collection('users')
+                .doc(FirebaseAuth.instance.currentUser?.uid)
+                .collection('absences')
+                .where('courseCode', isEqualTo: code)
+                .get();
+            final absent = absSnap.docs.length;
+            final total = AttendanceTotals.instance.totalsByCourse.value[code] ?? 0;
+            double pct;
+            if (total > 0) {
+              pct = absent * 100.0 / total;
+            } else {
+              pct = await AbsenceCalculator.computePercentFromFirestore(courseId: code);
+            }
+            if (pct > 20) {
+              // ignore: unawaited_futures
+              NotiService.showAbsenceAlert(code, pct);
+            }
+          } catch (_) {}
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Removed: $title'),
@@ -377,6 +388,30 @@ class _AbsenceRow extends StatelessWidget {
             final ok = await _confirmDelete(context, title);
             if (ok) {
               await AttendanceService.clearEvent(eventId);
+              // Recompute for this course and notify if still above threshold
+              final code = (record['courseCode'] ?? '').toString();
+              if (code.isNotEmpty) {
+                try {
+                  final absSnap = await FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(FirebaseAuth.instance.currentUser?.uid)
+                      .collection('absences')
+                      .where('courseCode', isEqualTo: code)
+                      .get();
+                  final absent = absSnap.docs.length;
+                  final total = AttendanceTotals.instance.totalsByCourse.value[code] ?? 0;
+                  double pct;
+                  if (total > 0) {
+                    pct = absent * 100.0 / total;
+                  } else {
+                    pct = await AbsenceCalculator.computePercentFromFirestore(courseId: code);
+                  }
+                  if (pct > 20) {
+                    // ignore: unawaited_futures
+                    NotiService.showAbsenceAlert(code, pct);
+                  }
+                } catch (_) {}
+              }
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(

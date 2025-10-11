@@ -23,7 +23,8 @@ class NotiService {
       return;
     }
 
-    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    // Use your custom small icon from res/drawable: abesherk.png
+    const androidInit = AndroidInitializationSettings('abesherk');
     const iosInit = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
@@ -74,29 +75,65 @@ class NotiService {
     if (kIsWeb) return; // no-op on web
 
     final percentText = pct.toStringAsFixed(1);
-    final title = 'Attendance Warning';
-    final body =
-        'You exceeded 20% absences in $courseId ($percentText%).';
+    final rounded = double.tryParse(percentText) ?? pct;
+    String title;
+    String body;
+    if (rounded > 25.0) {
+      title = 'Attendance At Risk';
+      body = 'You exceeded the 25% limit in $courseId ($percentText%).';
+    } else if ((rounded - 25.0).abs() < 0.01) {
+      title = 'Attendance Limit Reached';
+      body = 'You hit the 25% absence limit in $courseId ($percentText%).';
+    } else {
+      title = 'Attendance Warning';
+      body = 'You exceeded 20% absences in $courseId ($percentText%).';
+    }
 
-    final androidDetails = AndroidNotificationDetails(
-      _channelId,
-      _channelName,
-      channelDescription: _channelDesc,
-      importance: Importance.high,
-      priority: Priority.high,
-      ticker: 'Attendance alert',
+    // Try with custom image (requires res/drawable/absherk_notif.png).
+    final bigBitmap = const DrawableResourceAndroidBitmap('absherk_notif');
+    final withImage = NotificationDetails(
+      android: AndroidNotificationDetails(
+        _channelId,
+        _channelName,
+        channelDescription: _channelDesc,
+        importance: Importance.high,
+        priority: Priority.high,
+        ticker: 'Attendance alert',
+        icon: 'abesherk',
+        styleInformation: BigPictureStyleInformation(
+          bigBitmap,
+          largeIcon: bigBitmap,
+          contentTitle: title,
+          summaryText: body,
+          hideExpandedLargeIcon: false,
+        ),
+      ),
+      iOS: const DarwinNotificationDetails(),
     );
 
-    const iosDetails = DarwinNotificationDetails();
-
-    final details = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
+    // Fallback details without image (in case resource not found or style fails)
+    final fallback = NotificationDetails(
+      android: AndroidNotificationDetails(
+        _channelId,
+        _channelName,
+        channelDescription: _channelDesc,
+        importance: Importance.high,
+        priority: Priority.high,
+        ticker: 'Attendance alert',
+        icon: 'abesherk',
+      ),
+      iOS: const DarwinNotificationDetails(),
     );
 
-    // Use a deterministic id per course to avoid stacking too many
-    final id = courseId.hashCode & 0x7fffffff;
-    await _plugin.show(id, title, body, details,
-        payload: 'course:$courseId;pct:$percentText');
+    // Use a time-based id so each alert shows as a new notification
+    final id = (DateTime.now().millisecondsSinceEpoch % 0x7fffffff).toInt();
+    try {
+      await _plugin.show(id, title, body, withImage,
+          payload: 'course:$courseId;pct:$percentText');
+    } catch (_) {
+      // Try again without the image style
+      await _plugin.show(id, title, body, fallback,
+          payload: 'course:$courseId;pct:$percentText');
+    }
   }
 }

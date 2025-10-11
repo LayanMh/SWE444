@@ -16,13 +16,12 @@ android {
         versionCode = 1
         versionName = "1.0.0"
         manifestPlaceholders["appAuthRedirectScheme"] = "msauth"
-        minSdkVersion 21
     }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
-        coreLibraryDesugaringEnabled true
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
@@ -49,5 +48,6 @@ dependencies {
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
 
-    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.0.4"
+    // flutter_local_notifications requires >= 2.1.4
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
