@@ -335,7 +335,10 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const pdf.GeneratePdfPage()),
+             MaterialPageRoute(
+  builder: (_) => pdf.GeneratePdfPage(myRequestId: widget.requestId),
+),
+
               );
             },
           ),
