@@ -122,8 +122,8 @@ class _CourseCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
 
-            // Compute duration-weighted %, show counts in the label.
-            _PercentBar(courseCode: item.code, records: item.records),
+            // Compute total classes so far FROM LECTURES and show %.
+            _PercentBar(courseCode: item.code, absences: item.absentCount),
 
             const SizedBox(height: 4),
             if (latestStr != null) Text('Latest: $latestStr'),
@@ -142,43 +142,39 @@ class _CourseCard extends StatelessWidget {
 /* =========================== % Bar (denominator from lectures) ============================ */
 
 class _PercentBar extends StatelessWidget {
-  const _PercentBar({required this.courseCode, required this.records});
+  const _PercentBar({required this.courseCode, required this.absences});
 
   final String courseCode; // normalized
-  final List<Map<String, dynamic>> records; // only 'absent' rows
+  final int absences;
 
   @override
   Widget build(BuildContext context) {
-    // Prefer CalendarScreen-provided total minutes; otherwise, fall back
-    // to computing minutes from Firestore lectures via _computeDenominator.
+    // Prefer CalendarScreen-provided totals if available; otherwise, fall back
+    // to computing from Firestore lectures via _computeDenominator.
     return ValueListenableBuilder<Map<String, int>>(
-      valueListenable: AttendanceTotals.instance.totalMinutesByCourse,
+      valueListenable: AttendanceTotals.instance.totalsByCourse,
       builder: (context, totals, _) {
-        final providedMinutes = totals[courseCode];
-        if (providedMinutes != null && providedMinutes > 0) {
-          return _renderBar(totalMinutes: providedMinutes);
+        final provided = totals[courseCode];
+        if (provided != null && provided > 0) {
+          return _renderBar(total: provided);
         }
         return FutureBuilder<_Denom>(
-          future: _computeDenominatorMinutes(courseCode),
+          future: _computeDenominator(courseCode),
           builder: (context, snap) {
             if (snap.connectionState == ConnectionState.waiting) {
               return _placeholderBar();
             }
-            final denom = snap.data ?? const _Denom(totalEvents: 0, totalMinutes: 0);
-            final totalMinutes = denom.totalMinutes > 0
-                ? denom.totalMinutes
-                : _sumAbsentMinutes(records);
-            return _renderBar(totalMinutes: totalMinutes);
+            final denom = snap.data ?? const _Denom(totalSoFar: 0);
+            final fallbackTotal = denom.totalSoFar > 0 ? denom.totalSoFar : absences;
+            return _renderBar(total: fallbackTotal);
           },
         );
       },
     );
   }
 
-  Widget _renderBar({required int totalMinutes}) {
-    final absentEvents = records.length;
-    final absentMinutes = _sumAbsentMinutes(records);
-    final pct = totalMinutes == 0 ? 0.0 : (absentMinutes * 100.0 / totalMinutes);
+  Widget _renderBar({required int total}) {
+    final pct = total == 0 ? 0.0 : (absences * 100.0 / total);
     final level = (pct / 25).clamp(0, 1).toDouble();
 
     Color barColor;
@@ -211,8 +207,7 @@ class _PercentBar extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          'Absence: ${pct.toStringAsFixed(1)}% (absent $absentEvents of ' 
-          '${_totalClassesFor(courseCode)} classes)',
+          'Absence: ${pct.toStringAsFixed(1)}% of classes ($absences/$total)',
           style: TextStyle(
             fontSize: 12,
             color: barColor,
@@ -246,84 +241,17 @@ class _PercentBar extends StatelessWidget {
           ),
         ],
       );
-
-  int _totalClassesFor(String courseCode) {
-    final counts = AttendanceTotals.instance.totalsByCourse.value;
-    return counts[courseCode] ?? 0;
-  }
-
-  int _sumAbsentMinutes(List<Map<String, dynamic>> recs) {
-    int total = 0;
-    for (final r in recs) {
-      final s = _asDateTime(r['start']);
-      final e = _asDateTime(r['end']) ?? (s?.add(const Duration(minutes: 1)));
-      if (s == null) continue;
-      final mins = (e != null && e.isAfter(s)) ? e.difference(s).inMinutes : 1;
-      total += mins <= 0 ? 1 : mins;
-    }
-    return total;
-  }
 }
 
-// Denominator = totals up to now (events and minutes)
+// Denominator = number of scheduled class occurrences up to now
 class _Denom {
-  const _Denom({required this.totalEvents, required this.totalMinutes});
-  final int totalEvents;
-  final int totalMinutes;
-}
-
-Future<_Denom> _computeDenominatorMinutes(String normalizedCourseCode) async {
-  final uid = FirebaseAuth.instance.currentUser?.uid;
-  if (uid == null) return const _Denom(totalEvents: 0, totalMinutes: 0);
-
-  // 1) Read user's lectures for this course.
-  final userLects = await FirebaseFirestore.instance
-      .collection('users')
-      .doc(uid)
-      .collection('lectures')
-      .where('courseCode', isEqualTo: normalizedCourseCode)
-      .get();
-
-  // If nothing in users/{uid}/lectures, try a fallback root collection (optional).
-  var lectDocs = userLects.docs;
-  if (lectDocs.isEmpty) {
-    final root = await FirebaseFirestore.instance
-        .collection('lectures')
-        .where('courseCode', isEqualTo: normalizedCourseCode)
-        .get();
-    lectDocs = root.docs;
-  }
-
-  if (lectDocs.isEmpty) {
-    // No schedule found; return zeros so UI falls back gracefully.
-    return const _Denom(totalEvents: 0, totalMinutes: 0);
-  }
-
-  // 2) Generate occurrences from semester start to today.
-  final now = DateTime.now();
-  final startOfYear = DateTime(now.year, 9, 1); // simple default
-  int totalEvents = 0;
-  int totalMinutes = 0;
-
-  for (final d in lectDocs) {
-    final data = d.data();
-    final int dayOfWeek = (data['dayOfWeek'] as num).toInt(); // 0..6
-    final int startTime = (data['startTime'] as num?)?.toInt() ?? 0;
-    final int endTime = (data['endTime'] as num?)?.toInt() ?? 0;
-    final int lectMins = (endTime - startTime) > 0 ? (endTime - startTime) : 1;
-
-    // Count each week's occurrence.
-    final occ = _countWeekdayOccurrences(startOfYear, now, dayOfWeek);
-    totalEvents += occ;
-    totalMinutes += occ * lectMins;
-  }
-
-  return _Denom(totalEvents: totalEvents, totalMinutes: totalMinutes);
+  const _Denom({required this.totalSoFar});
+  final int totalSoFar;
 }
 
 Future<_Denom> _computeDenominator(String normalizedCourseCode) async {
   final uid = FirebaseAuth.instance.currentUser?.uid;
-  if (uid == null) return const _Denom(totalEvents: 0, totalMinutes: 0);
+  if (uid == null) return const _Denom(totalSoFar: 0);
 
   // 1) Read user's lectures for this course.
   //    Expected doc fields (based on your Lecture model):
@@ -347,7 +275,7 @@ Future<_Denom> _computeDenominator(String normalizedCourseCode) async {
 
   if (lectDocs.isEmpty) {
     // No schedule → we can’t know total; fall back to absences-only elsewhere.
-    return const _Denom(totalEvents: 0, totalMinutes: 0);
+    return const _Denom(totalSoFar: 0);
   }
 
   // 2) Generate occurrences from semester start to today.
@@ -355,22 +283,16 @@ Future<_Denom> _computeDenominator(String normalizedCourseCode) async {
   //    change if you already store semesterStart in lecture docs.
   final now = DateTime.now();
   final startOfYear = DateTime(now.year, 9, 1); // simple default
-  int totalEvents = 0;
-  int totalMinutes = 0;
+  int total = 0;
 
   for (final d in lectDocs) {
     final data = d.data();
     final int dayOfWeek = (data['dayOfWeek'] as num).toInt(); // 0..6
     // count each week’s occurrence from startOfYear..today for that weekday
-    final int startTime = (data['startTime'] as num?)?.toInt() ?? 0;
-    final int endTime = (data['endTime'] as num?)?.toInt() ?? 0;
-    final int lectMins = (endTime - startTime) > 0 ? (endTime - startTime) : 1;
-    final occ = _countWeekdayOccurrences(startOfYear, now, dayOfWeek);
-    totalEvents += occ;
-    totalMinutes += occ * lectMins;
+    total += _countWeekdayOccurrences(startOfYear, now, dayOfWeek);
   }
 
-  return _Denom(totalEvents: totalEvents, totalMinutes: totalMinutes);
+  return _Denom(totalSoFar: total);
 }
 
 
@@ -424,30 +346,20 @@ class _AbsenceRow extends StatelessWidget {
         final code = (record['courseCode'] ?? '').toString();
         if (code.isNotEmpty) {
           try {
-            // Sum remaining absence minutes
+            // Count remaining absences quickly
             final absSnap = await FirebaseFirestore.instance
                 .collection('users')
                 .doc(FirebaseAuth.instance.currentUser?.uid)
                 .collection('absences')
                 .where('courseCode', isEqualTo: code)
                 .get();
-            int absentMinutes = 0;
-            for (final d in absSnap.docs) {
-              final data = d.data();
-              final s = _asDateTime(data['start']);
-              final e = _asDateTime(data['end']) ?? (s?.add(const Duration(minutes: 1)));
-              if (s == null) continue;
-              final mins = (e != null && e.isAfter(s)) ? e.difference(s).inMinutes : 1;
-              absentMinutes += mins <= 0 ? 1 : mins;
-            }
-
-            final tm = AttendanceTotals.instance.totalMinutesByCourse.value[code] ?? 0;
+            final absent = absSnap.docs.length;
+            final total = AttendanceTotals.instance.totalsByCourse.value[code] ?? 0;
             double pct;
-            if (tm > 0) {
-              pct = absentMinutes * 100.0 / tm;
+            if (total > 0) {
+              pct = absent * 100.0 / total;
             } else {
-              final denom = await _computeDenominatorMinutes(code);
-              pct = denom.totalMinutes > 0 ? (absentMinutes * 100.0 / denom.totalMinutes) : 0.0;
+              pct = await AbsenceCalculator.computePercentFromFirestore(courseId: code);
             }
             if (pct > 20) {
               // ignore: unawaited_futures
@@ -486,22 +398,13 @@ class _AbsenceRow extends StatelessWidget {
                       .collection('absences')
                       .where('courseCode', isEqualTo: code)
                       .get();
-                  int absentMinutes = 0;
-                  for (final d in absSnap.docs) {
-                    final data = d.data();
-                    final s = _asDateTime(data['start']);
-                    final e = _asDateTime(data['end']) ?? (s?.add(const Duration(minutes: 1)));
-                    if (s == null) continue;
-                    final mins = (e != null && e.isAfter(s)) ? e.difference(s).inMinutes : 1;
-                    absentMinutes += mins <= 0 ? 1 : mins;
-                  }
-                  final tm = AttendanceTotals.instance.totalMinutesByCourse.value[code] ?? 0;
+                  final absent = absSnap.docs.length;
+                  final total = AttendanceTotals.instance.totalsByCourse.value[code] ?? 0;
                   double pct;
-                  if (tm > 0) {
-                    pct = absentMinutes * 100.0 / tm;
+                  if (total > 0) {
+                    pct = absent * 100.0 / total;
                   } else {
-                    final denom = await _computeDenominatorMinutes(code);
-                    pct = denom.totalMinutes > 0 ? (absentMinutes * 100.0 / denom.totalMinutes) : 0.0;
+                    pct = await AbsenceCalculator.computePercentFromFirestore(courseId: code);
                   }
                   if (pct > 20) {
                     // ignore: unawaited_futures
