@@ -8,7 +8,6 @@ import 'add_lecture_screen.dart';
 
 import '../services/attendance_service.dart'; // for attendance
 import '../services/attendance_totals.dart';
-import 'package:absherk/services/noti_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -1136,11 +1135,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
     // Show counts to the user; keep minutes for calculation only.
     final msg =
         '$courseId absence: ${pct.toStringAsFixed(1)}% (absent $absentEvents of $totalEvents classes)';
-
-    if (pct > 20) {
-      // ignore: unawaited_futures
-      NotiService.showAbsenceAlert(courseId, pct);
-    }
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

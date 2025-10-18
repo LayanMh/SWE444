@@ -1,139 +1,22 @@
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/foundation.dart';
 
 class NotiService {
   NotiService._();
 
-  static final FlutterLocalNotificationsPlugin _plugin =
-      FlutterLocalNotificationsPlugin();
-
-  static const String _channelId = 'attendance_alerts';
-  static const String _channelName = 'Attendance Alerts';
-  static const String _channelDesc = 'Alerts when absence exceeds thresholds';
-
   static bool _inited = false;
 
-  /// Initialize the local notifications plugin and request permissions.
+  // Notifications disabled: keep API but do nothing.
   static Future<void> initialize() async {
-    if (_inited) return;
-
-    if (kIsWeb) {
-      // Local notifications are not supported on web via this plugin.
-      _inited = true;
-      return;
-    }
-
-    // Use your custom small icon from res/drawable: abesherk.png
-    const androidInit = AndroidInitializationSettings('abesherk');
-    const iosInit = DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
-    );
-
-    const initSettings = InitializationSettings(
-      android: androidInit,
-      iOS: iosInit,
-    );
-
-    await _plugin.initialize(initSettings);
-
-    // Android: request permission and create channel when available.
-    final androidImpl = _plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
-    await androidImpl?.requestNotificationsPermission();
-    const channel = AndroidNotificationChannel(
-      _channelId,
-      _channelName,
-      description: _channelDesc,
-      importance: Importance.high,
-      enableLights: true,
-      enableVibration: true,
-      showBadge: true,
-    );
-    await androidImpl?.createNotificationChannel(channel);
-
-    // iOS: request permissions via implementation when available.
-    final iosImpl = _plugin
-        .resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>();
-    await iosImpl?.requestPermissions(alert: true, badge: true, sound: true);
-
     _inited = true;
   }
 
-  /// Show an absence threshold alert (20%+).
   static Future<void> showAbsenceAlert(String courseId, double pct) async {
-    // Ensure initialized
     if (!_inited) {
       try {
         await initialize();
-      } catch (_) {
-        // ignore
-      }
+      } catch (_) {}
     }
-
-    if (kIsWeb) return; // no-op on web
-
-    final percentText = pct.toStringAsFixed(1);
-    final rounded = double.tryParse(percentText) ?? pct;
-    String title;
-    String body;
-    if (rounded > 25.0) {
-      title = 'Attendance At Risk';
-      body = 'You exceeded the 25% limit in $courseId ($percentText%).';
-    } else if ((rounded - 25.0).abs() < 0.01) {
-      title = 'Attendance Limit Reached';
-      body = 'You hit the 25% absence limit in $courseId ($percentText%).';
-    } else {
-      title = 'Attendance Warning';
-      body = 'You exceeded 20% absences in $courseId ($percentText%).';
-    }
-
-    // Try with custom image (requires res/drawable/absherk_notif.png).
-    final bigBitmap = const DrawableResourceAndroidBitmap('absherk_notif');
-    final withImage = NotificationDetails(
-      android: AndroidNotificationDetails(
-        _channelId,
-        _channelName,
-        channelDescription: _channelDesc,
-        importance: Importance.high,
-        priority: Priority.high,
-        ticker: 'Attendance alert',
-        icon: 'abesherk',
-        styleInformation: BigPictureStyleInformation(
-          bigBitmap,
-          largeIcon: bigBitmap,
-          contentTitle: title,
-          summaryText: body,
-          hideExpandedLargeIcon: false,
-        ),
-      ),
-      iOS: const DarwinNotificationDetails(),
-    );
-
-    // Fallback details without image (in case resource not found or style fails)
-    final fallback = NotificationDetails(
-      android: AndroidNotificationDetails(
-        _channelId,
-        _channelName,
-        channelDescription: _channelDesc,
-        importance: Importance.high,
-        priority: Priority.high,
-        ticker: 'Attendance alert',
-        icon: 'abesherk',
-      ),
-      iOS: const DarwinNotificationDetails(),
-    );
-
-    // Use a time-based id so each alert shows as a new notification
-    final id = (DateTime.now().millisecondsSinceEpoch % 0x7fffffff).toInt();
-    try {
-      await _plugin.show(id, title, body, withImage,
-          payload: 'course:$courseId;pct:$percentText');
-    } catch (_) {
-      // Try again without the image style
-      await _plugin.show(id, title, body, fallback,
-          payload: 'course:$courseId;pct:$percentText');
-    }
+    // No-op (notifications suppressed on all platforms, including web)
+    return;
   }
 }
