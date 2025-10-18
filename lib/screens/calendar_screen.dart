@@ -348,6 +348,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     }
 
     final currentDay = _dayKeys[pageIndex];
+    final currentDayEvents = _eventsForDay(currentDay);
     final theme = Theme.of(context);
     final isToday = _isSameDay(currentDay, DateTime.now());
 
@@ -437,6 +438,18 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     onPressed: _jumpToToday,
                     icon: const Icon(Icons.today_rounded),
                     label: const Text('Jump to today'),
+                  ),
+                ),
+              ),
+            if (currentDayEvents.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () => _confirmAbsenceAllDay(currentDay),
+                    icon: const Icon(Icons.event_busy_rounded),
+                    label: const Text('Absence All Day'),
                   ),
                 ),
               ),
@@ -1060,10 +1073,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   /// Recompute absence % for a course and show a SnackBar warning if > 20%.
   ///
-  /// Rule:
+  /// Duration-weighted rule:
   /// - Present = default (no doc in Firestore)
   /// - We only store exceptions: 'absent'
-  /// - Percentage = ABSENT / TOTAL_EVENTS * 100
+  /// - Percentage = SUM(absent minutes) / SUM(all event minutes) * 100
   Future<void> _recomputeAndWarn(String courseId) async {
     final courseEvents = _events
         .where((e) => _resolveCourseId(e) == courseId)
@@ -1086,20 +1099,41 @@ class _CalendarScreenState extends State<CalendarScreen> {
       return;
     }
 
-    final absent = courseEvents.where((e) => byEvent[e.id] == 'absent').length;
-    final total = courseEvents.length;
-    if (total == 0 || !mounted) {
+    int _durationMinutes(MicrosoftCalendarEvent e) {
+      final start = e.start;
+      final end = e.end;
+      if (start == null) return 0;
+      final dtEnd = (end == null || !end.isAfter(start))
+          ? start.add(const Duration(minutes: 1))
+          : end;
+      final mins = dtEnd.difference(start).inMinutes;
+      // Guard against zero/negative; treat as at least 1 minute.
+      return mins <= 0 ? 1 : mins;
+    }
+
+    int totalMinutes = 0;
+    int absentMinutes = 0;
+    int totalEvents = courseEvents.length;
+    int absentEvents = 0;
+    for (final e in courseEvents) {
+      final m = _durationMinutes(e);
+      totalMinutes += m;
+      if (byEvent[e.id] == 'absent') {
+        absentMinutes += m;
+        absentEvents += 1;
+      }
+    }
+
+    if (totalMinutes == 0 || !mounted) {
       return;
     }
 
-    final pct = absent * 100.0 / total;
-    final msg = '$courseId absence: ${pct.toStringAsFixed(1)}% (absent $absent of $total)';
+    final pct = absentMinutes * 100.0 / totalMinutes;
+    // Show counts to the user; keep minutes for calculation only.
+    final msg =
+        '$courseId absence: ${pct.toStringAsFixed(1)}% (absent $absentEvents of $totalEvents classes)';
 
-    // Local notification when thresholds exceeded (20%/25%).
     if (pct > 20) {
-      // Fire-and-forget; NotiService is initialized in main
-      // and handles tiered messages and platform specifics.
-      // Avoid blocking the UI.
       // ignore: unawaited_futures
       NotiService.showAbsenceAlert(courseId, pct);
     }
@@ -1113,15 +1147,251 @@ class _CalendarScreenState extends State<CalendarScreen> {
     );
   }
 
+  Future<void> _confirmAbsenceAllDay(DateTime day) async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final target = DateTime(day.year, day.month, day.day);
+    if (target.isAfter(today)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You can only record absence for today or past days.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    final dayLabel = DateFormat('EEE, MMM d, yyyy').format(target);
+    final totalCount = _eventsForDay(target).length;
+    if (totalCount == 0) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No classes scheduled for this day.')),
+      );
+      return;
+    }
+
+    // If every class is already marked absent, notify and exit.
+    try {
+      final allAbsent = await _areAllEventsAbsentForDay(target);
+      if (allAbsent) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Absence already recorded for all classes this day.'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+        return;
+      }
+    } catch (_) {
+      // If check fails, proceed to dialog; marking will still work.
+    }
+
+    // Compute how many are pending to mark (not already absent)
+    int pendingCount = totalCount;
+    try {
+      pendingCount = await _countPendingAbsencesForDay(target);
+    } catch (_) {
+      // If this fails, fall back to totalCount in UI
+      pendingCount = totalCount;
+    }
+    if (pendingCount <= 0) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Absence already recorded for all classes this day.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    final ok = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Absence all day'),
+            content: Text('Record absence for $pendingCount classes on\n$dayLabel?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Mark all'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (!ok) return;
+    await _markAbsenceAllDay(target);
+  }
+
+  Future<void> _markAbsenceAllDay(DateTime day) async {
+    final events = _eventsForDay(day);
+    if (events.isEmpty) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final Set<String> changedCourses = <String>{};
+    int newMarks = 0;
+    int skipped = 0;
+
+    for (final e in events) {
+      final start = e.start ?? day;
+      final end = e.end ?? start.add(const Duration(minutes: 1));
+      final courseId = _resolveCourseId(e);
+      try {
+        // Skip if already marked absent for this event
+        final alreadyAbsent = await _isEventAlreadyAbsent(e.id);
+        if (alreadyAbsent) {
+          skipped += 1;
+          continue;
+        }
+        await AttendanceService.mark(
+          courseId: courseId,
+          eventId: e.id,
+          status: 'absent',
+          title: e.subject.isNotEmpty ? e.subject : 'Lecture',
+          start: start,
+          end: end,
+        );
+        changedCourses.add(courseId);
+        newMarks += 1;
+      } catch (_) {
+        // Continue with other events even if one fails
+      }
+    }
+
+    if (!mounted) return;
+    if (newMarks == 0) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Absence already recorded for all classes this day.'),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    } else if (skipped > 0) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Recorded absence for $newMarks classes ($skipped already recorded).'),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } else {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Recorded absence for $newMarks classes.'),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+
+    // Recompute and warn only for courses that actually changed
+    for (final c in changedCourses) {
+      try {
+        await _recomputeAndWarn(c);
+      } catch (_) {}
+    }
+  }
+
+  Future<bool> _isEventAlreadyAbsent(String eventId) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return false;
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('absences')
+          .doc(eventId)
+          .get();
+      final status = (snap.data()?['status'] ?? '').toString();
+      return snap.exists && status == 'absent';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> _areAllEventsAbsentForDay(DateTime day) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return false;
+    final events = _eventsForDay(day);
+    if (events.isEmpty) return false;
+    for (final e in events) {
+      try {
+        final snap = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .collection('absences')
+            .doc(e.id)
+            .get();
+        final status = (snap.data()?['status'] ?? '').toString();
+        if (!snap.exists || status != 'absent') {
+          return false;
+        }
+      } catch (_) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  Future<int> _countPendingAbsencesForDay(DateTime day) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return 0;
+    final events = _eventsForDay(day);
+    if (events.isEmpty) return 0;
+    int pending = 0;
+    for (final e in events) {
+      try {
+        final snap = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .collection('absences')
+            .doc(e.id)
+            .get();
+        final status = (snap.data()?['status'] ?? '').toString();
+        if (!(snap.exists && status == 'absent')) {
+          pending += 1;
+        }
+      } catch (_) {
+        // If check fails for an event, assume it's pending to avoid undercounting
+        pending += 1;
+      }
+    }
+    return pending;
+  }
+
   /// Compute totals per normalized course code and publish to shared state
   /// so AbsencePage can use the same denominators as CalendarScreen.
   void _publishTotals() {
-    final Map<String, int> totals = <String, int>{};
+    int _durationMinutes(MicrosoftCalendarEvent e) {
+      final start = e.start;
+      final end = e.end;
+      if (start == null) return 0;
+      final dtEnd = (end == null || !end.isAfter(start))
+          ? start.add(const Duration(minutes: 1))
+          : end;
+      final mins = dtEnd.difference(start).inMinutes;
+      return mins <= 0 ? 1 : mins;
+    }
+
+    final Map<String, int> totalsCount = <String, int>{};
+    final Map<String, int> totalsMinutes = <String, int>{};
     for (final e in _events) {
       final code = _resolveCourseId(e);
-      totals[code] = (totals[code] ?? 0) + 1;
+      totalsCount[code] = (totalsCount[code] ?? 0) + 1;
+      totalsMinutes[code] = (totalsMinutes[code] ?? 0) + _durationMinutes(e);
     }
-    AttendanceTotals.instance.setTotals(totals);
+    AttendanceTotals.instance.setTotals(totalsCount);
+    AttendanceTotals.instance.setTotalsMinutes(totalsMinutes);
   }
 
   /// Remove absence documents for the given event IDs, ignoring individual errors.
