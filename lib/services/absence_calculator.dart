@@ -47,7 +47,7 @@ class AbsenceCalculator {
 
     final pct = absent * 100.0 / total;
 
-    // 5) Optional local notification when over 20%.
+    // Optional local notification when over 20%.
     if (notify && pct > 20) {
       try {
         await NotiService.showAbsenceAlert(courseId, pct);

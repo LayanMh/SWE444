@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 import 'providers/schedule_provider.dart';
 import 'package:absherk/services/noti_service.dart';
+import 'package:absherk/services/daily_alert_service.dart';
 
 // New
 import 'screens/home_page.dart';
@@ -34,6 +35,11 @@ Future<void> main() async {
   }
   // Initialize local notifications (Android/iOS)
   await NotiService.initialize();
+  // Evaluate and schedule today's 6pm alert for tomorrow's risky classes
+  // (best-effort; for background scheduling, integrate a background task)
+  try {
+    await DailyAlertService.evaluateAndScheduleSixPmAlert();
+  } catch (_) {}
   runApp(const MyApp());
 }
 

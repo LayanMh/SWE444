@@ -59,7 +59,6 @@ class AttendanceService {
       'end': Timestamp.fromDate(end),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
-
     // After marking absent, compute fresh percentage and alert if over thresholds.
     try {
       final pct = await AbsenceCalculator.computePercentFromFirestore(courseId: courseId);
