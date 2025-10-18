@@ -428,29 +428,33 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 ],
               ),
             ),
-            if (!isToday &&
-                _dayKeys.any((day) => _isSameDay(day, DateTime.now())))
+            if ((!isToday &&
+                    _dayKeys.any((day) => _isSameDay(day, DateTime.now()))) ||
+                currentDayEvents.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: _jumpToToday,
-                    icon: const Icon(Icons.today_rounded),
-                    label: const Text('Jump to today'),
-                  ),
-                ),
-              ),
-            if (currentDayEvents.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: () => _confirmAbsenceAllDay(currentDay),
-                    icon: const Icon(Icons.event_busy_rounded),
-                    label: const Text('Absence All Day'),
-                  ),
+                child: Row(
+                  children: [
+                    if (currentDayEvents.isNotEmpty)
+                      TextButton.icon(
+                        onPressed: () => _confirmAbsenceAllDay(currentDay),
+                        icon: const Icon(Icons.event_busy_rounded),
+                        label: const Text('Absence All Day'),
+                      ),
+                    if (currentDayEvents.isNotEmpty &&
+                        !isToday &&
+                        _dayKeys.any(
+                            (day) => _isSameDay(day, DateTime.now())))
+                      const Spacer(),
+                    if (!isToday &&
+                        _dayKeys
+                            .any((day) => _isSameDay(day, DateTime.now())))
+                      TextButton.icon(
+                        onPressed: _jumpToToday,
+                        icon: const Icon(Icons.today_rounded),
+                        label: const Text('Jump to today'),
+                      ),
+                  ],
                 ),
               ),
             const SizedBox(height: 8),
