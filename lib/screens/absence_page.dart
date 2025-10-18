@@ -15,6 +15,34 @@ class AbsencePage extends StatefulWidget {
 }
 
 class _AbsencePageState extends State<AbsencePage> {
+  Future<Set<String>> _loadCourseCodesFallback() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) return {};
+      final q = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('lectures')
+          .get();
+      final Set<String> codes = {};
+      for (final d in q.docs) {
+        final raw = (d.data()['courseCode'] ?? '').toString();
+        if (raw.isEmpty) continue;
+        codes.add(_normalize(raw));
+      }
+      if (codes.isNotEmpty) return codes;
+      // optional root fallback
+      final r = await FirebaseFirestore.instance.collection('lectures').get();
+      for (final d in r.docs) {
+        final raw = (d.data()['courseCode'] ?? '').toString();
+        if (raw.isEmpty) continue;
+        codes.add(_normalize(raw));
+      }
+      return codes;
+    } catch (_) {
+      return {};
+    }
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -31,10 +59,6 @@ class _AbsencePageState extends State<AbsencePage> {
 
           var docs = snap.data?.docs ?? [];
 
-          if (docs.isEmpty) {
-            return const Center(child: Text('No absences recorded.'));
-          }
-
           // 2) Group by course
           final Map<String, List<Map<String, dynamic>>> grouped = {};
           for (final d in docs) {
@@ -44,18 +68,63 @@ class _AbsencePageState extends State<AbsencePage> {
             grouped.putIfAbsent(key, () => []).add({'id': d.id, ...data});
           }
 
-          // 3) Build items (sorted by course code)
-          final items = grouped.entries.map((e) {
-            // newest first
-            e.value.sort((a, b) {
-              final da = _asDateTime(a['start']) ?? DateTime(0);
-              final db = _asDateTime(b['start']) ?? DateTime(0);
-              return db.compareTo(da);
-            });
+          // Merge with known courses from totals (Calendar) so courses with
+          // zero absences still appear.
+          final totalsCourses =
+              AttendanceTotals.instance.totalsByCourse.value.keys.toSet();
+          final allCodes = <String>{...grouped.keys, ...totalsCourses};
+
+          // If we still don't know any courses, try fetching from lectures.
+          if (allCodes.isEmpty) {
+            return FutureBuilder<Set<String>>(
+              future: _loadCourseCodesFallback(),
+              builder: (context, fsnap) {
+                if (fsnap.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final codes = fsnap.data ?? {};
+                if (codes.isEmpty && docs.isEmpty) {
+                  return const Center(child: Text('No courses found.'));
+                }
+                final List<_CourseItem> items = codes.map((code) {
+                  final recs = grouped[code] ?? <Map<String, dynamic>>[];
+                  if (recs.isNotEmpty) {
+                    recs.sort((a, b) {
+                      final da = _asDateTime(a['start']) ?? DateTime(0);
+                      final db = _asDateTime(b['start']) ?? DateTime(0);
+                      return db.compareTo(da);
+                    });
+                  }
+                  return _CourseItem(
+                    code: code,
+                    records: recs,
+                    latest: recs.isNotEmpty ? _asDateTime(recs.first['start']) : null,
+                  );
+                }).toList()
+                  ..sort((a, b) => a.code.compareTo(b.code));
+                return ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  itemCount: items.length,
+                  itemBuilder: (context, i) => _CourseCard(item: items[i]),
+                );
+              },
+            );
+          }
+
+          // 3) Build items for union of codes (sorted by course code)
+          final List<_CourseItem> items = allCodes.map((code) {
+            final recs = grouped[code] ?? <Map<String, dynamic>>[];
+            if (recs.isNotEmpty) {
+              recs.sort((a, b) {
+                final da = _asDateTime(a['start']) ?? DateTime(0);
+                final db = _asDateTime(b['start']) ?? DateTime(0);
+                return db.compareTo(da);
+              });
+            }
             return _CourseItem(
-              code: e.key,
-              records: e.value,
-              latest: _asDateTime(e.value.first['start']),
+              code: code,
+              records: recs,
+              latest: recs.isNotEmpty ? _asDateTime(recs.first['start']) : null,
             );
           }).toList()
             ..sort((a, b) => a.code.compareTo(b.code));
