@@ -449,10 +449,7 @@ class _AbsenceRow extends StatelessWidget {
               final denom = await _computeDenominatorMinutes(code);
               pct = denom.totalMinutes > 0 ? (absentMinutes * 100.0 / denom.totalMinutes) : 0.0;
             }
-            if (pct > 20) {
-              // ignore: unawaited_futures
-              NotiService.showAbsenceAlert(code, pct);
-            }
+            // No immediate notification here; 6pm scheduler will handle alerts.
           } catch (_) {}
         }
         ScaffoldMessenger.of(context).showSnackBar(
@@ -503,10 +500,7 @@ class _AbsenceRow extends StatelessWidget {
                     final denom = await _computeDenominatorMinutes(code);
                     pct = denom.totalMinutes > 0 ? (absentMinutes * 100.0 / denom.totalMinutes) : 0.0;
                   }
-                  if (pct > 20) {
-                    // ignore: unawaited_futures
-                    NotiService.showAbsenceAlert(code, pct);
-                  }
+                  // No immediate notification here; 6pm scheduler will handle alerts.
                 } catch (_) {}
               }
               if (context.mounted) {

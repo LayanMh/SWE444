@@ -59,15 +59,8 @@ class AttendanceService {
       'end': Timestamp.fromDate(end),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
-    // After marking absent, compute fresh percentage and alert if over thresholds.
-    try {
-      final pct = await AbsenceCalculator.computePercentFromFirestore(courseId: courseId);
-      if (pct > 20) {
-        await NotiService.showAbsenceAlert(courseId, pct);
-      }
-    } catch (_) {
-      // Do not fail the write flow if notification fails
-    }
+    // After marking absent, we no longer trigger immediate local notifications here.
+    // Any alerts will be handled by the scheduled 6pm evaluator.
   }
 
   /// Delete a single exception by eventId.
