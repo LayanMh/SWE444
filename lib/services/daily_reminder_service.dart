@@ -36,12 +36,8 @@ class DailyReminderService {
     } catch (_) {}
 
     const androidInit = AndroidInitializationSettings('abesherk');
-    const iosInit = DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
-    );
-    const initSettings = InitializationSettings(android: androidInit, iOS: iosInit);
+    
+    const initSettings = InitializationSettings(android: androidInit);
     await _plugin.initialize(initSettings);
 
     final androidImpl =
@@ -58,10 +54,6 @@ class DailyReminderService {
     );
     await androidImpl?.createNotificationChannel(channel);
 
-    final iosImpl =
-        _plugin.resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>();
-    await iosImpl?.requestPermissions(alert: true, badge: true, sound: true);
-
     _inited = true;
   }
 
@@ -77,7 +69,7 @@ class DailyReminderService {
 
     // Schedule for 18:00 UTC (converted to device local time)
     final nowUtc = DateTime.now().toUtc();
-    final sixUtcToday = DateTime.utc(nowUtc.year, nowUtc.month, nowUtc.day, 9:30);
+    final sixUtcToday = DateTime.utc(nowUtc.year, nowUtc.month, nowUtc.day, 18);
     final targetUtc = nowUtc.isBefore(sixUtcToday)
         ? sixUtcToday
         : sixUtcToday.add(const Duration(days: 1));
@@ -158,20 +150,55 @@ class DailyReminderService {
         payload: 'debug:show_now',
       );
     } catch (_) {}
+  }
 
-    // Also schedule one ~10s later (may be delayed on inexact mode/Doze).
-    final when = tz.TZDateTime.now(tz.local).add(const Duration(seconds: 10));
+  /// Immediately shows whether a 6 PM UTC reminder would be scheduled today
+  /// and lists tomorrow's at-risk courses (>20%). This does NOT schedule.
+  static Future<void> debugReportTomorrowRiskNow() async {
+    await initialize();
+    if (kIsWeb) return;
+
+    final details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        _channelId,
+        _channelName,
+        channelDescription: _channelDesc,
+        importance: Importance.high,
+        priority: Priority.high,
+        ticker: 'Reminder status',
+        icon: 'abesherk',
+      ),
+      iOS: const DarwinNotificationDetails(),
+    );
+
+    // Compute target 18:00 UTC converted to local (same as scheduler)
+    final nowUtc = DateTime.now().toUtc();
+    final sixUtcToday = DateTime.utc(nowUtc.year, nowUtc.month, nowUtc.day, 13);
+    final targetUtc = nowUtc.isBefore(sixUtcToday)
+        ? sixUtcToday
+        : sixUtcToday.add(const Duration(days: 1));
+    final localWhen = tz.TZDateTime.from(targetUtc, tz.local);
+
+    final risks = await _computeTomorrowRisks();
+    final body = risks.isEmpty
+        ? 'No reminder: no courses >20% for tomorrow.'
+        : _formatBody(risks) + ' | Fires ~ ' + _fmt(localWhen);
+
     try {
-      await _plugin.zonedSchedule(
-        9998,
-        'Debug Ping (Scheduled)',
-        'This should arrive around 10s later.',
-        when,
+      await _plugin.show(
+        9996,
+        risks.isEmpty ? 'Reminder Status: Not Scheduled' : 'Reminder Status: Scheduled',
+        body,
         details,
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-        payload: 'debug:ping10s',
+        payload: 'debug:status',
       );
     } catch (_) {}
+  }
+
+  static String _fmt(DateTime dt) {
+    final hh = dt.hour.toString().padLeft(2, '0');
+    final mm = dt.minute.toString().padLeft(2, '0');
+    return '$hh:$mm';
   }
 
   static Future<List<_CourseRisk>> _computeTomorrowRisks() async {
@@ -184,22 +211,74 @@ class DailyReminderService {
       final tomorrow = now.add(const Duration(days: 1));
       final dayOfWeekZeroBased = (tomorrow.weekday % 7); // Mon=1..Sun=7 -> 1..0
 
-      // Read user schedule for tomorrow
-      final userLectures = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .collection('lectures')
-          .where('dayOfWeek', isEqualTo: dayOfWeekZeroBased)
-          .get();
+      // Read user schedule for tomorrow (handle both 0..6 and 1..7 encodings)
+      final List<QueryDocumentSnapshot<Map<String, dynamic>>> docs = [];
+      final oneBased = ((dayOfWeekZeroBased + 1) <= 7) ? (dayOfWeekZeroBased + 1) : 1;
 
-      var docs = userLectures.docs;
-      if (docs.isEmpty) {
-        // Optional fallback to root collection
-        final fallback = await FirebaseFirestore.instance
+      // users/{uid}/schedule
+      try {
+        final a = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .collection('schedule')
+            .where('dayOfWeek', isEqualTo: dayOfWeekZeroBased)
+            .get();
+        docs.addAll(a.docs);
+      } catch (_) {}
+      try {
+        final b = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .collection('schedule')
+            .where('dayOfWeek', isEqualTo: oneBased)
+            .get();
+        for (final d in b.docs) {
+          if (!docs.any((x) => x.id == d.id)) docs.add(d);
+        }
+      } catch (_) {}
+
+      // users/{uid}/lectures
+      try {
+        final c = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
             .collection('lectures')
             .where('dayOfWeek', isEqualTo: dayOfWeekZeroBased)
             .get();
-        docs = fallback.docs;
+        for (final d in c.docs) {
+          if (!docs.any((x) => x.id == d.id)) docs.add(d);
+        }
+      } catch (_) {}
+      try {
+        final d = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .collection('lectures')
+            .where('dayOfWeek', isEqualTo: oneBased)
+            .get();
+        for (final e in d.docs) {
+          if (!docs.any((x) => x.id == e.id)) docs.add(e);
+        }
+      } catch (_) {}
+
+      // Optional root fallback
+      if (docs.isEmpty) {
+        try {
+          final e = await FirebaseFirestore.instance
+              .collection('lectures')
+              .where('dayOfWeek', isEqualTo: dayOfWeekZeroBased)
+              .get();
+          docs.addAll(e.docs);
+        } catch (_) {}
+        try {
+          final f = await FirebaseFirestore.instance
+              .collection('lectures')
+              .where('dayOfWeek', isEqualTo: oneBased)
+              .get();
+          for (final d in f.docs) {
+            if (!docs.any((x) => x.id == d.id)) docs.add(d);
+          }
+        } catch (_) {}
       }
 
       if (docs.isEmpty) return const [];

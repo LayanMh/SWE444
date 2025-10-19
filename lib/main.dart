@@ -36,6 +36,8 @@ Future<void> main() async {
   await DailyReminderService.initialize();
   // TEMP: Debug ping to verify notifications (fires in ~10s)
   await DailyReminderService.debugPingIn10s();
+  // TEMP: Show whether a reminder would be scheduled and for when
+  await DailyReminderService.debugReportTomorrowRiskNow();
   await DailyReminderService.schedule6pmForTomorrowIfNeeded();
   runApp(const MyApp());
 }
