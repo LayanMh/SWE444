@@ -4,27 +4,46 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ProfileScreen extends StatefulWidget {
-const ProfileScreen({Key? key}) : super(key: key);
+  const ProfileScreen({super.key});
+ 
 
 @override
-State<ProfileScreen> createState() => _ProfileScreenState();
+State<ProfileScreen> createState() => ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
-final FirebaseAuth _auth = FirebaseAuth.instance;
-final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-Map<String, dynamic>? userData;
-bool isLoading = true;
-String? errorMessage;
-String? currentUserEmail;
+class ProfileScreenState extends State<ProfileScreen> {
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final ScrollController _scrollController = ScrollController(); 
+  final Map<String, GlobalKey> _fieldKeys = {}; 
+  final Map<String, FocusNode> _focusNodes = {};
+  Map<String, dynamic>? userData;
+  bool isLoading = true;
+  String? errorMessage;
+  String? currentUserEmail;
 
-String? _editingField;
-final Map<String, TextEditingController> _controllers = {};
-final Map<String, GlobalKey<FormState>> _formKeys = {};
+  String? _editingField;
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();  
+  final Map<String, TextEditingController> _controllers = {};
+  Map<String, String?> _fieldErrors = {};
 
 List<String> _majorOptions = [];
 List<int> _levelOptions = [];
 bool _isEditMode = false;
+bool get isEditMode => _isEditMode;
+void cancelEdit() => _cancelEdit();
+
+
+void _cancelEdit() {
+  // Clear all controllers and reset state
+  _controllers.clear();
+  _fieldErrors.clear();
+  _focusNodes.clear();
+  _fieldKeys.clear();
+  setState(() => _isEditMode = false);
+  // Reload original data
+  _loadUserData();
+}
 
 @override
 void initState() {
@@ -35,30 +54,49 @@ _loadDropdownOptions();
 
 @override
 void dispose() {
-_controllers.forEach((key, controller) => controller.dispose());
-super.dispose();
+  _controllers.forEach((key, controller) => controller.dispose());
+  _focusNodes.forEach((key, node) => node.dispose()); // ADD THIS
+  _scrollController.dispose(); // ADD THIS
+  super.dispose();
 }
+
+List<String> _genderOptions = [];
 
 Future<void> _loadDropdownOptions() async {
-try {
-final doc = await _firestore
-.collection('users')
-.doc("5YACUgOv9DV043jJreFPGuwXh2e2")
-.get();
+  try {
+    final doc = await _firestore
+        .collection('users')
+        .doc("5YACUgOv9DV043jJreFPGuwXh2e2")
+        .get();
 
-if (doc.exists) {
-setState(() {
-if (doc.data()?['major'] != null) {
-_majorOptions = List<String>.from(doc.data()!['major']);
+    if (doc.exists) {
+      setState(() {
+        if (doc.data()?['major'] != null) {
+          _majorOptions = List<String>.from(doc.data()!['major']);
+        }
+        if (doc.data()?['level'] != null) {
+          _levelOptions = List<int>.from(doc.data()!['level']);
+        }
+        if (doc.data()?['gender'] != null) {
+          _genderOptions = List<String>.from(doc.data()!['gender']);
+        }
+      });
+    }
+  } catch (e) {
+    debugPrint('Error loading options: $e');
+  }
 }
-if (doc.data()?['level'] != null) {
-_levelOptions = List<int>.from(doc.data()!['level']);
-}
-});
-}
-} catch (e) {
-debugPrint('Error loading options: $e');
-}
+
+String? _getCurrentGender() {
+  if (userData?['gender'] != null) {
+    if (userData!['gender'] is String) {
+      return userData!['gender'];
+    } else if (userData!['gender'] is List) {
+      final genderList = List<String>.from(userData!['gender']);
+      return genderList.isNotEmpty ? genderList.first : null;
+    }
+  }
+  return null;
 }
 
 Future<void> _loadUserData() async {
@@ -367,186 +405,235 @@ shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
 ),
 );
 }
-
 Future<void> _saveAllChanges() async {
-// Validate all form fields
-bool allValid = true;
-_formKeys.forEach((key, formKey) {
-if (formKey.currentState?.validate() == false) {
-allValid = false;
+  // Validate form
+  if (!_formKey.currentState!.validate()) {
+    // Find first field with error and scroll to it
+    String? firstErrorField;
+    
+    // Check fields in order they appear
+    if (_controllers['FName'] != null) {
+      final error = _validateName(_controllers['FName']!.text, 'first name');
+      if (error != null) firstErrorField = 'FName';
+    }
+    
+    if (firstErrorField == null && _controllers['LName'] != null) {
+      final error = _validateName(_controllers['LName']!.text, 'last name');
+      if (error != null) firstErrorField = 'LName';
+    }
+    
+    if (firstErrorField == null && _controllers['GPA'] != null) {
+      final error = _validateGPA(_controllers['GPA']!.text);
+      if (error != null) firstErrorField = 'GPA';
+    }
+    
+    // Scroll to and focus on the first error field
+    if (firstErrorField != null) {
+      final context = _fieldKeys[firstErrorField]?.currentContext;
+      if (context != null) {
+        await Scrollable.ensureVisible(
+          context,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+        
+        Future.delayed(const Duration(milliseconds: 350), () {
+          _focusNodes[firstErrorField]?.requestFocus();
+        });
+      }
+    }
+    
+    return;
+  }
+
+  // Save logic
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final microsoftDocId = prefs.getString('microsoft_user_doc_id');
+
+    String? docId;
+    if (microsoftDocId != null) {
+      docId = microsoftDocId;
+    } else if (_auth.currentUser != null) {
+      docId = _auth.currentUser!.uid;
+    }
+
+    if (docId == null) {
+      _showErrorMessage('Unable to identify user');
+      return;
+    }
+
+    Map<String, dynamic> updates = {};
+
+    _controllers.forEach((fieldName, controller) {
+      if (fieldName == 'GPA') {
+        final gpaValue = double.tryParse(controller.text.trim());
+        if (gpaValue != null) {
+          updates[fieldName] = gpaValue;
+        }
+      } else {
+        updates[fieldName] = controller.text.trim();
+      }
+    });
+
+    if (userData?['major'] != null) {
+      updates['major'] = userData!['major'];
+    }
+    if (userData?['level'] != null) {
+      updates['level'] = userData!['level'];
+    }
+    if (userData?['gender'] != null) {
+      updates['gender'] = userData!['gender'];
+    }
+
+    updates['updatedAt'] = FieldValue.serverTimestamp();
+
+    await _firestore.collection('users').doc(docId).update(updates);
+
+    setState(() => _isEditMode = false);
+    _showSuccessMessage('Profile updated successfully!');
+    _controllers.clear();
+    _focusNodes.clear();
+    _fieldKeys.clear();
+    await _loadUserData();
+  } catch (e) {
+    debugPrint('Error saving changes: $e');
+    _showErrorMessage('Failed to save changes: $e');
+  }
 }
-});
-
-if (!allValid) {
-_showErrorMessage('Please fix all validation errors');
-return;
-}
-
-try {
-final prefs = await SharedPreferences.getInstance();
-final microsoftDocId = prefs.getString('microsoft_user_doc_id');
-
-String? docId;
-if (microsoftDocId != null) {
-docId = microsoftDocId;
-} else if (_auth.currentUser != null) {
-docId = _auth.currentUser!.uid;
-}
-
-if (docId == null) {
-_showErrorMessage('Unable to identify user');
-return;
-}
-
-Map<String, dynamic> updates = {};
-
-// Collect all changes from text field controllers
-_controllers.forEach((fieldName, controller) {
-if (fieldName == 'GPA') {
-final gpaValue = double.tryParse(controller.text.trim());
-if (gpaValue != null) {
-updates[fieldName] = gpaValue;
-}
-} else {
-updates[fieldName] = controller.text.trim();
-}
-});
-
-// Add dropdown values (major and level)
-if (userData?['major'] != null) {
-updates['major'] = userData!['major'];
-}
-if (userData?['level'] != null) {
-updates['level'] = userData!['level'];
-}
-
-// Add timestamp
-updates['updatedAt'] = FieldValue.serverTimestamp();
-
-// Update Firestore
-await _firestore.collection('users').doc(docId).update(updates);
-
-setState(() => _isEditMode = false);
-_showSuccessMessage('Profile updated successfully!');
-// Clear controllers
-_controllers.clear();
-_formKeys.clear();
-await _loadUserData();
-} catch (e) {
-debugPrint('Error saving changes: $e');
-_showErrorMessage('Failed to save changes: $e');
-}
-}
-
 Widget _buildEditableTextField({
-required IconData icon,
-required String title,
-required String fieldName,
-required String? Function(String?) validator,
-String? hint,
-TextInputType? keyboardType,
-bool isEditable = true,
+  required IconData icon,
+  required String title,
+  required String fieldName,
+  required String? Function(String?) validator,
+  String? hint,
+  TextInputType? keyboardType,
+  bool isEditable = true,
 }) {
-// Initialize controller if not exists
-if (!_controllers.containsKey(fieldName) && userData?[fieldName] != null) {
-String value = '';
-if (fieldName == 'GPA') {
-final gpa = userData![fieldName];
-value = gpa is num ? gpa.toStringAsFixed(2) : '';
-} else {
-value = userData![fieldName].toString();
-}
-_controllers[fieldName] = TextEditingController(text: value);
-_formKeys[fieldName] = GlobalKey<FormState>();
-}
+  // Initialize controller and focus node if not exists
+  if (!_controllers.containsKey(fieldName) && userData?[fieldName] != null) {
+    String value = '';
+    if (fieldName == 'GPA') {
+      final gpa = userData![fieldName];
+      value = gpa is num ? gpa.toStringAsFixed(2) : '';
+    } else {
+      value = userData![fieldName].toString();
+    }
+    _controllers[fieldName] = TextEditingController(text: value);
+  }
+  
+  // Initialize focus node and key
+  _focusNodes[fieldName] ??= FocusNode();
+  _fieldKeys[fieldName] ??= GlobalKey();
 
-return Container(
-margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
-padding: const EdgeInsets.all(16.0),
-decoration: BoxDecoration(
-color: Colors.white,
-borderRadius: BorderRadius.circular(12.0),
-boxShadow: [
-BoxShadow(
-color: Colors.grey.withOpacity(0.1),
-spreadRadius: 1,
-blurRadius: 5,
-offset: const Offset(0, 2),
-),
-],
-),
-child: Column(
-crossAxisAlignment: CrossAxisAlignment.start,
-children: [
-Row(
-children: [
-Icon(
-icon,
-color: isEditable && _isEditMode
-? const Color(0xFF0097b2)
-: Colors.grey[400],
-size: 24.0,
-),
-const SizedBox(width: 16.0),
-Text(
-title,
-style: TextStyle(
-fontSize: 14.0,
-color: Colors.grey[600],
-fontWeight: FontWeight.w500,
-),
-),
-],
-),
-const SizedBox(height: 8.0),
-if (_isEditMode && isEditable)
-Form(
-key: _formKeys[fieldName],
-child: TextFormField(
-controller: _controllers[fieldName],
-keyboardType: keyboardType,
-validator: validator,
-enabled: isEditable,
-decoration: InputDecoration(
-hintText: hint,
-border: OutlineInputBorder(
-borderRadius: BorderRadius.circular(8),
-borderSide: BorderSide.none,
-),
-enabledBorder: OutlineInputBorder(
-borderRadius: BorderRadius.circular(8),
-borderSide: BorderSide.none,
-),
-focusedBorder: OutlineInputBorder(
-borderRadius: BorderRadius.circular(8),
-borderSide: BorderSide.none,
-),
-contentPadding: const EdgeInsets.symmetric(
-horizontal: 12,
-vertical: 12,
-),
-filled: true,
-fillColor: const Color(0xFF95E1D3).withOpacity(0.1),
-),
-),
-)
-else
-Text(
-_controllers[fieldName]?.text ??
-(userData?[fieldName]?.toString() ?? 'Not specified'),
-style: TextStyle(
-fontSize: 16.0,
-fontWeight: FontWeight.w600,
-color: isEditable
-? const Color(0xFF0e0259)
-: Colors.grey[600],
-),
-),
-],
-),
-);
+  return Container(
+    key: _fieldKeys[fieldName], // ADD THIS
+    margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+    padding: const EdgeInsets.all(16.0),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12.0),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.grey.withOpacity(0.1),
+          spreadRadius: 1,
+          blurRadius: 5,
+          offset: const Offset(0, 2),
+        ),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              icon,
+              color: isEditable && _isEditMode
+                  ? const Color(0xFF0097b2)
+                  : Colors.grey[400],
+              size: 24.0,
+            ),
+            const SizedBox(width: 16.0),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 14.0,
+                color: Colors.grey[600],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8.0),
+        if (_isEditMode && isEditable)
+          TextFormField(
+            controller: _controllers[fieldName],
+            focusNode: _focusNodes[fieldName], // ADD THIS
+            keyboardType: keyboardType,
+            autovalidateMode: AutovalidateMode.onUserInteraction,
+            validator: validator,
+            enabled: isEditable,
+            decoration: InputDecoration(
+              errorStyle: const TextStyle(fontSize: 11, height: 1.2),
+              errorMaxLines: 2,
+              hintText: hint,
+              hintStyle: TextStyle(
+                color: const Color(0xFF006B7A).withOpacity(0.4),
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide.none,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide.none,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(
+                  color: Color(0xFF0097b2),
+                  width: 1,
+                ),
+              ),
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(
+                  color: Colors.red,
+                  width: 1,
+                ),
+              ),
+              focusedErrorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(
+                  color: Colors.red,
+                  width: 1.5,
+                ),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 12,
+              ),
+              filled: true,
+              fillColor: const Color(0xFF95E1D3).withOpacity(0.1),
+            ),
+          )
+        else
+          Text(
+            _controllers[fieldName]?.text ??
+                (userData?[fieldName]?.toString() ?? 'Not specified'),
+            style: TextStyle(
+              fontSize: 16.0,
+              fontWeight: FontWeight.w600,
+              color: isEditable
+                  ? const Color(0xFF0e0259)
+                  : Colors.grey[600],
+            ),
+          ),
+      ],
+    ),
+  );
 }
-
 Widget _buildEditableDropdown<T>({
 required IconData icon,
 required String title,
@@ -554,6 +641,7 @@ required String fieldName,
 required List<T> options,
 required T? Function() getCurrentValue,
 required String Function(T?) displayValue,
+String? Function(T?)? validator,
 bool isEditable = true,
 }) {
 final currentValue = getCurrentValue();
@@ -600,6 +688,7 @@ const SizedBox(height: 8.0),
 if (_isEditMode && isEditable && options.isNotEmpty)
 DropdownButtonFormField<T>(
 value: currentValue,
+validator: validator, 
 isExpanded: true,
 decoration: InputDecoration(
 border: OutlineInputBorder(
@@ -628,14 +717,16 @@ child: Text(item.toString()),
 );
 }).toList(),
 onChanged: (newValue) {
-setState(() {
-// Store the selected value to be saved later
-if (fieldName == 'major') {
-userData!['major'] = [newValue];
-} else if (fieldName == 'level') {
-userData!['level'] = [newValue];
-}
-});
+  setState(() {
+    // Store the selected value to be saved later
+    if (fieldName == 'major') {
+      userData!['major'] = [newValue];
+    } else if (fieldName == 'level') {
+      userData!['level'] = [newValue];
+    } else if (fieldName == 'gender') {
+      userData!['gender'] = [newValue];
+    }
+  });
 },
 )
 else
@@ -810,29 +901,33 @@ return levelList.isNotEmpty ? levelList.first : null;
 }
 return null;
 }
-
-// Validation methods
 String? _validateName(String? value, String fieldName) {
-if (value == null || value.trim().isEmpty) {
-return 'Please enter your $fieldName';
-}
-if (value.trim().contains(' ')) {
-return '$fieldName cannot contain spaces';
-}
-if (RegExp(r'\d').hasMatch(value.trim())) {
-return '$fieldName cannot contain numbers';
-}
-if (value.trim().length > 30) {
-return '$fieldName cannot exceed 30 characters';
-}
-if (!RegExp(r'^[a-zA-Z]+$').hasMatch(value.trim())) {
-return '$fieldName can only contain letters';
-}
-if (RegExp(r'[\u{1F300}-\u{1F9FF}]', unicode: true)
-.hasMatch(value.trim())) {
-return '$fieldName cannot contain emojis';
-}
-return null;
+  if (value == null || value.trim().isEmpty) {
+    return 'Please enter your $fieldName';
+  }
+  
+  // Check for spaces
+  if (value.trim().contains(' ')) {
+    return 'Cannot contain spaces';
+  }
+  
+  // Check for numbers
+  if (RegExp(r'\d').hasMatch(value.trim())) {
+    return 'Cannot contain numbers';
+  }
+  
+  // Allow Arabic letters (Unicode range for Arabic: \u0600-\u06FF) and English letters
+  // This matches the same validation used in sign-in and sign-up screens
+  if (!RegExp(r'^[\u0600-\u06FFa-zA-Z]+$').hasMatch(value.trim())) {
+    return 'Can only contain letters';
+  }
+  
+  // Check length
+  if (value.trim().length > 30) {
+    return 'Cannot exceed 30 characters';
+  }
+  
+  return null;
 }
 
 String? _validateGPA(String? value) {
@@ -851,380 +946,399 @@ return 'GPA can have at most 2 decimal places';
 }
 return null;
 }
-
 @override
 Widget build(BuildContext context) {
-return Scaffold(
-backgroundColor: Colors.grey[50],
-body: Container(
-decoration: const BoxDecoration(
-gradient: LinearGradient(
-begin: Alignment.topLeft,
-end: Alignment.bottomRight,
-colors: [
-Color(0xFF006B7A),
-Color(0xFF0097b2),
-Color(0xFF0e0259),
-],
-stops: [0.0, 0.6, 1.0],
-),
-),
-child: SafeArea(
-child: Column(
-children: [
-// Custom App Bar
-Padding(
-padding: const EdgeInsets.all(16.0),
-child: Row(
-children: [
-const SizedBox(width: 48),
-const Expanded(
-child: Text(
-'My Profile',
-style: TextStyle(
-fontSize: 20,
-fontWeight: FontWeight.w700,
-color: Colors.white,
-letterSpacing: 0.5,
-),
-textAlign: TextAlign.center,
-),
-),
-PopupMenuButton<String>(
-onSelected: (value) {
-if (value == 'edit') {
-setState(() => _isEditMode = true);
-} else if (value == 'refresh') {
-_loadUserData();
-} else if (value == 'delete') {
-_deleteAccount();
-}
-},
-icon: Container(
-decoration: BoxDecoration(
-color: Colors.white.withOpacity(0.15),
-borderRadius: BorderRadius.circular(12),
-border: Border.all(color: Colors.white.withOpacity(0.2)),
-),
-child: const Padding(
-padding: EdgeInsets.all(12.0),
-child: Icon(
-Icons.more_vert,
-color: Colors.white,
-size: 20,
-),
-),
-),
-itemBuilder: (BuildContext context) => [
-if (!_isEditMode)
-const PopupMenuItem<String>(
-value: 'edit',
-child: Row(
-children: [
-Icon(Icons.edit, color: Color(0xFF0097b2)),
-SizedBox(width: 8),
-Text('Edit Profile'),
-],
-),
-),
-const PopupMenuItem<String>(
-value: 'refresh',
-child: Row(
-children: [
-Icon(Icons.refresh, color: Color(0xFF0097b2)),
-SizedBox(width: 8),
-Text('Refresh'),
-],
-),
-),
-const PopupMenuItem<String>(
-value: 'delete',
-child: Row(
-children: [
-Icon(Icons.delete_forever, color: Colors.red),
-SizedBox(width: 8),
-Text('Delete Account'),
-],
-),
-),
-],
-),
-],
-),
-),
-// Profile Content
-Expanded(
-child: Container(
-decoration: BoxDecoration(
-color: Colors.grey[50],
-borderRadius: const BorderRadius.only(
-topLeft: Radius.circular(24),
-topRight: Radius.circular(24),
-),
-),
-child: RefreshIndicator(
-onRefresh: _loadUserData,
-child: isLoading
-? const Center(child: CircularProgressIndicator())
-: errorMessage != null
-? Center(
-child: Column(
-mainAxisAlignment: MainAxisAlignment.center,
-children: [
-Icon(
-Icons.error_outline,
-size: 64.0,
-color: Colors.grey[400],
-),
-const SizedBox(height: 16.0),
-Text(
-errorMessage!,
-style: TextStyle(
-fontSize: 16.0,
-color: Colors.grey[600],
-),
-textAlign: TextAlign.center,
-),
-const SizedBox(height: 16.0),
-ElevatedButton(
-onPressed: _loadUserData,
-child: const Text('Retry'),
-),
-],
-),
-)
-: SingleChildScrollView(
-physics:
-const AlwaysScrollableScrollPhysics(),
-child: Column(
-children: [
-// Profile Header
-Container(
-width: double.infinity,
-padding: const EdgeInsets.all(24.0),
-child: Column(
-children: [
-CircleAvatar(
-radius: 50.0,
-backgroundColor:
-const Color(0xFF0097b2),
-child: Text(
-_getInitials(),
-style: const TextStyle(
-fontSize: 36.0,
-fontWeight: FontWeight.bold,
-color: Colors.white,
-),
-),
-),
-const SizedBox(height: 16.0),
-Text(
-_getDisplayName(),
-style: const TextStyle(
-fontSize: 24.0,
-fontWeight: FontWeight.bold,
-color: Color(0xFF0e0259),
-),
-),
-const SizedBox(height: 8.0),
-Text(
-currentUserEmail ??
-_auth.currentUser?.email ??
-'No email',
-style: TextStyle(
-fontSize: 16.0,
-color: Colors.grey[600],
-),
-),
-const SizedBox(height: 8.0),
-],
-),
-),
-// Personal Information
-if (userData?['FName'] != null)
-_buildEditableTextField(
-icon: Icons.person,
-title: 'First Name',
-fieldName: 'FName',
-validator: (value) => _validateName(value, 'First name'),
-),
-if (userData?['LName'] != null)
-_buildEditableTextField(
-icon: Icons.person_outline,
-title: 'Last Name',
-fieldName: 'LName',
-validator: (value) => _validateName(value, 'Last name'),
-),
-_buildReadOnlyTile(
-icon: Icons.email,
-title: 'Email Address',
-value: currentUserEmail ?? _auth.currentUser?.email ?? 'Not available',
-),
-// Academic Information
-_buildEditableDropdown<String>(
-icon: Icons.school,
-title: 'Major',
-fieldName: 'major',
-options: _majorOptions,
-getCurrentValue: _getCurrentMajor,
-displayValue: (value) => value ?? 'Not specified',
-),
-_buildEditableDropdown<int>(
-icon: Icons.trending_up,
-title: 'Academic Level',
-fieldName: 'level',
-options: _levelOptions,
-getCurrentValue: _getCurrentLevel,
-displayValue: (value) => value != null ? 'Level $value' : 'Not specified',
-),
-_buildEditableTextField(
-icon: Icons.grade,
-title: 'Current GPA',
-fieldName: 'GPA',
-hint: 'e.g., 3.75',
-keyboardType: const TextInputType.numberWithOptions(decimal: true),
-validator: _validateGPA,
-),
-_buildReadOnlyTile(
-icon: Icons.person_pin,
-title: 'Gender',
-value: _getGenderDisplay(),
-),
-const SizedBox(height: 30.0),
-// Edit Mode: Save/Cancel Buttons OR Sign Out Button
-Padding(
-padding: const EdgeInsets.symmetric(horizontal: 16.0),
-child: _isEditMode
-? Row(
-children: [
-Expanded(
-child: Container(
-height: 48,
-decoration: BoxDecoration(
-borderRadius: BorderRadius.circular(12),
-border: Border.all(
-color: const Color(0xFF0097b2),
-width: 2,
-),
-),
-child: ElevatedButton.icon(
-onPressed: () {
-// Clear controllers and reload data
-_controllers.clear();
-_formKeys.clear();
-setState(() => _isEditMode = false);
-_loadUserData();
-},
-icon: const Icon(Icons.close),
-label: const Text(
-'Cancel',
-style: TextStyle(
-fontSize: 16,
-fontWeight: FontWeight.w600,
-letterSpacing: 0.5,
-),
-),
-style: ElevatedButton.styleFrom(
-backgroundColor: Colors.white,
-foregroundColor: const Color(0xFF0097b2),
-elevation: 0,
-shape: RoundedRectangleBorder(
-borderRadius: BorderRadius.circular(12),
-),
-),
-),
-),
-),
-const SizedBox(width: 12),
-Expanded(
-child: Container(
-height: 48,
-decoration: BoxDecoration(
-gradient: const LinearGradient(
-colors: [Color(0xFF0097b2), Color(0xFF006B7A)],
-),
-borderRadius: BorderRadius.circular(12),
-boxShadow: [
-BoxShadow(
-color: const Color(0xFF0097b2).withOpacity(0.3),
-blurRadius: 20,
-offset: const Offset(0, 8),
-),
-],
-),
-child: ElevatedButton.icon(
-onPressed: _saveAllChanges,
-icon: const Icon(Icons.check),
-label: const Text(
-'Save',
-style: TextStyle(
-fontSize: 16,
-fontWeight: FontWeight.w600,
-letterSpacing: 0.5,
-),
-),
-style: ElevatedButton.styleFrom(
-backgroundColor: Colors.transparent,
-shadowColor: Colors.transparent,
-foregroundColor: Colors.white,
-shape: RoundedRectangleBorder(
-borderRadius: BorderRadius.circular(12),
-),
-),
-),
-),
-),
-],
-)
-: Container(
-width: double.infinity,
-height: 48,
-decoration: BoxDecoration(
-gradient: const LinearGradient(
-colors: [Colors.red, Color(0xFFD32F2F)],
-),
-borderRadius: BorderRadius.circular(12),
-boxShadow: [
-BoxShadow(
-color: Colors.red.withOpacity(0.3),
-blurRadius: 20,
-offset: const Offset(0, 8),
-),
-],
-),
-child: ElevatedButton.icon(
-onPressed: _signOut,
-icon: const Icon(Icons.logout),
-label: const Text(
-'Sign Out',
-style: TextStyle(
-fontSize: 16,
-fontWeight: FontWeight.w600,
-letterSpacing: 0.5,
-),
-),
-style: ElevatedButton.styleFrom(
-backgroundColor: Colors.transparent,
-shadowColor: Colors.transparent,
-foregroundColor: Colors.white,
-shape: RoundedRectangleBorder(
-borderRadius: BorderRadius.circular(12),
-),
-),
-),
-),
-),
-const SizedBox(height: 30.0),
-],
-),
-),
-),
-),
-),
-],
-),
-),
-),
-);
+  return WillPopScope(
+    onWillPop: () async {
+      if (_isEditMode) {
+        // Show confirmation dialog
+        final shouldLeave = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Discard Changes?'),
+            content: const Text('You have unsaved changes. Are you sure you want to leave?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Stay'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('Discard'),
+              ),
+            ],
+          ),
+        );
+        
+        if (shouldLeave == true) {
+          _cancelEdit();
+          return true;
+        }
+        return false;
+      }
+      return true;
+    },
+    child: Scaffold(
+      backgroundColor: Colors.grey[50],
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF006B7A),
+              Color(0xFF0097b2),
+              Color(0xFF0e0259),
+            ],
+            stops: [0.0, 0.6, 1.0],
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              // Custom App Bar
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  children: [
+                    const SizedBox(width: 48),
+                    const Expanded(
+                      child: Text(
+                        'My Profile',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          letterSpacing: 0.5,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    PopupMenuButton<String>(
+                      onSelected: (value) {
+                        if (value == 'edit') {
+                          setState(() => _isEditMode = true);
+                        } else if (value == 'delete') {
+                          _deleteAccount();
+                        }
+                      },
+                      icon: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white.withOpacity(0.2)),
+                        ),
+                        child: const Padding(
+                          padding: EdgeInsets.all(12.0),
+                          child: Icon(
+                            Icons.more_vert,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                      itemBuilder: (BuildContext context) => [
+                        if (!_isEditMode)
+                          const PopupMenuItem<String>(
+                            value: 'edit',
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit, color: Color(0xFF0097b2)),
+                                SizedBox(width: 8),
+                                Text('Edit Profile'),
+                              ],
+                            ),
+                          ),
+                        const PopupMenuItem<String>(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete_forever, color: Colors.red),
+                              SizedBox(width: 8),
+                              Text('Delete Account'),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              // Profile Content
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(24),
+                      topRight: Radius.circular(24),
+                    ),
+                  ),
+                  child: RefreshIndicator(
+                    onRefresh: _loadUserData,
+                    child: isLoading
+                        ? const Center(child: CircularProgressIndicator())
+                        : errorMessage != null
+                            ? Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.error_outline,
+                                      size: 64.0,
+                                      color: Colors.grey[400],
+                                    ),
+                                    const SizedBox(height: 16.0),
+                                    Text(
+                                      errorMessage!,
+                                      style: TextStyle(
+                                        fontSize: 16.0,
+                                        color: Colors.grey[600],
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    const SizedBox(height: 16.0),
+                                    ElevatedButton(
+                                      onPressed: _loadUserData,
+                                      child: const Text('Retry'),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : SingleChildScrollView(
+                                controller: _scrollController,
+                                physics: const AlwaysScrollableScrollPhysics(),
+                                child: Form(
+                                  key: _formKey,
+                                  child: Column(
+                                    children: [
+                                      // Profile Header
+                                      Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.all(24.0),
+                                        child: Column(
+                                          children: [
+                                            CircleAvatar(
+                                              radius: 50.0,
+                                              backgroundColor: const Color(0xFF0097b2),
+                                              child: Text(
+                                                _getInitials(),
+                                                style: const TextStyle(
+                                                  fontSize: 36.0,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 16.0),
+                                            Text(
+                                              _getDisplayName(),
+                                              style: const TextStyle(
+                                                fontSize: 24.0,
+                                                fontWeight: FontWeight.bold,
+                                                color: Color(0xFF0e0259),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 8.0),
+                                            Text(
+                                              currentUserEmail ??
+                                                  _auth.currentUser?.email ??
+                                                  'No email',
+                                              style: TextStyle(
+                                                fontSize: 16.0,
+                                                color: Colors.grey[600],
+                                              ),
+                                            ),
+                                            const SizedBox(height: 8.0),
+                                          ],
+                                        ),
+                                      ),
+                                      // Personal Information
+                                      if (userData?['FName'] != null)
+                                        _buildEditableTextField(
+                                          icon: Icons.person,
+                                          title: 'First Name',
+                                          fieldName: 'FName',
+                                          validator: (value) => _validateName(value, 'first name'),
+                                        ),
+                                      if (userData?['LName'] != null)
+                                        _buildEditableTextField(
+                                          icon: Icons.person_outline,
+                                          title: 'Last Name',
+                                          fieldName: 'LName',
+                                          validator: (value) => _validateName(value, 'last name'),
+                                        ),
+                                      
+                                      // Academic Information
+                                      _buildEditableDropdown<String>(
+                                        icon: Icons.school,
+                                        title: 'Major',
+                                        fieldName: 'major',
+                                        options: _majorOptions,
+                                        getCurrentValue: _getCurrentMajor,
+                                        displayValue: (value) => value ?? 'Not specified',
+                                        validator: (value) => value == null ? 'Please select your major' : null,
+                                      ),
+                                      _buildEditableDropdown<int>(
+                                        icon: Icons.trending_up,
+                                        title: 'Academic Level',
+                                        fieldName: 'level',
+                                        options: _levelOptions,
+                                        getCurrentValue: _getCurrentLevel,
+                                        displayValue: (value) => value != null ? 'Level $value' : 'Not specified',
+                                        validator: (value) => value == null ? 'Please select your level' : null,
+                                      ),
+                                      _buildEditableTextField(
+                                        icon: Icons.grade,
+                                        title: 'Current GPA',
+                                        fieldName: 'GPA',
+                                        hint: 'e.g., 3.75',
+                                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                        validator: _validateGPA,
+                                      ),
+                                     _buildEditableDropdown<String>(
+  icon: Icons.person_pin,
+  title: 'Gender',
+  fieldName: 'gender',
+  options: _genderOptions,
+  getCurrentValue: _getCurrentGender,
+  displayValue: (value) => value ?? 'Not specified',
+  validator: (value) => value == null ? 'Please select your gender' : null,
+),
+                                      const SizedBox(height: 30.0),
+                                      // Edit Mode: Save/Cancel Buttons OR Sign Out Button
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                                        child: _isEditMode
+                                            ? Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: Container(
+                                                      height: 48,
+                                                      decoration: BoxDecoration(
+                                                        borderRadius: BorderRadius.circular(12),
+                                                        border: Border.all(
+                                                          color: const Color(0xFF0097b2),
+                                                          width: 2,
+                                                        ),
+                                                      ),
+                                                      child: ElevatedButton.icon(
+                                                        onPressed: () {
+                                                          _cancelEdit();
+                                                        },
+                                                        icon: const Icon(Icons.close),
+                                                        label: const Text(
+                                                          'Cancel',
+                                                          style: TextStyle(
+                                                            fontSize: 16,
+                                                            fontWeight: FontWeight.w600,
+                                                            letterSpacing: 0.5,
+                                                          ),
+                                                        ),
+                                                        style: ElevatedButton.styleFrom(
+                                                          backgroundColor: Colors.white,
+                                                          foregroundColor: const Color(0xFF0097b2),
+                                                          elevation: 0,
+                                                          shape: RoundedRectangleBorder(
+                                                            borderRadius: BorderRadius.circular(12),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 12),
+                                                  Expanded(
+                                                    child: Container(
+                                                      height: 48,
+                                                      decoration: BoxDecoration(
+                                                        gradient: const LinearGradient(
+                                                          colors: [Color(0xFF0097b2), Color(0xFF006B7A)],
+                                                        ),
+                                                        borderRadius: BorderRadius.circular(12),
+                                                        boxShadow: [
+                                                          BoxShadow(
+                                                            color: const Color(0xFF0097b2).withOpacity(0.3),
+                                                            blurRadius: 20,
+                                                            offset: const Offset(0, 8),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                      child: ElevatedButton.icon(
+                                                        onPressed: _saveAllChanges,
+                                                        icon: const Icon(Icons.check),
+                                                        label: const Text(
+                                                          'Save',
+                                                          style: TextStyle(
+                                                            fontSize: 16,
+                                                            fontWeight: FontWeight.w600,
+                                                            letterSpacing: 0.5,
+                                                          ),
+                                                        ),
+                                                        style: ElevatedButton.styleFrom(
+                                                          backgroundColor: Colors.transparent,
+                                                          shadowColor: Colors.transparent,
+                                                          foregroundColor: Colors.white,
+                                                          shape: RoundedRectangleBorder(
+                                                            borderRadius: BorderRadius.circular(12),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              )
+                                            : Container(
+                                                width: double.infinity,
+                                                height: 48,
+                                                decoration: BoxDecoration(
+                                                  gradient: const LinearGradient(
+                                                    colors: [Colors.red, Color(0xFFD32F2F)],
+                                                  ),
+                                                  borderRadius: BorderRadius.circular(12),
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      color: Colors.red.withOpacity(0.3),
+                                                      blurRadius: 20,
+                                                      offset: const Offset(0, 8),
+                                                    ),
+                                                  ],
+                                                ),
+                                                child: ElevatedButton.icon(
+                                                  onPressed: _signOut,
+                                                  icon: const Icon(Icons.logout),
+                                                  label: const Text(
+                                                    'Sign Out',
+                                                    style: TextStyle(
+                                                      fontSize: 16,
+                                                      fontWeight: FontWeight.w600,
+                                                      letterSpacing: 0.5,
+                                                    ),
+                                                  ),
+                                                  style: ElevatedButton.styleFrom(
+                                                    backgroundColor: Colors.transparent,
+                                                    shadowColor: Colors.transparent,
+                                                    foregroundColor: Colors.white,
+                                                    shape: RoundedRectangleBorder(
+                                                      borderRadius: BorderRadius.circular(12),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                      ),
+                                      const SizedBox(height: 30.0),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
 }
 }
