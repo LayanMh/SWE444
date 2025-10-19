@@ -19,6 +19,7 @@ import 'screens/absence_page.dart';
 import 'screens/welcome_screen.dart';
 import 'screens/calendar_screen.dart'; 
 import 'screens/add_lecture_screen.dart';
+import 'services/daily_reminder_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,7 +32,11 @@ Future<void> main() async {
     debugPrint('Firebase initialization failed: $e');
     debugPrintStack(stackTrace: st);
   }
-  // Notifications disabled: NotiService removed
+  // Initialize and schedule 6 PM daily attendance reminder
+  await DailyReminderService.initialize();
+  // TEMP: Debug ping to verify notifications (fires in ~10s)
+  await DailyReminderService.debugPingIn10s();
+  await DailyReminderService.schedule6pmForTomorrowIfNeeded();
   runApp(const MyApp());
 }
 
