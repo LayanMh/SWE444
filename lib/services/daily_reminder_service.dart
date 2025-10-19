@@ -77,7 +77,7 @@ class DailyReminderService {
 
     // Schedule for 18:00 UTC (converted to device local time)
     final nowUtc = DateTime.now().toUtc();
-    final sixUtcToday = DateTime.utc(nowUtc.year, nowUtc.month, nowUtc.day, 8);
+    final sixUtcToday = DateTime.utc(nowUtc.year, nowUtc.month, nowUtc.day, 9:30);
     final targetUtc = nowUtc.isBefore(sixUtcToday)
         ? sixUtcToday
         : sixUtcToday.add(const Duration(days: 1));
