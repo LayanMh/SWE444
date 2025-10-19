@@ -184,10 +184,10 @@ class _CourseCard extends StatelessWidget {
                   ?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 6),
-            _Badge(
-              label: 'Absent ${item.absentCount}',
-              color: Colors.red.withOpacity(0.12),
-              textColor: Colors.red,
+            _AbsenceBadge(
+              courseCode: item.code,
+              records: item.records,
+              count: item.absentCount,
             ),
             const SizedBox(height: 8),
 
@@ -250,14 +250,7 @@ class _PercentBar extends StatelessWidget {
     final pct = totalMinutes == 0 ? 0.0 : (absentMinutes * 100.0 / totalMinutes);
     final level = (pct / 25).clamp(0, 1).toDouble();
 
-    Color barColor;
-    if (level >= 1.0) {
-      barColor = Colors.red;
-    } else if (level >= 0.5) {
-      barColor = Colors.orange;
-    } else {
-      barColor = Colors.green;
-    }
+    final Color barColor = _colorForPct(pct);
 
     // UI should be pure: no side effects during build.
 
@@ -532,7 +525,6 @@ class _AbsenceRow extends StatelessWidget {
         );
       },
       child: ListTile(
-        leading: const Icon(Icons.remove_circle_rounded, color: Colors.red),
         title: Text(title),
         subtitle: Text('absent • $when'),
         dense: true,
@@ -643,6 +635,73 @@ class _Badge extends StatelessWidget {
       ),
     );
   }
+}
+
+// Shows the "Absent N" badge whose color matches the percentage bar.
+class _AbsenceBadge extends StatelessWidget {
+  const _AbsenceBadge({
+    required this.courseCode,
+    required this.records,
+    required this.count,
+  });
+
+  final String courseCode; // normalized
+  final List<Map<String, dynamic>> records; // only 'absent' rows
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<Map<String, int>>(
+      valueListenable: AttendanceTotals.instance.totalMinutesByCourse,
+      builder: (context, totals, _) {
+        final providedMinutes = totals[courseCode];
+        if (providedMinutes != null && providedMinutes > 0) {
+          return _buildForTotal(providedMinutes);
+        }
+        // Fallback to computing denominator minutes asynchronously.
+        return FutureBuilder<_Denom>(
+          future: _computeDenominatorMinutes(courseCode),
+          builder: (context, snap) {
+            if (snap.connectionState == ConnectionState.waiting) {
+              return _Badge(
+                label: 'Absent $count',
+                color: Colors.grey.withOpacity(0.12),
+                textColor: Colors.grey,
+              );
+            }
+            final denom = snap.data ?? const _Denom(totalEvents: 0, totalMinutes: 0);
+            return _buildForTotal(denom.totalMinutes);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildForTotal(int totalMinutes) {
+    int absentMinutes = 0;
+    for (final r in records) {
+      final s = _asDateTime(r['start']);
+      final e = _asDateTime(r['end']) ?? (s?.add(const Duration(minutes: 1)));
+      if (s == null) continue;
+      final mins = (e != null && e.isAfter(s)) ? e.difference(s).inMinutes : 1;
+      absentMinutes += mins <= 0 ? 1 : mins;
+    }
+    final pct = totalMinutes == 0 ? 0.0 : (absentMinutes * 100.0 / totalMinutes);
+    final color = _colorForPct(pct);
+    return _Badge(
+      label: 'Absent $count',
+      color: color.withOpacity(0.12),
+      textColor: color,
+    );
+  }
+}
+
+// Shared color logic for percentage thresholds used by both bar and badge.
+Color _colorForPct(double pct) {
+  final level = (pct / 25).clamp(0, 1).toDouble();
+  if (level >= 1.0) return Colors.red;
+  if (level >= 0.5) return Colors.orange;
+  return Colors.green;
 }
 
 DateTime? _asDateTime(dynamic v) {
