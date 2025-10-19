@@ -439,53 +439,60 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 ],
               ),
             ),
-            if (!isToday &&
-                _dayKeys.any((day) => _isSameDay(day, DateTime.now())))
+            if ((!isToday &&
+                    _dayKeys.any((day) => _isSameDay(day, DateTime.now()))) ||
+                currentDayEvents.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    style: TextButton.styleFrom(
-                      foregroundColor: _CalendarPalette.headerStrong,
-                    ),
-                    onPressed: _jumpToToday,
-                    icon: const Icon(
-                      Icons.today_rounded,
-                      color: _CalendarPalette.headerStrong,
-                    ),
-                    label: Text(
-                      'Jump to today',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: _CalendarPalette.headerStrong,
-                        fontWeight: FontWeight.w600,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    if (currentDayEvents.isNotEmpty)
+                      TextButton.icon(
+                        style: TextButton.styleFrom(
+                          foregroundColor: _CalendarPalette.headerMuted,
+                        ),
+                        onPressed: () => _confirmAbsenceAllDay(currentDay),
+                        icon: const Icon(
+                          Icons.event_busy_rounded,
+                          color: _CalendarPalette.headerMuted,
+                        ),
+                        label: Text(
+                          'Absence All Day',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: _CalendarPalette.headerMuted,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                ),
-              ),
-            if (currentDayEvents.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    style: TextButton.styleFrom(
-                      foregroundColor: _CalendarPalette.headerMuted,
-                    ),
-                    onPressed: () => _confirmAbsenceAllDay(currentDay),
-                    icon: const Icon(
-                      Icons.event_busy_rounded,
-                      color: _CalendarPalette.headerMuted,
-                    ),
-                    label: Text(
-                      'Absence All Day',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: _CalendarPalette.headerMuted,
-                        fontWeight: FontWeight.w600,
+                    if (currentDayEvents.isNotEmpty &&
+                        !isToday &&
+                        _dayKeys.any(
+                          (day) => _isSameDay(day, DateTime.now()),
+                        ))
+                      const SizedBox(width: 12),
+                    if (!isToday &&
+                        _dayKeys.any(
+                          (day) => _isSameDay(day, DateTime.now()),
+                        ))
+                      TextButton.icon(
+                        style: TextButton.styleFrom(
+                          foregroundColor: _CalendarPalette.headerStrong,
+                        ),
+                        onPressed: _jumpToToday,
+                        icon: const Icon(
+                          Icons.today_rounded,
+                          color: _CalendarPalette.headerStrong,
+                        ),
+                        label: Text(
+                          'Jump to today',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: _CalendarPalette.headerStrong,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
+                  ],
                 ),
               ),
             const SizedBox(height: 8),
