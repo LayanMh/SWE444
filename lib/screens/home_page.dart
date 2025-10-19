@@ -16,17 +16,53 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  int _selectedIndex = 2;
 
-  late final List<Widget> _tabs = <Widget>[
-    ProfileScreen(),
-    const CalendarScreen(),
-    const _HomeTab(),
-    const ExperiencePage(),
-    const CommunityPage(),
-  ];
+  int _selectedIndex = 2; 
+final GlobalKey<ProfileScreenState> _profileKey = GlobalKey<ProfileScreenState>();
+late final List<Widget> _tabs = <Widget>[
+  ProfileScreen(key: _profileKey),  // ← add key here
+  const CalendarScreen(),
+  const _HomeTab(),
+  const ExperiencePage(),
+  const CommunityPage(),
+];
 
-  void _onTap(int i) => setState(() => _selectedIndex = i);
+ void _onTap(int i) async {
+  // If leaving Profile (index 0) while in edit mode
+  if (_selectedIndex == 0 && i != 0) {
+    final profileState = _profileKey.currentState;
+    if (profileState != null && profileState.isEditMode) {
+      // Ask user whether to discard edits or stay
+      final shouldLeave = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Discard Changes?'),
+          content: const Text('You have unsaved changes. Do you want to leave without saving?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Stay'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Discard'),
+            ),
+          ],
+        ),
+      );
+
+      // If user wants to stay → do nothing
+      if (shouldLeave != true) return;
+
+      // Otherwise cancel edits before switching tab
+      profileState.cancelEdit();
+    }
+  }
+
+  setState(() => _selectedIndex = i);
+}
+
 
   @override
   Widget build(BuildContext context) {
