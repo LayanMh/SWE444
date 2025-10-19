@@ -908,22 +908,23 @@ String? _validateName(String? value, String fieldName) {
   
   // Check for spaces
   if (value.trim().contains(' ')) {
-    return 'Cannot contain spaces';  // Simplified message
+    return 'Cannot contain spaces';
   }
   
   // Check for numbers
   if (RegExp(r'\d').hasMatch(value.trim())) {
-    return 'Cannot contain numbers';  // Simplified message
+    return 'Cannot contain numbers';
   }
   
-  // Check for special characters and emojis
-  if (!RegExp(r'^[a-zA-Z]+$').hasMatch(value.trim())) {
-    return 'Can only contain letters';  // Simplified message
+  // Allow Arabic letters (Unicode range for Arabic: \u0600-\u06FF) and English letters
+  // This matches the same validation used in sign-in and sign-up screens
+  if (!RegExp(r'^[\u0600-\u06FFa-zA-Z]+$').hasMatch(value.trim())) {
+    return 'Can only contain letters';
   }
   
   // Check length
   if (value.trim().length > 30) {
-    return 'Cannot exceed 30 characters';  // Simplified message
+    return 'Cannot exceed 30 characters';
   }
   
   return null;
