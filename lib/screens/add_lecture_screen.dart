@@ -35,8 +35,10 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     final messenger = ScaffoldMessenger.of(context);
-    final scheduleProvider =
-        Provider.of<ScheduleProvider>(context, listen: false);
+    final scheduleProvider = Provider.of<ScheduleProvider>(
+      context,
+      listen: false,
+    );
     setState(() => _isLoading = true);
 
     try {
@@ -72,8 +74,7 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
         endTime: lecture.endTime,
       );
 
-      final conflictingLecture =
-          scheduleProvider.findTimeConflict(newLecture);
+      final conflictingLecture = scheduleProvider.findTimeConflict(newLecture);
       if (conflictingLecture != null) {
         messenger.showSnackBar(
           SnackBar(
@@ -113,20 +114,17 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
           .collection('schedule')
           .doc(section);
 
-      await userScheduleRef.set(
-        {
-          'courseCode': lecture.courseCode,
-          'courseName': lecture.courseName,
-          'section': lecture.section,
-          'classroom': lecture.classroom,
-          'dayOfWeek': lecture.dayOfWeek,
-          'startTime': lecture.startTime,
-          'endTime': lecture.endTime,
-          'addedAt': FieldValue.serverTimestamp(),
-          'status': 'active',
-        },
-        SetOptions(merge: true),
-      );
+      await userScheduleRef.set({
+        'courseCode': lecture.courseCode,
+        'courseName': lecture.courseName,
+        'section': lecture.section,
+        'classroom': lecture.classroom,
+        'dayOfWeek': lecture.dayOfWeek,
+        'startTime': lecture.startTime,
+        'endTime': lecture.endTime,
+        'addedAt': FieldValue.serverTimestamp(),
+        'status': 'active',
+      }, SetOptions(merge: true));
 
       messenger.showSnackBar(
         const SnackBar(content: Text('Lecture added to your schedule.')),
@@ -141,10 +139,21 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
         );
       } else {
         try {
-          await MicrosoftCalendarService.addWeeklyRecurringLecture(
-            account: account,
-            lecture: newLecture.toRecurringLecture(),
-          );
+          final createdEvent =
+              await MicrosoftCalendarService.addWeeklyRecurringLecture(
+                account: account,
+                lecture: newLecture.toRecurringLecture(),
+              );
+          try {
+            await userScheduleRef.set({
+              'calendarEventId': createdEvent.id,
+              if (createdEvent.seriesMasterId != null &&
+                  createdEvent.seriesMasterId!.isNotEmpty)
+                'calendarSeriesMasterId': createdEvent.seriesMasterId,
+            }, SetOptions(merge: true));
+          } catch (_) {
+            // If we fail to persist the event id, continue; deletion flow can fall back.
+          }
           if (!mounted) return;
           messenger.showSnackBar(
             const SnackBar(
@@ -212,4 +221,3 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
     );
   }
 }
-

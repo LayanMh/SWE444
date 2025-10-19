@@ -372,6 +372,7 @@ Future<Map<String, dynamic>?> _findExistingUserByEmail(String email) async {
 
       // Save credentials if remember me is checked
       await _saveCredentials();
+      await _clearMicrosoftSessionForEmailLogin();
 
       if (mounted) {
         _showSuccessMessage('Welcome back to ABSHERK!');
@@ -397,6 +398,24 @@ Future<Map<String, dynamic>?> _findExistingUserByEmail(String email) async {
       return;
     }
     Navigator.pushReplacementNamed(context, '/home');
+  }
+
+  Future<void> _clearMicrosoftSessionForEmailLogin() async {
+    try {
+      await MicrosoftAuthService.signOut();
+    } catch (error) {
+      debugPrint('Failed to clear Microsoft session: $error');
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('microsoft_user_email');
+      await prefs.remove('microsoft_user_doc_id');
+      await prefs.remove('schedule_mode');
+      await prefs.setBool('microsoft_remember_me', false);
+    } catch (error) {
+      debugPrint('Failed to clear Microsoft preferences: $error');
+    }
   }
 
   void _handleForgotPassword() {
