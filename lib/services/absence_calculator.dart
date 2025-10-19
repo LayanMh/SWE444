@@ -99,15 +99,26 @@ class AbsenceCalculator {
         .get();
     final absent = absSnap.docs.length;
 
-    // 2) Compute denominator from lectures by counting weekly occurrences since a start date.
-    final lectSnap = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(docId)
-        .collection('lectures')
-        .where('courseCode', isEqualTo: norm)
-        .get();
+    // 2) Compute denominator from user's saved schedule/lectures by counting
+    //    weekly occurrences since a start date. Prefer users/{uid}/schedule.
+    var lectDocs = (await FirebaseFirestore.instance
+            .collection('users')
+            .doc(docId)
+            .collection('schedule')
+            .where('courseCode', isEqualTo: norm)
+            .get())
+        .docs;
 
-    var lectDocs = lectSnap.docs;
+    if (lectDocs.isEmpty) {
+      final lectSnap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(docId)
+          .collection('lectures')
+          .where('courseCode', isEqualTo: norm)
+          .get();
+      lectDocs = lectSnap.docs;
+    }
+
     if (lectDocs.isEmpty) {
       final root = await FirebaseFirestore.instance
           .collection('lectures')
