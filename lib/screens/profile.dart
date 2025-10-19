@@ -1168,11 +1168,7 @@ Widget build(BuildContext context) {
                                           fieldName: 'LName',
                                           validator: (value) => _validateName(value, 'last name'),
                                         ),
-                                      _buildReadOnlyTile(
-                                        icon: Icons.email,
-                                        title: 'Email Address',
-                                        value: currentUserEmail ?? _auth.currentUser?.email ?? 'Not available',
-                                      ),
+                                      
                                       // Academic Information
                                       _buildEditableDropdown<String>(
                                         icon: Icons.school,
