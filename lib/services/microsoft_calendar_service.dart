@@ -247,6 +247,11 @@ class MicrosoftCalendarService {
       },
     );
 
+    if (response.statusCode == 404) {
+      // Treat missing events as already deleted to keep the app state in sync.
+      return;
+    }
+
     if (response.statusCode != 204) {
       throw Exception(
         'Failed to delete event (${response.statusCode}): ${response.body}',

@@ -124,6 +124,17 @@ class ScheduleService {
     });
   }
 
+  static Future<List<ScheduleEntry>> fetchScheduleOnce() async {
+    final docId = await _resolveUserDocId();
+    final query = await _db
+        .collection('users')
+        .doc(docId)
+        .collection('schedule')
+        .orderBy('courseCode')
+        .get();
+    return query.docs.map(ScheduleEntry.fromSnapshot).toList(growable: false);
+  }
+
   static Future<void> deleteEntry(ScheduleEntry entry) async {
     final docId = await _resolveUserDocId();
     final docRef = _db
@@ -192,23 +203,31 @@ class ScheduleService {
     required ScheduleEntry entry,
     required DocumentReference<Map<String, dynamic>> docRef,
   }) async {
-    final _CalendarDeleteTarget? target = await _resolveDeleteTarget(
-      account,
-      entry,
-      docRef,
-    );
-
-    if (target == null) {
-      throw StateError(
-        'Unable to locate the calendar event for section ${entry.section}.',
-      );
+    _CalendarDeleteTarget? target;
+    try {
+      target = await _resolveDeleteTarget(account, entry, docRef);
+    } catch (_) {
+      target = null;
     }
 
-    await MicrosoftCalendarService.deleteLecture(
-      account: account,
-      eventId: target.eventId,
-      seriesMasterId: target.seriesMasterId,
-    );
+    if (target != null) {
+      try {
+        await MicrosoftCalendarService.deleteLecture(
+          account: account,
+          eventId: target.eventId,
+          seriesMasterId: target.seriesMasterId,
+        );
+      } catch (error) {
+        final message = error.toString();
+        final notFound =
+            message.contains('404') ||
+            message.contains('ErrorItemNotFound') ||
+            message.contains('The specified object was not found');
+        if (!notFound) {
+          rethrow;
+        }
+      }
+    }
 
     await AttendanceService.clearCourse(entry.courseCode);
 
