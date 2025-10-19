@@ -140,7 +140,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
         _isLoading = false;
       });
     }
-    // âœ… Use existing session
+    // ✅ Use existing session
     final account =
         MicrosoftAuthService.currentAccount ??
         await MicrosoftAuthService.ensureSignedIn(interactive: interactive);
@@ -194,8 +194,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 
   Widget _buildAddSectionButton({
-    EdgeInsetsGeometry padding = const EdgeInsets.only(right: 16, bottom: 8),
-    double width = 170,
+    EdgeInsetsGeometry padding = const EdgeInsets.only(right: 16, bottom: 12),
+    double width = 152,
   }) {
     return Padding(
       padding: padding,
@@ -213,7 +213,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
             decoration: const BoxDecoration(
               borderRadius: BorderRadius.all(Radius.circular(24)),
               gradient: LinearGradient(
-                colors: <Color>[_CalendarPalette.accentPrimary, _CalendarPalette.accentSecondary],
+                colors: <Color>[
+                  _CalendarPalette.accentPrimary,
+                  _CalendarPalette.accentSecondary,
+                ],
                 begin: Alignment.centerLeft,
                 end: Alignment.centerRight,
               ),
@@ -241,6 +244,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   Widget _decorateBackground(Widget child) {
     return Container(
+      constraints: const BoxConstraints.expand(),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           colors: <Color>[
@@ -286,57 +290,44 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   Widget _buildEmptyState() {
     final theme = Theme.of(context);
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: <Color>[
-            _CalendarPalette.gradientStart,
-            _CalendarPalette.gradientEnd,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: RefreshIndicator(
+    return _decorateBackground(
+      RefreshIndicator(
         onRefresh: _handleRefresh,
-        child: SingleChildScrollView(
+        child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.calendar_today_rounded,
-                size: 64,
-                color: _CalendarPalette.accentPrimary,
+          children: [
+            Icon(
+              Icons.calendar_today_rounded,
+              size: 64,
+              color: _CalendarPalette.accentPrimary,
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Build your calendar',
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
               ),
-              const SizedBox(height: 24),
-              Text(
-                'Build your calendar',
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: _CalendarPalette.textStrong,
-                ),
-                textAlign: TextAlign.center,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Tap "Add Section" to start crafting your schedule.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: Colors.white70,
               ),
-              const SizedBox(height: 12),
-              Text(
-                'Tap "Add Section" to start crafting your schedule.',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: _CalendarPalette.textMuted,
-                ),
-                textAlign: TextAlign.center,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            Align(
+              alignment: Alignment.center,
+              child: _buildAddSectionButton(
+                padding: const EdgeInsets.only(bottom: 24),
+                width: 168,
               ),
-              const SizedBox(height: 32),
-              Align(
-                alignment: Alignment.center,
-                child: _buildAddSectionButton(
-                  padding: EdgeInsets.zero,
-                  width: 200,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -361,6 +352,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final isToday = _isSameDay(currentDay, DateTime.now());
 
     return Container(
+      constraints: const BoxConstraints.expand(),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           colors: <Color>[
@@ -467,14 +459,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
                       ),
                     if (currentDayEvents.isNotEmpty &&
                         !isToday &&
-                        _dayKeys.any(
-                          (day) => _isSameDay(day, DateTime.now()),
-                        ))
+                        _dayKeys.any((day) => _isSameDay(day, DateTime.now())))
                       const SizedBox(width: 12),
                     if (!isToday &&
-                        _dayKeys.any(
-                          (day) => _isSameDay(day, DateTime.now()),
-                        ))
+                        _dayKeys.any((day) => _isSameDay(day, DateTime.now())))
                       TextButton.icon(
                         style: TextButton.styleFrom(
                           foregroundColor: _CalendarPalette.headerStrong,
@@ -690,8 +678,17 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 ),
                 // Hide the action icon for future events
                 if (!(event.start != null &&
-                    DateTime(event.start!.year, event.start!.month, event.start!.day)
-                        .isAfter(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day)))) ...[
+                    DateTime(
+                      event.start!.year,
+                      event.start!.month,
+                      event.start!.day,
+                    ).isAfter(
+                      DateTime(
+                        DateTime.now().year,
+                        DateTime.now().month,
+                        DateTime.now().day,
+                      ),
+                    ))) ...[
                   const SizedBox(width: 12),
                   FutureBuilder<bool>(
                     future: _isEventAlreadyAbsent(event.id),
@@ -712,7 +709,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         icon: icon,
                         color: color,
                         onPressed: () async {
-                          await _confirmAbsenceToggle(event, isAbsent: isAbsent);
+                          await _confirmAbsenceToggle(
+                            event,
+                            isAbsent: isAbsent,
+                          );
                           if (mounted) setState(() {});
                         },
                       );
@@ -837,7 +837,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     return '$startLabel - ${formatter.format(end)}';
   }
 
-  /// Extract a course code from the event subject, e.g. "CS101 ï¿½ Lecture 5".
+  /// Extract a course code from the event subject, e.g. "CS101 � Lecture 5".
   String _resolveCourseId(MicrosoftCalendarEvent e) {
     final s = (e.subject).toUpperCase();
     final m = RegExp(r'[A-Z]{2,}\s?\d{2,}').firstMatch(s); // CS101 or CS 101
@@ -930,7 +930,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('You can only record absence for today or past classes.'),
+          content: Text(
+            'You can only record absence for today or past classes.',
+          ),
           duration: Duration(seconds: 2),
         ),
       );
@@ -1150,7 +1152,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 
   /// Confirm from the icon and record absence (no clearing from calendar).
-  Future<void> _confirmAbsenceToggle(MicrosoftCalendarEvent event, {required bool isAbsent}) async {
+  Future<void> _confirmAbsenceToggle(
+    MicrosoftCalendarEvent event, {
+    required bool isAbsent,
+  }) async {
     final start = event.start ?? DateTime.now();
     final now = DateTime.now();
     final eventDay = DateTime(start.year, start.month, start.day);
@@ -1159,7 +1164,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('You can only record absence for today or past classes.'),
+          content: Text(
+            'You can only record absence for today or past classes.',
+          ),
           duration: Duration(seconds: 2),
         ),
       );
@@ -1389,12 +1396,3 @@ class _SignInPrompt extends StatelessWidget {
     );
   }
 }
-
-
-
-
-
-
-
-
-

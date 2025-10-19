@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:uuid/uuid.dart';
 
 import '../models/lecture.dart';
 import '../providers/schedule_provider.dart';
 import '../services/microsoft_auth_service.dart';
 import '../services/microsoft_calendar_service.dart';
 import '../services/firebase_lecture_service.dart';
+import '../services/schedule_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -22,7 +22,6 @@ class AddLectureScreen extends StatefulWidget {
 class _AddLectureScreenState extends State<AddLectureScreen> {
   final _formKey = GlobalKey<FormState>();
   final _controller = TextEditingController();
-  final _uuid = const Uuid();
   bool _isLoading = false;
 
   @override
@@ -42,6 +41,19 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
     setState(() => _isLoading = true);
 
     try {
+      List<ScheduleEntry>? remoteSchedule;
+      try {
+        remoteSchedule = await ScheduleService.fetchScheduleOnce();
+      } catch (_) {
+        remoteSchedule = null;
+      }
+      if (!mounted) return;
+      if (remoteSchedule != null) {
+        scheduleProvider.replaceLectures(
+          remoteSchedule.map((entry) => entry.toLecture()),
+        );
+      }
+
       final section = _controller.text.trim();
 
       if (scheduleProvider.containsSection(section)) {
@@ -64,7 +76,7 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
       }
 
       final newLecture = Lecture(
-        id: _uuid.v4(),
+        id: lecture.section,
         courseCode: lecture.courseCode,
         courseName: lecture.courseName,
         section: lecture.section,
@@ -85,8 +97,6 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
         );
         return;
       }
-
-      scheduleProvider.addLecture(newLecture);
 
       // Save lecture under current user's schedule in Firestore
       final firebaseUser = FirebaseAuth.instance.currentUser;
@@ -112,19 +122,28 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
           .collection('users')
           .doc(userDocId)
           .collection('schedule')
-          .doc(section);
+          .doc(newLecture.id);
 
-      await userScheduleRef.set({
-        'courseCode': lecture.courseCode,
-        'courseName': lecture.courseName,
-        'section': lecture.section,
-        'classroom': lecture.classroom,
-        'dayOfWeek': lecture.dayOfWeek,
-        'startTime': lecture.startTime,
-        'endTime': lecture.endTime,
-        'addedAt': FieldValue.serverTimestamp(),
-        'status': 'active',
-      }, SetOptions(merge: true));
+      try {
+        await userScheduleRef.set({
+          'courseCode': lecture.courseCode,
+          'courseName': lecture.courseName,
+          'section': lecture.section,
+          'classroom': lecture.classroom,
+          'dayOfWeek': lecture.dayOfWeek,
+          'startTime': lecture.startTime,
+          'endTime': lecture.endTime,
+          'addedAt': FieldValue.serverTimestamp(),
+          'status': 'active',
+        }, SetOptions(merge: true));
+      } catch (error) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('Failed to save section: $error')),
+        );
+        return;
+      }
+
+      scheduleProvider.addLecture(newLecture);
 
       messenger.showSnackBar(
         const SnackBar(content: Text('Lecture added to your schedule.')),
