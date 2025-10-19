@@ -1,5 +1,3 @@
-import 'package:firebase_auth/firebase_auth.dart';
-
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
@@ -15,10 +13,11 @@ import 'screens/swapping_main.dart';
 import 'screens/experience.dart';
 import 'screens/community.dart';
 import 'screens/absence_page.dart';
+import 'screens/my_courses_page.dart';
 
 // Existing
 import 'screens/welcome_screen.dart';
-import 'screens/calendar_screen.dart'; 
+import 'screens/calendar_screen.dart';
 import 'screens/add_lecture_screen.dart';
 
 Future<void> main() async {
@@ -61,9 +60,7 @@ class MyApp extends StatelessWidget {
     ).copyWith(surfaceContainerHighest: const Color(0xFFE0F7F0));
 
     return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => ScheduleProvider()),
-      ],
+      providers: [ChangeNotifierProvider(create: (_) => ScheduleProvider())],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'ABSHERK',
@@ -94,7 +91,9 @@ class MyApp extends StatelessWidget {
             ),
           ),
           textButtonTheme: TextButtonThemeData(
-            style: TextButton.styleFrom(foregroundColor: const Color(0xFF0097b2)),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFF0097b2),
+            ),
           ),
           inputDecorationTheme: InputDecorationTheme(
             border: OutlineInputBorder(
@@ -113,19 +112,17 @@ class MyApp extends StatelessWidget {
         home: const WelcomeScreen(),
 
         routes: {
-      
-          '/calendar': (_) => const CalendarScreen(), 
+          '/calendar': (_) => const CalendarScreen(),
           '/add-lecture': (_) => const AddLectureScreen(),
 
-        
-          '/home': (_) => const HomePage(), 
+          '/home': (_) => const HomePage(),
           '/swapping': (_) => const SwapRequestPage(),
-  '/calculator': (_) => const GpaCalculator(),
-
+          '/calculator': (_) => const GpaCalculator(),
 
           '/experience': (_) => const ExperiencePage(),
           '/community': (_) => const CommunityPage(),
           '/absence': (_) => const AbsencePage(),
+          '/my-courses': (_) => const MyCoursesPage(),
         },
       ),
     );

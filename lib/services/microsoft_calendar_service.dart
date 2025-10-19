@@ -16,6 +16,7 @@ class MicrosoftCalendarEvent {
     this.location,
     this.seriesMasterId,
     this.eventType,
+    this.bodyContent,
   });
 
   final String id;
@@ -26,6 +27,7 @@ class MicrosoftCalendarEvent {
   final String? location;
   final String? seriesMasterId;
   final String? eventType;
+  final String? bodyContent;
 
   factory MicrosoftCalendarEvent.fromJson(Map<String, dynamic> json) {
     final rawLocation =
@@ -33,6 +35,8 @@ class MicrosoftCalendarEvent {
     final trimmedLocation = rawLocation?.trim();
     final masterId = (json['seriesMasterId'] as String?)?.trim();
     final type = (json['type'] as String?)?.trim();
+    final content =
+        (json['body'] as Map<String, dynamic>?)?['content'] as String?;
 
     return MicrosoftCalendarEvent(
       id: json['id'] as String? ?? '',
@@ -45,6 +49,7 @@ class MicrosoftCalendarEvent {
           : trimmedLocation,
       seriesMasterId: (masterId == null || masterId.isEmpty) ? null : masterId,
       eventType: type,
+      bodyContent: content,
     );
   }
 }
@@ -88,7 +93,8 @@ class MicrosoftCalendarService {
       'endDateTime': endUtc.toIso8601String(),
       r'$orderby': 'start/dateTime',
       r'$top': '50',
-      r'$select': 'id,subject,start,end,isAllDay,location,seriesMasterId,type',
+      r'$select':
+          'id,subject,start,end,isAllDay,location,seriesMasterId,type,body',
     });
 
     final response = await http.get(
@@ -144,7 +150,7 @@ class MicrosoftCalendarService {
     }
   }
 
-  static Future<void> addWeeklyRecurringLecture({
+  static Future<MicrosoftCalendarEvent> addWeeklyRecurringLecture({
     required MicrosoftAccount account,
     required RecurringLecture lecture,
   }) async {
@@ -214,6 +220,13 @@ class MicrosoftCalendarService {
         'Failed to create calendar event (${response.statusCode})',
       );
     }
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map<String, dynamic>) {
+      throw Exception('Unexpected response while creating calendar event.');
+    }
+
+    return MicrosoftCalendarEvent.fromJson(decoded);
   }
 
   static Future<void> deleteLecture({

@@ -1,5 +1,4 @@
 ﻿import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
 import 'package:intl/intl.dart';
 
 import '../services/microsoft_auth_service.dart';
@@ -12,6 +11,26 @@ import 'package:absherk/services/noti_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+class _CalendarPalette {
+  static const Color gradientStart = Color(0xFF0092A5);
+  static const Color gradientEnd = Color(0xFF0E1D6F);
+  static const Color cardGradientStart = Color(0xFFF1F7FF);
+  static const Color cardGradientEnd = Color(0xFFE5F1FF);
+  static const Color cardBorder = Color(0xFFA5C2F5);
+  static const Color textStrong = Color(0xFF122448);
+  static const Color textMuted = Color(0xFF4D5C7C);
+  static const Color accentPrimary = Color(0xFF4C6EF5);
+  static const Color accentSecondary = Color(0xFF5AD7C0);
+  static const Color chipBackground = Color(0xFFE3EDFF);
+  static const Color chipText = Color(0xFF2F4FA2);
+  static const Color headerStrong = Color(0xFFF1F9FF);
+  static const Color headerMuted = Color(0xCCF1F9FF);
+  static const Color headerChipBackground = Color(0x40FFFFFF);
+  static const Color headerChipText = Color(0xFFEFF6FF);
+  static const Color indicatorInactive = Color(0x66FFFFFF);
+  static const Color iconOnGradient = Colors.white;
+}
+
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
 
@@ -22,7 +41,8 @@ class CalendarScreen extends StatefulWidget {
 class _CalendarScreenState extends State<CalendarScreen> {
   static const Duration _calendarWindowRange = Duration(days: 210);
 
-  late final DateTime _calendarWindowStart = MicrosoftCalendarService.resolveSemesterStart();
+  late final DateTime _calendarWindowStart =
+      MicrosoftCalendarService.resolveSemesterStart();
   MicrosoftAccount? _account;
   List<MicrosoftCalendarEvent> _events = <MicrosoftCalendarEvent>[];
   List<DateTime> _dayKeys = <DateTime>[];
@@ -42,8 +62,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
     _pageController?.dispose();
     super.dispose();
   }
-
-
 
   Future<void> _loadCalendar({
     bool interactive = false,
@@ -122,7 +140,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
         _isLoading = false;
       });
     }
-    // ✅ Use existing session
+    // âœ… Use existing session
     final account =
         MicrosoftAuthService.currentAccount ??
         await MicrosoftAuthService.ensureSignedIn(interactive: interactive);
@@ -141,21 +159,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
     return _loadCalendar(interactive: false, showSpinner: false);
   }
 
-  Future<void> _handleSignOut() async {
-    await MicrosoftAuthService.signOut();
-    if (!mounted) return;
-    final previousController = _pageController;
-    setState(() {
-      _account = null;
-      _events = <MicrosoftCalendarEvent>[];
-      _dayKeys = <DateTime>[];
-      _currentPage = 0;
-      _pageController = null;
-    });
-    previousController?.dispose();
-    AttendanceTotals.instance.clear();
-  }
-
   Future<void> _openAddLecture() async {
     await Navigator.push(
       context,
@@ -169,51 +172,31 @@ class _CalendarScreenState extends State<CalendarScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: const Text('My Schedule'),
         actions: [
-          if (_account != null && _events.isNotEmpty && !_isLoading)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: TextButton.icon(
-                style: TextButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  backgroundColor: Colors.white.withValues(alpha: 0.16),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                ),
-                onPressed: _confirmDeleteAll,
-                icon: const Icon(Icons.delete_sweep_rounded),
-                label: const Text('Clear all'),
-              ),
-            ),
           if (_account != null && !_isLoading)
             IconButton(
               icon: const Icon(Icons.refresh),
+              color: _CalendarPalette.iconOnGradient,
               onPressed: () => _loadCalendar(interactive: false),
               tooltip: 'Refresh events',
-            ),
-          if (_account != null)
-            IconButton(
-              icon: const Icon(Icons.logout),
-              onPressed: _handleSignOut,
-              tooltip: 'Sign out',
             ),
         ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-      floatingActionButton: (_account != null && _events.isNotEmpty && !_isLoading)
+      floatingActionButton:
+          (_account != null && _events.isNotEmpty && !_isLoading)
           ? _buildAddSectionButton()
           : null,
       body: _buildBody(),
     );
   }
 
-  Widget _buildAddSectionButton({EdgeInsetsGeometry padding = const EdgeInsets.only(right: 16, bottom: 8), double width = 170}) {
+  Widget _buildAddSectionButton({
+    EdgeInsetsGeometry padding = const EdgeInsets.only(right: 16, bottom: 8),
+    double width = 170,
+  }) {
     return Padding(
       padding: padding,
       child: Material(
@@ -230,7 +213,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
             decoration: const BoxDecoration(
               borderRadius: BorderRadius.all(Radius.circular(24)),
               gradient: LinearGradient(
-                colors: [Color(0xFF4C6EF5), Color(0xFF5AD7C0)],
+                colors: <Color>[_CalendarPalette.accentPrimary, _CalendarPalette.accentSecondary],
                 begin: Alignment.centerLeft,
                 end: Alignment.centerRight,
               ),
@@ -256,20 +239,42 @@ class _CalendarScreenState extends State<CalendarScreen> {
     );
   }
 
+  Widget _decorateBackground(Widget child) {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: <Color>[
+            _CalendarPalette.gradientStart,
+            _CalendarPalette.gradientEnd,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: child,
+    );
+  }
+
   Widget _buildBody() {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return _decorateBackground(
+        const Center(child: CircularProgressIndicator()),
+      );
     }
 
     if (_error != null) {
-      return _ErrorView(
-        message: _error!,
-        onRetry: () => _loadCalendar(interactive: false),
+      return _decorateBackground(
+        _ErrorView(
+          message: _error!,
+          onRetry: () => _loadCalendar(interactive: false),
+        ),
       );
     }
 
     if (_account == null) {
-      return _SignInPrompt(onPressed: () => _loadCalendar(interactive: true));
+      return _decorateBackground(
+        _SignInPrompt(onPressed: () => _loadCalendar(interactive: true)),
+      );
     }
 
     if (_events.isEmpty) {
@@ -284,9 +289,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [Color(0xFFE8F1FF), Color(0xFFF8F5FF)],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
+          colors: <Color>[
+            _CalendarPalette.gradientStart,
+            _CalendarPalette.gradientEnd,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
       ),
       child: RefreshIndicator(
@@ -297,17 +305,17 @@ class _CalendarScreenState extends State<CalendarScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
+              Icon(
                 Icons.calendar_today_rounded,
                 size: 64,
-                color: Color(0xFF4C6EF5),
+                color: _CalendarPalette.accentPrimary,
               ),
               const SizedBox(height: 24),
               Text(
                 'Build your calendar',
                 style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w700,
-                  color: const Color(0xFF1B2559),
+                  color: _CalendarPalette.textStrong,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -315,7 +323,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
               Text(
                 'Tap "Add Section" to start crafting your schedule.',
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFF4F5D9A),
+                  color: _CalendarPalette.textMuted,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -355,7 +363,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [Color(0xFFE8F1FF), Color(0xFFFDF7FF)],
+          colors: <Color>[
+            _CalendarPalette.gradientStart,
+            _CalendarPalette.gradientEnd,
+          ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -374,6 +385,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         ? () => _goToPage(pageIndex - 1)
                         : null,
                     icon: const Icon(Icons.chevron_left_rounded),
+                    color: _CalendarPalette.iconOnGradient,
                     splashRadius: 24,
                   ),
                   Expanded(
@@ -384,14 +396,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
                           DateFormat('EEEE').format(currentDay),
                           style: theme.textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.w700,
-                            color: const Color(0xFF1B2559),
+                            color: _CalendarPalette.headerStrong,
                           ),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           DateFormat('MMMM d, yyyy').format(currentDay),
                           style: theme.textTheme.bodyMedium?.copyWith(
-                            color: const Color(0xFF4F5D9A),
+                            color: _CalendarPalette.headerMuted,
                           ),
                         ),
                         if (isToday)
@@ -402,16 +414,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
                               vertical: 4,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(
-                                0xFF4C6EF5,
-                              ).withValues(alpha: 0.14),
+                              color: _CalendarPalette.headerChipBackground,
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: const Text(
+                            child: Text(
                               'Today',
-                              style: TextStyle(
-                                color: Color(0xFF4C6EF5),
-                                fontWeight: FontWeight.w600,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: _CalendarPalette.headerChipText,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),
@@ -423,6 +433,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         ? () => _goToPage(pageIndex + 1)
                         : null,
                     icon: const Icon(Icons.chevron_right_rounded),
+                    color: _CalendarPalette.iconOnGradient,
                     splashRadius: 24,
                   ),
                 ],
@@ -435,9 +446,21 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 child: Align(
                   alignment: Alignment.centerRight,
                   child: TextButton.icon(
+                    style: TextButton.styleFrom(
+                      foregroundColor: _CalendarPalette.headerStrong,
+                    ),
                     onPressed: _jumpToToday,
-                    icon: const Icon(Icons.today_rounded),
-                    label: const Text('Jump to today'),
+                    icon: const Icon(
+                      Icons.today_rounded,
+                      color: _CalendarPalette.headerStrong,
+                    ),
+                    label: Text(
+                      'Jump to today',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: _CalendarPalette.headerStrong,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -447,9 +470,21 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 child: Align(
                   alignment: Alignment.centerRight,
                   child: TextButton.icon(
+                    style: TextButton.styleFrom(
+                      foregroundColor: _CalendarPalette.headerMuted,
+                    ),
                     onPressed: () => _confirmAbsenceAllDay(currentDay),
-                    icon: const Icon(Icons.event_busy_rounded),
-                    label: const Text('Absence All Day'),
+                    icon: const Icon(
+                      Icons.event_busy_rounded,
+                      color: _CalendarPalette.headerMuted,
+                    ),
+                    label: Text(
+                      'Absence All Day',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: _CalendarPalette.headerMuted,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -486,17 +521,17 @@ class _CalendarScreenState extends State<CalendarScreen> {
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
           children: [
-            const Icon(
+            Icon(
               Icons.emoji_emotions_outlined,
               size: 52,
-              color: Color(0xFF4C6EF5),
+              color: _CalendarPalette.accentPrimary,
             ),
             const SizedBox(height: 18),
             Text(
               'No classes scheduled',
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w600,
-                color: const Color(0xFF1B2559),
+                color: _CalendarPalette.textStrong,
               ),
               textAlign: TextAlign.center,
             ),
@@ -504,7 +539,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
             Text(
               'Enjoy your day or add a new section to stay ahead.',
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: const Color(0xFF4F5D9A),
+                color: _CalendarPalette.textMuted,
               ),
               textAlign: TextAlign.center,
             ),
@@ -535,10 +570,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final timeLabel = _formatEventTime(event);
 
     return Material(
-      color: Colors.white,
+      color: Colors.transparent,
       borderRadius: BorderRadius.circular(22),
-      elevation: 6,
-      shadowColor: Colors.black12,
       child: InkWell(
         borderRadius: BorderRadius.circular(22),
         onTap: () async {
@@ -551,7 +584,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
           if (isFutureDay) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('You can only record absence for today or past classes.'),
+                content: Text(
+                  'You can only record absence for today or past classes.',
+                ),
                 duration: Duration(seconds: 2),
               ),
             );
@@ -584,95 +619,120 @@ class _CalendarScreenState extends State<CalendarScreen> {
           }
           _openAbsenceDialog(event);
         },
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 18, 8, 18),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 6,
-                height: 72,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF4C6EF5), Color(0xFF5AD7C0)],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      subject,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF1B2559),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.schedule_rounded,
-                          size: 18,
-                          color: Color(0xFF4F5D9A),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          timeLabel,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: const Color(0xFF4F5D9A),
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (location.isNotEmpty) ...[
-                      const SizedBox(height: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE9F1FF),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.location_on_outlined,
-                              size: 16,
-                              color: Color(0xFF1B74E4),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              location,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: const Color(0xFF1B74E4),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              IconButton(
-                onPressed: () => _confirmDelete(event),
-                icon: const Icon(
-                  Icons.delete_outline_rounded,
-                  color: Color(0xFFE63946),
-                ),
-                tooltip: 'Delete',
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(22),
+            gradient: const LinearGradient(
+              colors: <Color>[
+                _CalendarPalette.cardGradientStart,
+                _CalendarPalette.cardGradientEnd,
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            border: Border.all(
+              color: _CalendarPalette.cardBorder.withValues(alpha: 0.55),
+            ),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: _CalendarPalette.cardBorder.withValues(alpha: 0.25),
+                blurRadius: 18,
+                offset: const Offset(0, 12),
               ),
             ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 6,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    gradient: const LinearGradient(
+                      colors: <Color>[
+                        _CalendarPalette.accentPrimary,
+                        _CalendarPalette.accentSecondary,
+                      ],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        subject,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: _CalendarPalette.textStrong,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.schedule_rounded,
+                            size: 18,
+                            color: _CalendarPalette.textMuted,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            timeLabel,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: _CalendarPalette.textMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (location.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 10),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _CalendarPalette.chipBackground,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.location_on_outlined,
+                                  size: 16,
+                                  color: _CalendarPalette.chipText,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  location,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: _CalendarPalette.chipText,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                IconButton(
+                  icon: const Icon(Icons.event_available_rounded),
+                  color: _CalendarPalette.accentPrimary,
+                  onPressed: () => _openAbsenceDialog(event),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -694,7 +754,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
           height: 8,
           width: isActive ? 20 : 8,
           decoration: BoxDecoration(
-            color: isActive ? const Color(0xFF4C6EF5) : const Color(0xFFE0E5FF),
+            color: isActive
+                ? _CalendarPalette.headerStrong
+                : _CalendarPalette.indicatorInactive,
             borderRadius: BorderRadius.circular(4),
           ),
         );
@@ -774,18 +836,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
     return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 
-  String? _resolveSeriesId(MicrosoftCalendarEvent event) {
-    final candidate = event.seriesMasterId?.trim();
-    if (candidate != null && candidate.isNotEmpty) {
-      return candidate;
-    }
-    final type = event.eventType?.toLowerCase();
-    if (type == 'seriesmaster') {
-      return event.id;
-    }
-    return null;
-  }
-
   String _formatEventTime(MicrosoftCalendarEvent event) {
     if (event.isAllDay) return 'All day';
 
@@ -799,210 +849,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     return '$startLabel - ${formatter.format(end)}';
   }
 
-  Future<void> _confirmDeleteAll() async {
-    if (_events.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('No sections to delete.')));
-      return;
-    }
-
-    final total = _events.length;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete All Sections'),
-        content: Text(
-          'This will remove $total section${total == 1 ? '' : 's'} from your calendar. This action cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text(
-              'Delete all',
-              style: TextStyle(color: Colors.red),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (!mounted) {
-      return;
-    }
-
-    if (confirmed != true) {
-      return;
-    }
-
-    if (_account == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please sign in with Microsoft first.')),
-      );
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    final snapshot = List<MicrosoftCalendarEvent>.from(_events);
-    final processedSeries = <String>{};
-    final processedSingles = <String>{};
-    Object? firstError;
-
-    for (final event in snapshot) {
-      try {
-        final seriesId = _resolveSeriesId(event);
-        if (seriesId != null) {
-          if (!processedSeries.add(seriesId)) {
-            continue;
-          }
-          await MicrosoftCalendarService.deleteLecture(
-            account: _account!,
-            eventId: event.id,
-            seriesMasterId: seriesId,
-          );
-        } else {
-          if (!processedSingles.add(event.id)) {
-            continue;
-          }
-          await MicrosoftCalendarService.deleteLecture(
-            account: _account!,
-            eventId: event.id,
-          );
-        }
-      } catch (error) {
-        firstError ??= error;
-      }
-    }
-
-    if (!mounted) {
-      return;
-    }
-
-    final messenger = ScaffoldMessenger.of(context);
-
-    if (firstError == null) {
-      // Clear absence records for all deleted event IDs and courses
-      final ids = snapshot.map((e) => e.id);
-      await _clearAbsencesForEvents(ids);
-      final courseIds = snapshot.map(_resolveCourseId).toSet();
-      for (final c in courseIds) {
-        await _clearAbsencesForCourse(c);
-      }
-      setState(() {
-        _events = <MicrosoftCalendarEvent>[];
-        _isLoading = false;
-      });
-      _publishTotals();
-      messenger.showSnackBar(
-        const SnackBar(content: Text('All sections deleted.')),
-      );
-    } else {
-      setState(() {
-        _isLoading = false;
-      });
-      await _loadCalendar(interactive: false, showSpinner: false);
-      if (!mounted) {
-        return;
-      }
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('Some sections could not be deleted: $firstError'),
-        ),
-      );
-    }
-  }
-
-  Future<void> _confirmDelete(MicrosoftCalendarEvent event) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Lecture'),
-        content: Text(
-          'Are you sure you want to delete "${event.subject}" for all upcoming occurrences?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-
-    if (!mounted) return;
-    if (confirmed != true) return;
-
-    final messenger = ScaffoldMessenger.of(context);
-
-    try {
-      if (_account == null) return;
-
-      final seriesId = _resolveSeriesId(event);
-
-      await MicrosoftCalendarService.deleteLecture(
-        account: _account!,
-        eventId: event.id,
-        seriesMasterId: seriesId,
-      );
-
-      if (!mounted) return;
-
-      // Determine event IDs that will be removed so we can clear absences
-      final List<String> removedIds = <String>[];
-      if (seriesId != null) {
-        for (final e in _events) {
-          final candidateSeriesId = _resolveSeriesId(e);
-          if (e.id == event.id || e.id == seriesId || candidateSeriesId == seriesId) {
-            removedIds.add(e.id);
-          }
-        }
-      } else {
-        removedIds.add(event.id);
-      }
-
-      setState(() {
-        if (seriesId != null) {
-          _events.removeWhere((e) {
-            final candidateSeriesId = _resolveSeriesId(e);
-            return e.id == event.id || e.id == seriesId || candidateSeriesId == seriesId;
-          });
-        } else {
-          _events.removeWhere((e) => e.id == event.id);
-        }
-      });
-      // Clear absence records for removed events; if deleting a series, also by course
-      await _clearAbsencesForEvents(removedIds);
-      if (seriesId != null) {
-        final courseId = _resolveCourseId(event);
-        await _clearAbsencesForCourse(courseId);
-      }
-      _publishTotals();
-
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('${event.subject} deleted for all occurrences.'),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(content: Text('Error deleting event: $e')),
-      );
-    }
-  }
-
-  /// Extract a course code from the event subject, e.g. "CS101 � Lecture 5".
+  /// Extract a course code from the event subject, e.g. "CS101 ï¿½ Lecture 5".
   String _resolveCourseId(MicrosoftCalendarEvent e) {
     final s = (e.subject).toUpperCase();
     final m = RegExp(r'[A-Z]{2,}\s?\d{2,}').firstMatch(s); // CS101 or CS 101
@@ -1208,11 +1055,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
       return;
     }
 
-    final ok = await showDialog<bool>(
+    final ok =
+        await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
             title: const Text('Absence all day'),
-            content: Text('Record absence for $pendingCount classes on\n$dayLabel?'),
+            content: Text(
+              'Record absence for $pendingCount classes on\n$dayLabel?',
+            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
@@ -1279,7 +1129,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
     } else if (skipped > 0) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text('Recorded absence for $newMarks classes ($skipped already recorded).'),
+          content: Text(
+            'Recorded absence for $newMarks classes ($skipped already recorded).',
+          ),
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 3),
         ),
@@ -1393,38 +1245,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
     AttendanceTotals.instance.setTotals(totalsCount);
     AttendanceTotals.instance.setTotalsMinutes(totalsMinutes);
   }
-
-  /// Remove absence documents for the given event IDs, ignoring individual errors.
-  Future<void> _clearAbsencesForEvents(Iterable<String> eventIds) async {
-    for (final id in eventIds) {
-      try {
-        await AttendanceService.clearEvent(id);
-      } catch (_) {
-        // Ignore errors per-id to avoid blocking the whole flow.
-      }
-    }
-  }
-
-  /// Remove all absence docs for a course code (normalized) for the current user.
-  Future<void> _clearAbsencesForCourse(String courseId) async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-    try {
-      final q = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .collection('absences')
-          .where('courseCode', isEqualTo: courseId)
-          .get();
-      for (final d in q.docs) {
-        try {
-          await d.reference.delete();
-        } catch (_) {}
-      }
-    } catch (_) {
-      // ignore cleanup errors
-    }
-  }
 }
 
 class _ErrorView extends StatelessWidget {
@@ -1435,18 +1255,66 @@ class _ErrorView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
+      child: Container(
+        width: 300,
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          color: Colors.white.withValues(alpha: 0.9),
+          border: Border.all(
+            color: _CalendarPalette.cardBorder.withValues(alpha: 0.4),
+          ),
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: _CalendarPalette.cardBorder.withValues(alpha: 0.2),
+              blurRadius: 18,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              'Something went wrong:\n$message',
-              textAlign: TextAlign.center,
+            Icon(
+              Icons.wifi_off_rounded,
+              size: 40,
+              color: _CalendarPalette.accentPrimary,
             ),
             const SizedBox(height: 16),
-            ElevatedButton(onPressed: onRetry, child: const Text('Try again')),
+            Text(
+              'Something went wrong',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: _CalendarPalette.textStrong,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: _CalendarPalette.textMuted,
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _CalendarPalette.accentPrimary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                onPressed: onRetry,
+                child: const Text('Try again'),
+              ),
+            ),
           ],
         ),
       ),
@@ -1461,24 +1329,78 @@ class _SignInPrompt extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text(
-            'Sign in with your Microsoft account to view your calendar.',
-            textAlign: TextAlign.center,
+      child: Container(
+        width: 300,
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          gradient: const LinearGradient(
+            colors: <Color>[
+              _CalendarPalette.cardGradientStart,
+              _CalendarPalette.cardGradientEnd,
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: onPressed,
-            child: const Text('Sign in with Microsoft'),
+          border: Border.all(
+            color: _CalendarPalette.cardBorder.withValues(alpha: 0.5),
           ),
-        ],
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: _CalendarPalette.cardBorder.withValues(alpha: 0.25),
+              blurRadius: 20,
+              offset: const Offset(0, 16),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.cloud_sync_rounded,
+              size: 48,
+              color: _CalendarPalette.accentPrimary,
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Connect your Microsoft calendar to see your schedule.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: _CalendarPalette.textStrong,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _CalendarPalette.accentPrimary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                onPressed: onPressed,
+                child: const Text(
+                  'Sign in with Microsoft',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
+
+
+
+
 
 
 

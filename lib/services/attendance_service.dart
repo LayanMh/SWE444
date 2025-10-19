@@ -27,7 +27,8 @@ class AttendanceService {
   }
 
   /// Normalize course codes to a stable key (e.g. "CS 101" -> "CS101").
-  static String normalizeCourseCode(String v) => v.toUpperCase().replaceAll(' ', '');
+  static String normalizeCourseCode(String v) =>
+      v.toUpperCase().replaceAll(' ', '');
 
   // ---------------------------------------------------------------------------
   // Writes
@@ -43,8 +44,11 @@ class AttendanceService {
     required DateTime end,
   }) async {
     final docId = await _resolveUserDocId();
-    final ref =
-        _db.collection('users').doc(docId).collection('absences').doc(eventId);
+    final ref = _db
+        .collection('users')
+        .doc(docId)
+        .collection('absences')
+        .doc(eventId);
 
     if (status == 'present') {
       await ref.delete(); // default state (present) -> no exception doc
@@ -62,7 +66,9 @@ class AttendanceService {
 
     // After marking absent, compute fresh percentage and alert if over thresholds.
     try {
-      final pct = await AbsenceCalculator.computePercentFromFirestore(courseId: courseId);
+      final pct = await AbsenceCalculator.computePercentFromFirestore(
+        courseId: courseId,
+      );
       if (pct > 20) {
         await NotiService.showAbsenceAlert(courseId, pct);
       }
@@ -99,7 +105,9 @@ class AttendanceService {
   }
 
   /// Stream exceptions for one course.
-  static Stream<QuerySnapshot<Map<String, dynamic>>> streamCourseAbsences(String courseId) {
+  static Stream<QuerySnapshot<Map<String, dynamic>>> streamCourseAbsences(
+    String courseId,
+  ) {
     final norm = normalizeCourseCode(courseId);
     return Stream.fromFuture(_resolveUserDocId()).asyncExpand((docId) {
       return _db
@@ -113,7 +121,9 @@ class AttendanceService {
   }
 
   /// One-off read of exceptions for a course (eventId -> status).
-  static Future<Map<String, String>> getCourseExceptions(String courseId) async {
+  static Future<Map<String, String>> getCourseExceptions(
+    String courseId,
+  ) async {
     final docId = await _resolveUserDocId();
     final norm = normalizeCourseCode(courseId);
     final q = await _db
@@ -123,22 +133,49 @@ class AttendanceService {
         .where('courseCode', isEqualTo: norm)
         .get();
 
-    return {for (final d in q.docs) d.id: (d.data()['status'] ?? '').toString()};
+    return {
+      for (final d in q.docs) d.id: (d.data()['status'] ?? '').toString(),
+    };
   }
 
   /// Optional: throttle warnings over 20%.
   static Future<bool> shouldWarn(String courseId, double pct) async {
     final docId = await _resolveUserDocId();
     final norm = normalizeCourseCode(courseId);
-    final ref = _db.collection('users').doc(docId).collection('alerts').doc('attendance_$norm');
+    final ref = _db
+        .collection('users')
+        .doc(docId)
+        .collection('alerts')
+        .doc('attendance_$norm');
 
     final snap = await ref.get();
     final last = (snap.data()?['lastPct'] ?? 0).toDouble();
     if (pct > 20 && pct > last) {
-      await ref.set({'lastPct': pct, 'updatedAt': FieldValue.serverTimestamp()},
-          SetOptions(merge: true));
+      await ref.set({
+        'lastPct': pct,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
       return true;
     }
     return false;
+  }
+
+  /// Remove all recorded absences for a course.
+  static Future<void> clearCourse(String courseId) async {
+    final docId = await _resolveUserDocId();
+    final norm = normalizeCourseCode(courseId);
+    final query = await _db
+        .collection('users')
+        .doc(docId)
+        .collection('absences')
+        .where('courseCode', isEqualTo: norm)
+        .get();
+    for (final doc in query.docs) {
+      try {
+        await doc.reference.delete();
+      } catch (_) {
+        // Ignore per-document failures so remaining records still clear.
+      }
+    }
   }
 }

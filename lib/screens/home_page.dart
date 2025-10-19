@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'calendar_screen.dart'; 
+import 'calendar_screen.dart';
 import 'experience.dart';
 import 'community.dart';
 import 'profile.dart';
@@ -16,12 +16,12 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  int _selectedIndex = 2; 
+  int _selectedIndex = 2;
 
   late final List<Widget> _tabs = <Widget>[
     ProfileScreen(),
     const CalendarScreen(),
-    const _HomeTab(), 
+    const _HomeTab(),
     const ExperiencePage(),
     const CommunityPage(),
   ];
@@ -63,7 +63,6 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-
 class _HomeTab extends StatefulWidget {
   const _HomeTab();
 
@@ -81,49 +80,50 @@ class _HomeTabState extends State<_HomeTab> {
     _fetchUserName();
   }
 
-Future<void> _fetchUserName() async {
-  try {
-    // First check SharedPreferences for Microsoft user
-    final prefs = await SharedPreferences.getInstance();
-    final microsoftDocId = prefs.getString('microsoft_user_doc_id');
-    
-    DocumentSnapshot<Map<String, dynamic>>? doc;
-    
-    if (microsoftDocId != null) {
-      // Microsoft user
-      doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(microsoftDocId)
-          .get();
-    } else {
-      // Regular Firebase Auth user
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
+  Future<void> _fetchUserName() async {
+    try {
+      // First check SharedPreferences for Microsoft user
+      final prefs = await SharedPreferences.getInstance();
+      final microsoftDocId = prefs.getString('microsoft_user_doc_id');
+
+      DocumentSnapshot<Map<String, dynamic>>? doc;
+
+      if (microsoftDocId != null) {
+        // Microsoft user
         doc = await FirebaseFirestore.instance
             .collection('users')
-            .doc(user.uid)
+            .doc(microsoftDocId)
             .get();
+      } else {
+        // Regular Firebase Auth user
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          doc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .get();
+        }
       }
-    }
-    
-    if (doc != null && doc.exists && doc.data() != null) {
-      setState(() {
-        firstName = doc!.data()!['FName'] ?? "User";
-        _loading = false;
-      });
-    } else {
+
+      if (doc != null && doc.exists && doc.data() != null) {
+        setState(() {
+          firstName = doc!.data()!['FName'] ?? "User";
+          _loading = false;
+        });
+      } else {
+        setState(() {
+          firstName = "User";
+          _loading = false;
+        });
+      }
+    } catch (e) {
       setState(() {
         firstName = "User";
         _loading = false;
       });
     }
-  } catch (e) {
-    setState(() {
-      firstName = "User";
-      _loading = false;
-    });
   }
-}
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -131,11 +131,7 @@ Future<void> _fetchUserName() async {
         gradient: LinearGradient(
           begin: Alignment(-1, -1),
           end: Alignment(1, 1),
-          colors: [
-            Color(0xFF006B7A),
-            Color(0xFF0097B2),
-            Color(0xFF0E0259),
-          ],
+          colors: [Color(0xFF006B7A), Color(0xFF0097B2), Color(0xFF0E0259)],
           stops: [0.0, 0.55, 1.0],
         ),
       ),
@@ -143,7 +139,7 @@ Future<void> _fetchUserName() async {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header 
+            // Header
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
               child: Row(
@@ -182,7 +178,7 @@ Future<void> _fetchUserName() async {
               ),
             ),
 
-            // Quick Actions 
+            // Quick Actions
             const Padding(
               padding: EdgeInsets.fromLTRB(20, 16, 20, 8),
               child: Text(
@@ -224,6 +220,13 @@ Future<void> _fetchUserName() async {
                     icon: Icons.assignment_turned_in_rounded,
                     onTapRoute: '/absence',
                     accent: const Color(0xFF0097B2),
+                  ),
+                  _FeatureCard(
+                    title: 'My Courses',
+                    subtitle: 'Manage sections',
+                    icon: Icons.menu_book_rounded,
+                    onTapRoute: '/my-courses',
+                    accent: const Color(0xFF4E8FFF),
                   ),
                 ],
               ),
@@ -310,4 +313,4 @@ class _FeatureCard extends StatelessWidget {
       ),
     );
   }
-} 
+}
