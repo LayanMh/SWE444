@@ -581,51 +581,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       borderRadius: BorderRadius.circular(22),
       child: InkWell(
         borderRadius: BorderRadius.circular(22),
-        onTap: () async {
-          final start = event.start;
-          if (start == null) return;
-          final now = DateTime.now();
-          final eventDay = DateTime(start.year, start.month, start.day);
-          final today = DateTime(now.year, now.month, now.day);
-          final isFutureDay = eventDay.isAfter(today);
-          if (isFutureDay) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'You can only record absence for today or past classes.',
-                ),
-                duration: Duration(seconds: 2),
-              ),
-            );
-            return;
-          }
-
-          // Prevent opening if absence already recorded for this event
-          final uid = FirebaseAuth.instance.currentUser?.uid;
-          if (uid != null) {
-            try {
-              final snap = await FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(uid)
-                  .collection('absences')
-                  .doc(event.id)
-                  .get();
-              final status = (snap.data()?['status'] ?? '').toString();
-              if (snap.exists && status == 'absent') {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Absence already recorded for this class.'),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
-                return;
-              }
-            } catch (_) {
-              // If check fails, fall through to allow dialog
-            }
-          }
-          _openAbsenceDialog(event);
-        },
+        onTap: null, // Recording absence is via the icon only
         child: Ink(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(22),
@@ -737,10 +693,30 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     DateTime(event.start!.year, event.start!.month, event.start!.day)
                         .isAfter(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day)))) ...[
                   const SizedBox(width: 12),
-                  IconButton(
-                    icon: const Icon(Icons.event_available_rounded),
-                    color: _CalendarPalette.accentPrimary,
-                    onPressed: () => _openAbsenceDialog(event),
+                  FutureBuilder<bool>(
+                    future: _isEventAlreadyAbsent(event.id),
+                    builder: (context, snap) {
+                      final isAbsent = snap.data == true;
+                      final icon = isAbsent
+                          ? const Icon(Icons.person_off_outlined)
+                          : const Icon(Icons.person_outline);
+                      final color = isAbsent
+                          ? Colors.redAccent
+                          : _CalendarPalette.accentPrimary;
+                      final tooltip = isAbsent
+                          ? 'Absence recorded'
+                          : 'Record absence';
+                      return IconButton(
+                        tooltip: tooltip,
+                        visualDensity: VisualDensity.compact,
+                        icon: icon,
+                        color: color,
+                        onPressed: () async {
+                          await _confirmAbsenceToggle(event, isAbsent: isAbsent);
+                          if (mounted) setState(() {});
+                        },
+                      );
+                    },
                   ),
                 ],
               ],
@@ -868,67 +844,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     return (m?.group(0)?.replaceAll(' ', '')) ?? 'UNASSIGNED';
   }
 
-  /// Show dialog to mark Absent / Cancelled / Clear (present).
-  void _openAbsenceDialog(MicrosoftCalendarEvent event) {
-    final String eventId = event.id; // Microsoft event id (must be non-null)
-    final String courseId = _resolveCourseId(event);
-    final String title = event.subject.isNotEmpty ? event.subject : 'Lecture';
-    final DateTime start = event.start ?? DateTime.now();
-    final DateTime end = event.end ?? start.add(const Duration(minutes: 1));
-
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Row(
-          children: [
-            const Expanded(child: Text('Record absence')),
-            IconButton(
-              icon: const Icon(Icons.close),
-              tooltip: 'Close',
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-          ],
-        ),
-        content: Text(title),
-        actionsAlignment: MainAxisAlignment.center,
-        actions: [
-          TextButton(
-            child: const Text('Absent'),
-            onPressed: () async {
-              // Allow marking absence for today or any past day; block future days.
-              final now = DateTime.now();
-              final eventDay = DateTime(start.year, start.month, start.day);
-              final today = DateTime(now.year, now.month, now.day);
-              final isFutureDay = eventDay.isAfter(today);
-              if (isFutureDay) {
-                if (mounted) {
-                  ScaffoldMessenger.of(this.context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'You can only record absence for today or past classes.',
-                      ),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-                }
-                return;
-              }
-              await AttendanceService.mark(
-                courseId: courseId,
-                eventId: eventId,
-                status: 'absent',
-                title: title,
-                start: start,
-                end: end,
-              );
-              await _recomputeAndWarn(courseId);
-              if (mounted) Navigator.pop(context);
-            },
-          ),
-        ],
-      ),
-    );
-  }
+  // _openAbsenceDialog removed; icon-only flow handles confirmations now.
 
   /// Recompute absence % for a course and show a SnackBar warning if > 20%.
   ///
@@ -1014,7 +930,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('You can only record absence for today or past days.'),
+          content: Text('You can only record absence for today or past classes.'),
           duration: Duration(seconds: 2),
         ),
       );
@@ -1231,6 +1147,70 @@ class _CalendarScreenState extends State<CalendarScreen> {
       }
     }
     return pending;
+  }
+
+  /// Confirm from the icon and record absence (no clearing from calendar).
+  Future<void> _confirmAbsenceToggle(MicrosoftCalendarEvent event, {required bool isAbsent}) async {
+    final start = event.start ?? DateTime.now();
+    final now = DateTime.now();
+    final eventDay = DateTime(start.year, start.month, start.day);
+    final today = DateTime(now.year, now.month, now.day);
+    if (eventDay.isAfter(today)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You can only record absence for today or past classes.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    if (isAbsent) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Absence already recorded for this class.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    final bool? ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Record absence?'),
+        content: Text(event.subject.isNotEmpty ? event.subject : 'Lecture'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Record'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true) return;
+
+    final String eventId = event.id;
+    final String courseId = _resolveCourseId(event);
+    final String title = event.subject.isNotEmpty ? event.subject : 'Lecture';
+    final DateTime end = event.end ?? start.add(const Duration(minutes: 1));
+
+    await AttendanceService.mark(
+      courseId: courseId,
+      eventId: eventId,
+      status: 'absent',
+      title: title,
+      start: start,
+      end: end,
+    );
+    await _recomputeAndWarn(courseId);
   }
 
   /// Compute totals per normalized course code and publish to shared state
