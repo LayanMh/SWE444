@@ -6,7 +6,6 @@ import 'package:intl/intl.dart';
 import 'package:absherk/services/attendance_service.dart';
 import '../services/attendance_totals.dart';
 import 'package:absherk/services/absence_calculator.dart';
-import 'package:absherk/services/noti_service.dart';
 
 class AbsencePage extends StatefulWidget {
   const AbsencePage({super.key});
@@ -511,10 +510,7 @@ class _AbsenceRow extends StatelessWidget {
               final denom = await _computeDenominatorMinutes(code);
               pct = denom.totalMinutes > 0 ? (absentMinutes * 100.0 / denom.totalMinutes) : 0.0;
             }
-            if (pct > 20) {
-              // ignore: unawaited_futures
-              NotiService.showAbsenceAlert(code, pct);
-            }
+            // Removed local notification trigger when exceeding thresholds
           } catch (_) {}
         }
         ScaffoldMessenger.of(context).showSnackBar(
@@ -564,10 +560,7 @@ class _AbsenceRow extends StatelessWidget {
                     final denom = await _computeDenominatorMinutes(code);
                     pct = denom.totalMinutes > 0 ? (absentMinutes * 100.0 / denom.totalMinutes) : 0.0;
                   }
-                  if (pct > 20) {
-                    // ignore: unawaited_futures
-                    NotiService.showAbsenceAlert(code, pct);
-                  }
+                  // Removed local notification trigger when exceeding thresholds
                 } catch (_) {}
               }
               if (context.mounted) {
