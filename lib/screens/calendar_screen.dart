@@ -732,12 +732,17 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(width: 12),
-                IconButton(
-                  icon: const Icon(Icons.event_available_rounded),
-                  color: _CalendarPalette.accentPrimary,
-                  onPressed: () => _openAbsenceDialog(event),
-                ),
+                // Hide the action icon for future events
+                if (!(event.start != null &&
+                    DateTime(event.start!.year, event.start!.month, event.start!.day)
+                        .isAfter(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day)))) ...[
+                  const SizedBox(width: 12),
+                  IconButton(
+                    icon: const Icon(Icons.event_available_rounded),
+                    color: _CalendarPalette.accentPrimary,
+                    onPressed: () => _openAbsenceDialog(event),
+                  ),
+                ],
               ],
             ),
           ),
