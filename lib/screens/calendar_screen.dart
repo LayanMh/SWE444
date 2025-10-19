@@ -50,6 +50,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
   int _currentPage = 0;
   bool _isLoading = false;
   String? _error;
+  // Local cache so icons flip immediately after marking without waiting for Firestore
+  final Set<String> _recentlyMarkedAbsent = <String>{};
 
   @override
   void initState() {
@@ -1039,6 +1041,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           start: start,
           end: end,
         );
+        _recentlyMarkedAbsent.add(e.id);
         changedCourses.add(courseId);
         newMarks += 1;
       } catch (_) {
@@ -1082,9 +1085,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
         await _recomputeAndWarn(c);
       } catch (_) {}
     }
+    if (mounted) setState(() {});
   }
 
   Future<bool> _isEventAlreadyAbsent(String eventId) async {
+    // If we've just marked it locally, reflect immediately
+    if (_recentlyMarkedAbsent.contains(eventId)) return true;
+
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return false;
     try {
@@ -1217,6 +1224,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       start: start,
       end: end,
     );
+    _recentlyMarkedAbsent.add(eventId);
     await _recomputeAndWarn(courseId);
   }
 
