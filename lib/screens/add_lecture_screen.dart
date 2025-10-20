@@ -56,17 +56,6 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
         );
       }
 
-      if (scheduleProvider.hasReachedSectionLimit) {
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              'You can only add up to ${ScheduleProvider.maxSections} sections. Remove one before adding another.',
-            ),
-          ),
-        );
-        return;
-      }
-
       final section = _controller.text.trim();
 
       if (scheduleProvider.containsSection(section)) {
@@ -78,34 +67,38 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
         return;
       }
 
-     final lectures = await FirebaseLectureService.getLecturesBySectionMulti(section);
-if (!mounted) return;
+      final firebaseLectures =
+          await FirebaseLectureService.getLecturesBySectionMulti(section);
+      if (!mounted) return;
 
-if (lectures.isEmpty) {
-  messenger.showSnackBar(
-    const SnackBar(
-        content: Text('Section not found. Please check the number and try again.')),
-  );
-  return;
-}
+      if (firebaseLectures.isEmpty) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Section not found. Please check the number and try again.',
+            ),
+          ),
+        );
+        return;
+      }
 
-//  Validate total registered hours before adding
-final currentLectures = scheduleProvider.lectures;
-final totalHours = currentLectures.fold<int>(0, (sum, l) => sum + l.hour);
+      // Validate total registered hours before adding
+      final currentLectures = scheduleProvider.lectures;
+      final totalHours = currentLectures.fold<int>(0, (sum, l) => sum + l.hour);
+      final newHour = firebaseLectures.first.hour;
 
-
-final newHour = lectures.first.hour;
-
-if (totalHours + newHour > 20) {
-  messenger.showSnackBar(
-    SnackBar(
-      content: Text(
-        'You already have $totalHours hours. Adding ${lectures.first.courseCode} (${newHour}h) would exceed the 20-hour limit.',
-      ),
-    ),
-  );
-  return;
-}
+      if (totalHours + newHour > 20) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              'You already have $totalHours hours. Adding '
+              '${firebaseLectures.first.courseCode} '
+              '(${newHour}h) would exceed the 20-hour limit.',
+            ),
+          ),
+        );
+        return;
+      }
 
       final firebaseUser = FirebaseAuth.instance.currentUser;
       String? userDocId;
@@ -126,30 +119,56 @@ if (totalHours + newHour > 20) {
         return;
       }
 
-      for (final lecture in lectures) {
-        final newLecture = Lecture(
-          id: '${lecture.section}_${lecture.dayOfWeek}',
-          courseCode: lecture.courseCode,
-          courseName: lecture.courseName,
-          section: lecture.section,
-          classroom: lecture.classroom,
-          dayOfWeek: lecture.dayOfWeek,
-          startTime: lecture.startTime,
-          endTime: lecture.endTime,
-        );
+      String describeLecture(Lecture lecture) {
+        final sectionPart =
+            lecture.section.isNotEmpty ? ' section ${lecture.section}' : '';
+        return '${lecture.courseCode}$sectionPart';
+      }
 
-        final conflictingLecture = scheduleProvider.findTimeConflict(newLecture);
-        if (conflictingLecture != null) {
-          messenger.showSnackBar(
-            SnackBar(
-              content: Text(
-                'Time conflict with ${conflictingLecture.courseCode} section ${conflictingLecture.section}.',
-              ),
+      final newLectures = firebaseLectures
+          .map(
+            (lecture) => Lecture(
+              id: '${lecture.section}_${lecture.dayOfWeek}',
+              courseCode: lecture.courseCode,
+              courseName: lecture.courseName,
+              section: lecture.section,
+              classroom: lecture.classroom,
+              dayOfWeek: lecture.dayOfWeek,
+              startTime: lecture.startTime,
+              endTime: lecture.endTime,
+              hour: lecture.hour,
             ),
-          );
-          continue;
-        }
+          )
+          .toList(growable: false);
 
+      final Set<String> conflictSummaries = <String>{};
+      for (final candidate in newLectures) {
+        final conflictingLecture =
+            scheduleProvider.findTimeConflict(candidate);
+        if (conflictingLecture != null) {
+          conflictSummaries.add(
+            '${describeLecture(candidate)} overlaps '
+            '${describeLecture(conflictingLecture)}',
+          );
+        }
+      }
+
+      if (conflictSummaries.isNotEmpty) {
+        final summary = conflictSummaries.join('; ');
+        final message = conflictSummaries.length == 1
+            ? 'Time conflict: $summary. Remove the conflicting section first.'
+            : 'Time conflicts: $summary. Remove the conflicting sections first.';
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(message),
+          ),
+        );
+        return;
+      }
+
+      final addedLectures = <Lecture>[];
+
+      for (final newLecture in newLectures) {
         final userScheduleRef = FirebaseFirestore.instance
             .collection('users')
             .doc(userDocId)
@@ -158,13 +177,13 @@ if (totalHours + newHour > 20) {
 
         try {
           await userScheduleRef.set({
-            'courseCode': lecture.courseCode,
-            'courseName': lecture.courseName,
-            'section': lecture.section,
-            'classroom': lecture.classroom,
-            'dayOfWeek': lecture.dayOfWeek,
-            'startTime': lecture.startTime,
-            'endTime': lecture.endTime,
+            'courseCode': newLecture.courseCode,
+            'courseName': newLecture.courseName,
+            'section': newLecture.section,
+            'classroom': newLecture.classroom,
+            'dayOfWeek': newLecture.dayOfWeek,
+            'startTime': newLecture.startTime,
+            'endTime': newLecture.endTime,
             'addedAt': FieldValue.serverTimestamp(),
             'status': 'active',
           }, SetOptions(merge: true));
@@ -176,10 +195,26 @@ if (totalHours + newHour > 20) {
         }
 
         scheduleProvider.addLecture(newLecture);
+        addedLectures.add(newLecture);
+      }
+
+      if (addedLectures.isEmpty) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('No lectures were added to your schedule.'),
+          ),
+        );
+        return;
       }
 
       messenger.showSnackBar(
-        const SnackBar(content: Text('Lecture added to your schedule.')),
+        SnackBar(
+          content: Text(
+            addedLectures.length == 1
+                ? 'Lecture added to your schedule.'
+                : '${addedLectures.length} lectures added to your schedule.',
+          ),
+        ),
       );
 
       final account = await MicrosoftAuthService.ensureSignedIn();
@@ -190,7 +225,7 @@ if (totalHours + newHour > 20) {
           const SnackBar(content: Text('Microsoft sign-in cancelled.')),
         );
       } else {
-        for (final lecture in lectures) {
+        for (final lecture in addedLectures) {
           try {
             final createdEvent =
                 await MicrosoftCalendarService.addWeeklyRecurringLecture(
@@ -202,7 +237,7 @@ if (totalHours + newHour > 20) {
                 .collection('users')
                 .doc(userDocId)
                 .collection('schedule')
-                .doc('${lecture.section}_${lecture.dayOfWeek}');
+                .doc(lecture.id);
 
             await userScheduleRef.set({
               'calendarEventId': createdEvent.id,

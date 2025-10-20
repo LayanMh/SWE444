@@ -16,6 +16,33 @@ class _MyCoursesPageState extends State<MyCoursesPage> {
   bool _bulkDeleting = false;
   final DateFormat _timeFormatter = DateFormat('hh:mm a');
 
+  Map<String, List<ScheduleEntry>> _buildConflictMap(List<ScheduleEntry> entries) {
+    final Map<String, List<ScheduleEntry>> conflicts = <String, List<ScheduleEntry>>{};
+    final Map<int, List<ScheduleEntry>> byDay = <int, List<ScheduleEntry>>{};
+    for (final entry in entries) {
+      byDay.putIfAbsent(entry.dayOfWeek, () => <ScheduleEntry>[]).add(entry);
+    }
+
+    for (final dayEntries in byDay.values) {
+      final sorted = List<ScheduleEntry>.of(dayEntries)
+        ..sort((a, b) => a.startTime.compareTo(b.startTime));
+
+      for (var i = 0; i < sorted.length; i++) {
+        final current = sorted[i];
+        for (var j = i + 1; j < sorted.length; j++) {
+          final other = sorted[j];
+          if (other.startTime >= current.endTime) {
+            break;
+          }
+          conflicts.putIfAbsent(current.id, () => <ScheduleEntry>[]).add(other);
+          conflicts.putIfAbsent(other.id, () => <ScheduleEntry>[]).add(current);
+        }
+      }
+    }
+
+    return conflicts;
+  }
+
   static const List<String> _weekdays = [
     'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
   ];
@@ -38,6 +65,7 @@ class _MyCoursesPageState extends State<MyCoursesPage> {
         final entries = snapshot.data ?? <ScheduleEntry>[];
         final waiting =
             snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData;
+        final conflictMap = _buildConflictMap(entries);
 
         Widget body;
         if (snapshot.hasError) {
@@ -63,11 +91,16 @@ class _MyCoursesPageState extends State<MyCoursesPage> {
               final sessions = entry.value;
               final first = sessions.first;
               sessions.sort((a, b) => a.dayOfWeek.compareTo(b.dayOfWeek));
+              final hasConflict = sessions.any((s) => conflictMap.containsKey(s.id));
 
               return Card(
                 margin: const EdgeInsets.only(bottom: 16),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
+                  side: BorderSide(
+                    color: hasConflict ? Colors.redAccent : Colors.transparent,
+                    width: hasConflict ? 1.5 : 0,
+                  ),
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -88,7 +121,26 @@ class _MyCoursesPageState extends State<MyCoursesPage> {
                       const SizedBox(height: 8),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: sessions.map((s) => Text(_formatSchedule(s))).toList(),
+                        children: sessions.map((s) {
+                          final conflicts = conflictMap[s.id] ?? const <ScheduleEntry>[];
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(_formatSchedule(s)),
+                                if (conflicts.isNotEmpty)
+                                  Text(
+                                    'Conflict with ${_formatConflictTargets(conflicts)}',
+                                    style: const TextStyle(
+                                      color: Colors.redAccent,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
                       ),
                       const SizedBox(height: 12),
                       Align(
@@ -154,6 +206,18 @@ class _MyCoursesPageState extends State<MyCoursesPage> {
       return _timeFormatter.format(DateTime(now.year, now.month, now.day, h, min));
     }
     return '$day: ${fmt(e.startTime)} - ${fmt(e.endTime)}';
+  }
+
+  String _formatConflictTargets(List<ScheduleEntry> conflicts) {
+    final labels = <String>{};
+    for (final entry in conflicts) {
+      final sectionLabel =
+          entry.section.isNotEmpty ? 'section ${entry.section}' : '';
+      labels.add(sectionLabel.isEmpty
+          ? entry.courseCode
+          : '${entry.courseCode} ($sectionLabel)');
+    }
+    return labels.join(', ');
   }
 
   Future<void> _confirmDeleteGroup(String section, List<ScheduleEntry> sessions) async {
