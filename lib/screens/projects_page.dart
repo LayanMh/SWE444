@@ -117,8 +117,8 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
     
     final trimmedValue = value.trim();
     
-    if (trimmedValue.length > 40) {
-      return 'Organization name must be 40 characters or less';
+    if (trimmedValue.length > 30) {
+      return 'Organization name must be 30 characters or less';
     }
     
     if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
@@ -147,21 +147,17 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
     
     return null;
   }
-// Validation: Description
-String? _validateDescription(String? value) {
+
+  // Validation: Description
+ String? _validateDescription(String? value) {
   if (value == null || value.trim().isEmpty) {
-    return 'Please enter a description';
+    return null; 
   }
   
   final trimmedValue = value.trim();
-  final wordCount = trimmedValue.split(RegExp(r'\s+')).where((word) => word.isNotEmpty).length;
-  
-  if (wordCount < 50) {
-    return 'Description must be at least 50 words';
-  }
-  
-  if (trimmedValue.length > 600) {
-    return 'Description must be 600 characters or less';
+
+  if (trimmedValue.length < 200) {
+    return 'Description must be at least 200 characters';
   }
   
   if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
@@ -391,7 +387,7 @@ String? _validateDescription(String? value) {
                               controller: _organizationController,
                               label: 'Organization',
                               hint: 'e.g., Google Developer Student Club',
-                              maxLength: 40,
+                              maxLength: 30,
                               validator: _validateOrganization,
                             ),
                             const SizedBox(height: 16.0),
@@ -458,16 +454,14 @@ String? _validateDescription(String? value) {
                                   ),
                                 ),
                               ),
-                            const SizedBox(height: 16.0),
-                            _buildTextFieldWithWordCounter(
-                              controller: _descriptionController,
-                              label: 'Description *',
-                              hint: 'Describe your project...',
-                              maxLines: 5,
-                              minWords: 50,
-                              maxLength: 600,
-                              validator: _validateDescription,
-                            ),
+                          _buildTextFieldWithWordCounter(
+  controller: _descriptionController,
+  label: 'Description',  // ← Removed asterisk
+  hint: 'Describe your project...',
+  maxLines: 5,
+  minWords: 200,
+  validator: _validateDescription,
+),
                             const SizedBox(height: 24.0),
                             _buildSaveButton(),
                           ],
@@ -546,26 +540,13 @@ String? _validateDescription(String? value) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 14.0,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF0e0259),
-              ),
-            ),
-            Text(
-              '$currentLength/$maxLength',
-              style: TextStyle(
-                fontSize: 12.0,
-                color: currentLength > maxLength ? Colors.red : Colors.grey[600],
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14.0,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF0e0259),
+          ),
         ),
         const SizedBox(height: 8.0),
         TextFormField(
@@ -578,59 +559,71 @@ String? _validateDescription(String? value) {
           ],
           decoration: _inputDecoration(hint),
         ),
+        Padding(
+          padding: const EdgeInsets.only(top: 4.0, right: 4.0),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              '$currentLength/$maxLength',
+              style: TextStyle(
+                fontSize: 12.0,
+                color: currentLength > maxLength ? Colors.red : Colors.grey[600],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }
-Widget _buildTextFieldWithWordCounter({
-  required TextEditingController controller,
-  required String label,
-  String? hint,
-  int maxLines = 1,
-  required int minWords,
-  required int maxLength,
-  String? Function(String?)? validator,
-}) {
-  final currentLength = controller.text.length;
-  final wordCount = controller.text.trim().split(RegExp(r'\s+')).where((word) => word.isNotEmpty).length;
-  
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 14.0,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF0e0259),
+
+  Widget _buildTextFieldWithWordCounter({
+    required TextEditingController controller,
+    required String label,
+    String? hint,
+    int maxLines = 1,
+    required int minWords,
+    String? Function(String?)? validator,
+  }) {
+    final currentLength = controller.text.length;
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14.0,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF0e0259),
+          ),
+        ),
+        const SizedBox(height: 8.0),
+        TextFormField(
+          controller: controller,
+          maxLines: maxLines,
+          validator: validator,
+          autovalidateMode: AutovalidateMode.disabled,
+          decoration: _inputDecoration(hint),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 4.0, right: 4.0),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              '$currentLength/$minWords characters',
+              style: TextStyle(
+                fontSize: 12.0,
+                color: Colors.grey[600],
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
-          Text(
-            '$wordCount/$minWords words • $currentLength/$maxLength chars',
-            style: TextStyle(
-              fontSize: 12.0,
-              color: Colors.grey[600],
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-      const SizedBox(height: 8.0),
-      TextFormField(
-        controller: controller,
-        maxLines: maxLines,
-        validator: validator,
-        autovalidateMode: AutovalidateMode.disabled, // Changed from onUserInteraction
-        inputFormatters: [
-          LengthLimitingTextInputFormatter(maxLength),
-        ],
-        decoration: _inputDecoration(hint),
-      ),
-    ],
-  );
-}
+        ),
+      ],
+    );
+  }
+
   Widget _buildTextField({
     required TextEditingController controller,
     required String label,

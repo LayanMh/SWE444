@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/services.dart';
 import 'dart:io';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class WorkshopFormPage extends StatefulWidget {
   final Map<String, dynamic>? existingItem;
@@ -21,7 +22,6 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
   final _formKey = GlobalKey<FormState>();
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseStorage _storage = FirebaseStorage.instance;
   final ImagePicker _picker = ImagePicker();
 
   late TextEditingController _titleController;
@@ -96,8 +96,8 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
 
     final trimmedValue = value.trim();
 
-    if (trimmedValue.length > 40) {
-      return 'Organization name must be 40 characters or less';
+    if (trimmedValue.length > 30) {
+      return 'Organization name must be 30 characters or less';
     }
 
     if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
@@ -135,19 +135,16 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
 
   // Validation: Description
   String? _validateDescription(String? value) {
+    // Allow empty description (optional field)
     if (value == null || value.trim().isEmpty) {
-      return null; // Description is optional
+      return null;
     }
 
     final trimmedValue = value.trim();
-    final wordCount = trimmedValue.split(RegExp(r'\s+')).where((word) => word.isNotEmpty).length;
 
-    if (wordCount < 20) {
-      return 'Description must be at least 20 words';
-    }
-
-    if (trimmedValue.length > 600) {
-      return 'Description must be 600 characters or less';
+    // Only validate if user has entered something
+    if (trimmedValue.length < 200) {
+      return 'Description must be at least 200 characters';
     }
 
     if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
@@ -180,39 +177,48 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
     if (_certificateFile == null) return _existingCertificateUrl;
 
     try {
-      final String fileName = 'workshops/${userId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final Reference ref = _storage.ref().child(fileName);
+      debugPrint('📤 Starting upload to ImgBB...');
       
-      final UploadTask uploadTask = ref.putFile(_certificateFile!);
-      final TaskSnapshot snapshot = await uploadTask;
+      // Read file as bytes
+      final bytes = await _certificateFile!.readAsBytes();
+      final base64Image = base64Encode(bytes);
       
-      return await snapshot.ref.getDownloadURL();
-    } catch (e) {
-      debugPrint('Error uploading certificate: $e');
+      // Upload to ImgBB
+      final response = await http.post(
+        Uri.parse('https://api.imgbb.com/1/upload'),
+        body: {
+          'key': '0b411c63631d14df85c76a6cdbcf1667',  // Your API key
+          'image': base64Image,
+          'name': 'workshop_${userId}_${DateTime.now().millisecondsSinceEpoch}',
+        },
+      );
       
-      if (e is FirebaseException) {
-        switch (e.code) {
-          case 'unauthorized':
-            _showErrorMessage('You do not have permission to upload files');
-            break;
-          case 'canceled':
-            _showErrorMessage('Upload was canceled');
-            break;
-          case 'unknown':
-            _showErrorMessage('An unknown error occurred during upload');
-            break;
-          default:
-            _showErrorMessage('Failed to upload certificate: ${e.message}');
-        }
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final imageUrl = data['data']['url'];
+        debugPrint('✅ Upload success: $imageUrl');
+        return imageUrl;
       } else {
-        _showErrorMessage('Failed to upload certificate');
+        debugPrint('❌ Upload failed: ${response.statusCode}');
+        debugPrint('Response body: ${response.body}');
+        throw Exception('Upload failed with status: ${response.statusCode}');
       }
+      
+    } catch (e) {
+      debugPrint('❌ Upload error: $e');
+      _showErrorMessage('Failed to upload certificate. Please check your internet connection.');
       return null;
     }
   }
 
   Future<void> _saveWorkshop() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // Check if certificate is provided
+    if (_certificateFile == null && _existingCertificateUrl == null) {
+      _showErrorMessage('Please upload a certificate');
+      return;
+    }
 
     setState(() => _isSaving = true);
 
@@ -224,13 +230,18 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
       }
 
       String? certificateUrl = await _uploadCertificate(docId);
+      
+      if (certificateUrl == null && _existingCertificateUrl == null) {
+        _showErrorMessage('Failed to upload certificate. Please try again.');
+        return;
+      }
 
       final workshopItem = {
         'title': _titleController.text.trim(),
         'organization': _organizationController.text.trim(),
         'year': int.tryParse(_yearController.text.trim()),
         'description': _descriptionController.text.trim().isEmpty ? null : _descriptionController.text.trim(),
-        'certificateUrl': certificateUrl,
+        'certificateUrl': certificateUrl ?? _existingCertificateUrl,
       };
 
       final doc = await _firestore.collection('users').doc(docId).get();
@@ -364,7 +375,7 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
                               controller: _organizationController,
                               label: 'Organization',
                               hint: 'e.g., IEEE Student Branch',
-                              maxLength: 40,
+                              maxLength: 30,
                               validator: _validateOrganization,
                             ),
                             const SizedBox(height: 16.0),
@@ -376,13 +387,12 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
                               keyboardType: TextInputType.number,
                             ),
                             const SizedBox(height: 16.0),
-                            _buildTextFieldWithWordCounter(
+                            _buildTextFieldWithCharCounter(
                               controller: _descriptionController,
                               label: 'Description',
                               hint: 'What did you learn?',
                               maxLines: 5,
-                              minWords: 20,
-                              maxLength: 600,
+                              minChars: 200,
                               validator: _validateDescription,
                             ),
                             const SizedBox(height: 16.0),
@@ -408,7 +418,7 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Certificate',
+          'Certificate *',
           style: TextStyle(
             fontSize: 14.0,
             fontWeight: FontWeight.w600,
@@ -416,40 +426,149 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
           ),
         ),
         const SizedBox(height: 8.0),
-        InkWell(
-          onTap: _pickCertificate,
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey[300]!),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.upload_file, color: Color(0xFF0097b2)),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    _certificateFile != null
-                        ? 'Certificate selected'
-                        : _existingCertificateUrl != null
-                            ? 'Certificate uploaded (tap to change)'
-                            : 'Tap to upload certificate',
-                    style: TextStyle(
-                      color: _certificateFile != null || _existingCertificateUrl != null
-                          ? const Color(0xFF0097b2)
-                          : Colors.grey[600],
-                    ),
+        if (_certificateFile != null || _existingCertificateUrl != null) ...[
+          // Show certificate preview with actions
+          Column(
+            children: [
+              InkWell(
+                onTap: () => _showCertificatePreview(),
+                child: Container(
+                  height: 200,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey[300]!),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: _certificateFile != null
+                        ? Image.file(_certificateFile!, fit: BoxFit.cover, width: double.infinity)
+                        : Image.network(_existingCertificateUrl!, fit: BoxFit.cover, width: double.infinity),
                   ),
                 ),
-                if (_certificateFile != null || _existingCertificateUrl != null)
-                  Icon(Icons.check_circle, color: Colors.green[600]),
-              ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _pickCertificate,
+                      icon: const Icon(Icons.edit, size: 18),
+                      label: const Text('Replace'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF0097b2),
+                        side: const BorderSide(color: Color(0xFF0097b2)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _certificateFile = null;
+                          _existingCertificateUrl = null;
+                        });
+                      },
+                      icon: const Icon(Icons.delete, size: 18),
+                      label: const Text('Remove'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red,
+                        side: const BorderSide(color: Colors.red),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ] else ...[
+          // Show upload button
+          InkWell(
+            onTap: _pickCertificate,
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey[300]!, style: BorderStyle.solid, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.1),
+                    spreadRadius: 1,
+                    blurRadius: 4,
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.cloud_upload_outlined, color: const Color(0xFF0097b2), size: 32),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Tap to upload certificate',
+                    style: TextStyle(
+                      color: const Color(0xFF0097b2),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
+        ],
       ],
+    );
+  }
+
+  void _showCertificatePreview() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Stack(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: _certificateFile != null
+                          ? Image.file(_certificateFile!, fit: BoxFit.contain)
+                          : _existingCertificateUrl != null
+                              ? Image.network(_existingCertificateUrl!, fit: BoxFit.contain)
+                              : const SizedBox.shrink(),
+                    ),
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close, color: Colors.white),
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.black54,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -467,26 +586,13 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 14.0,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF0e0259),
-              ),
-            ),
-            Text(
-              '$currentLength/$maxLength',
-              style: TextStyle(
-                fontSize: 12.0,
-                color: Colors.grey[600],
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14.0,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF0e0259),
+          ),
         ),
         const SizedBox(height: 8.0),
         TextFormField(
@@ -494,51 +600,50 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
           maxLines: maxLines,
           validator: validator,
           keyboardType: keyboardType,
-          autovalidateMode: AutovalidateMode.disabled,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           inputFormatters: [
             LengthLimitingTextInputFormatter(maxLength),
           ],
           decoration: _inputDecoration(hint),
         ),
+        Padding(
+          padding: const EdgeInsets.only(top: 4.0, right: 4.0),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              '$currentLength/$maxLength',
+              style: TextStyle(
+                fontSize: 12.0,
+                color: currentLength > maxLength ? Colors.red : Colors.grey[600],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildTextFieldWithWordCounter({
+  Widget _buildTextFieldWithCharCounter({
     required TextEditingController controller,
     required String label,
     String? hint,
     int maxLines = 1,
-    required int minWords,
-    required int maxLength,
+    required int minChars,
     String? Function(String?)? validator,
   }) {
     final currentLength = controller.text.length;
-    final wordCount = controller.text.trim().split(RegExp(r'\s+')).where((word) => word.isNotEmpty).length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 14.0,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF0e0259),
-              ),
-            ),
-            Text(
-              '$wordCount/$minWords words • $currentLength/$maxLength chars',
-              style: TextStyle(
-                fontSize: 12.0,
-                color: Colors.grey[600],
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14.0,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF0e0259),
+          ),
         ),
         const SizedBox(height: 8.0),
         TextFormField(
@@ -546,10 +651,21 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
           maxLines: maxLines,
           validator: validator,
           autovalidateMode: AutovalidateMode.disabled,
-          inputFormatters: [
-            LengthLimitingTextInputFormatter(maxLength),
-          ],
           decoration: _inputDecoration(hint),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 4.0, right: 4.0),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              '$currentLength/$minChars characters',
+              style: TextStyle(
+                fontSize: 12.0,
+                color: Colors.grey[600],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
         ),
       ],
     );
@@ -580,7 +696,7 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
           maxLines: maxLines,
           validator: validator,
           keyboardType: keyboardType,
-          autovalidateMode: AutovalidateMode.disabled,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           decoration: _inputDecoration(hint),
         ),
       ],

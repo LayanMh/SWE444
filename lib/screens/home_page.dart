@@ -190,26 +190,7 @@ class _HomeTabState extends State<_HomeTab> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  Expanded(
-                    child: _loading
-                        ? const Text(
-                            "Welcome...",
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          )
-                        : Text(
-                            "Hello $firstName \n! أبشر في أبشّرك ..",
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.2,
-                            ),
-                          ),
-                  ),
+                  
                 ],
               ),
             ),

@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/services.dart';
 import 'dart:io';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class ClubFormPage extends StatefulWidget {
   final Map<String, dynamic>? existingItem;
@@ -21,7 +22,6 @@ class _ClubFormPageState extends State<ClubFormPage> {
   final _formKey = GlobalKey<FormState>();
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseStorage _storage = FirebaseStorage.instance;
   final ImagePicker _picker = ImagePicker();
 
   late TextEditingController _titleController;
@@ -44,7 +44,6 @@ class _ClubFormPageState extends State<ClubFormPage> {
     _descriptionController = TextEditingController(text: widget.existingItem?['description'] ?? '');
     _existingCertificateUrl = widget.existingItem?['certificateUrl'];
 
-    // Add listeners to trigger rebuild for character counter
     _titleController.addListener(() => setState(() {}));
     _organizationController.addListener(() => setState(() {}));
     _roleController.addListener(() => setState(() {}));
@@ -73,108 +72,65 @@ class _ClubFormPageState extends State<ClubFormPage> {
     return null;
   }
 
-  // Validation: Title (Club Name)
   String? _validateTitle(String? value) {
     if (value == null || value.trim().isEmpty) {
-      return 'Please enter a club name';
+      return 'Please enter a student club name';
     }
-
     final trimmedValue = value.trim();
-
     if (trimmedValue.length > 30) {
-      return 'Club name must be 30 characters or less';
+      return 'Student club name must be 30 characters or less';
     }
-
     if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
-      return 'Club name cannot contain only numbers';
+      return 'Student club name cannot contain only numbers';
     }
-
     return null;
   }
 
-  // Validation: Organization
   String? _validateOrganization(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return null;
-    }
-
+    if (value == null || value.trim().isEmpty) return null;
     final trimmedValue = value.trim();
-
-    if (trimmedValue.length > 40) {
-      return 'Organization name must be 40 characters or less';
+    if (trimmedValue.length > 30) {
+      return 'Organization name must be 30 characters or less';
     }
-
     if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
       return 'Organization name cannot contain only numbers';
     }
-
     return null;
   }
 
-  // Validation: Role
   String? _validateRole(String? value) {
     if (value == null || value.trim().isEmpty) {
       return 'Please enter your role';
     }
-
     final trimmedValue = value.trim();
-
     if (trimmedValue.length > 30) {
       return 'Role must be 30 characters or less';
     }
-
     if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
       return 'Role cannot contain only numbers';
     }
-
     return null;
   }
 
-  // Validation: Hours
   String? _validateHours(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return null; // Hours is optional
-    }
-
+    if (value == null || value.trim().isEmpty) return null;
     final trimmedValue = value.trim();
     final hours = int.tryParse(trimmedValue);
-
-    if (hours == null) {
-      return 'Please enter a valid number';
-    }
-
-    if (hours < 0) {
-      return 'Hours cannot be negative';
-    }
-
-    if (hours > 10000) {
-      return 'Hours must be less than 10,000';
-    }
-
+    if (hours == null) return 'Please enter a valid number';
+    if (hours < 0) return 'Hours cannot be negative';
+    if (hours > 10000) return 'Hours must be less than 10,000';
     return null;
   }
 
-  // Validation: Description
   String? _validateDescription(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return null; // Description is optional
-    }
-
+    if (value == null || value.trim().isEmpty) return null;
     final trimmedValue = value.trim();
-    final wordCount = trimmedValue.split(RegExp(r'\s+')).where((word) => word.isNotEmpty).length;
-
-    if (wordCount < 20) {
-      return 'Description must be at least 20 words';
+    if (trimmedValue.length < 200) {
+      return 'Description must be at least 200 characters';
     }
-
-    if (trimmedValue.length > 600) {
-      return 'Description must be 600 characters or less';
-    }
-
     if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
       return 'Description cannot contain only numbers';
     }
-
     return null;
   }
 
@@ -201,39 +157,42 @@ class _ClubFormPageState extends State<ClubFormPage> {
     if (_certificateFile == null) return _existingCertificateUrl;
 
     try {
-      final String fileName = 'clubs/${userId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final Reference ref = _storage.ref().child(fileName);
-
-      final UploadTask uploadTask = ref.putFile(_certificateFile!);
-      final TaskSnapshot snapshot = await uploadTask;
-
-      return await snapshot.ref.getDownloadURL();
-    } catch (e) {
-      debugPrint('Error uploading certificate: $e');
-
-      if (e is FirebaseException) {
-        switch (e.code) {
-          case 'unauthorized':
-            _showErrorMessage('You do not have permission to upload files');
-            break;
-          case 'canceled':
-            _showErrorMessage('Upload was canceled');
-            break;
-          case 'unknown':
-            _showErrorMessage('An unknown error occurred during upload');
-            break;
-          default:
-            _showErrorMessage('Failed to upload certificate: ${e.message}');
-        }
+      debugPrint('📤 Starting upload to ImgBB...');
+      final bytes = await _certificateFile!.readAsBytes();
+      final base64Image = base64Encode(bytes);
+      
+      final response = await http.post(
+        Uri.parse('https://api.imgbb.com/1/upload'),
+        body: {
+          'key': '0b411c63631d14df85c76a6cdbcf1667',
+          'image': base64Image,
+          'name': 'club_${userId}_${DateTime.now().millisecondsSinceEpoch}',
+        },
+      );
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final imageUrl = data['data']['url'];
+        debugPrint('✅ Upload success: $imageUrl');
+        return imageUrl;
       } else {
-        _showErrorMessage('Failed to upload certificate');
+        debugPrint('❌ Upload failed: ${response.statusCode}');
+        throw Exception('Upload failed with status: ${response.statusCode}');
       }
+    } catch (e) {
+      debugPrint('❌ Upload error: $e');
+      _showErrorMessage('Failed to upload certificate. Please check your internet connection.');
       return null;
     }
   }
 
   Future<void> _saveClub() async {
     if (!_formKey.currentState!.validate()) return;
+
+    if (_certificateFile == null && _existingCertificateUrl == null) {
+      _showErrorMessage('Please upload a certificate');
+      return;
+    }
 
     setState(() => _isSaving = true);
 
@@ -245,6 +204,11 @@ class _ClubFormPageState extends State<ClubFormPage> {
       }
 
       String? certificateUrl = await _uploadCertificate(docId);
+      
+      if (certificateUrl == null && _existingCertificateUrl == null) {
+        _showErrorMessage('Failed to upload certificate. Please try again.');
+        return;
+      }
 
       final clubItem = {
         'title': _titleController.text.trim(),
@@ -252,7 +216,7 @@ class _ClubFormPageState extends State<ClubFormPage> {
         'role': _roleController.text.trim(),
         'hours': _hoursController.text.trim().isEmpty ? null : int.tryParse(_hoursController.text.trim()),
         'description': _descriptionController.text.trim().isEmpty ? null : _descriptionController.text.trim(),
-        'certificateUrl': certificateUrl,
+        'certificateUrl': certificateUrl ?? _existingCertificateUrl,
       };
 
       final doc = await _firestore.collection('users').doc(docId).get();
@@ -278,7 +242,6 @@ class _ClubFormPageState extends State<ClubFormPage> {
       }
     } catch (e) {
       debugPrint('Error saving club: $e');
-
       if (e is FirebaseException) {
         switch (e.code) {
           case 'permission-denied':
@@ -305,7 +268,6 @@ class _ClubFormPageState extends State<ClubFormPage> {
 
   void _showErrorMessage(String message) {
     if (!mounted) return;
-
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -314,6 +276,67 @@ class _ClubFormPageState extends State<ClubFormPage> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         duration: const Duration(seconds: 4),
       ),
+    );
+  }
+
+  void _showCertificateDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                constraints: const BoxConstraints(maxHeight: 400),
+                child: _certificateFile != null
+                    ? Image.file(_certificateFile!, fit: BoxFit.contain)
+                    : _existingCertificateUrl != null
+                        ? Image.network(_existingCertificateUrl!, fit: BoxFit.contain)
+                        : const SizedBox.shrink(),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _pickCertificate();
+                        },
+                        icon: const Icon(Icons.edit, color: Color(0xFF0097b2)),
+                        label: const Text('Replace', style: TextStyle(color: Color(0xFF0097b2))),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFF0097b2)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            _certificateFile = null;
+                            _existingCertificateUrl = null;
+                          });
+                          Navigator.pop(context);
+                        },
+                        icon: const Icon(Icons.delete, color: Colors.red),
+                        label: const Text('Remove', style: TextStyle(color: Colors.red)),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Colors.red),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -343,7 +366,7 @@ class _ClubFormPageState extends State<ClubFormPage> {
                     ),
                     Expanded(
                       child: Text(
-                        widget.existingItem != null ? 'Edit Club' : 'Add Club',
+                        widget.existingItem != null ? 'Edit Student Club' : 'Add Student Club',
                         style: const TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w700,
@@ -376,7 +399,7 @@ class _ClubFormPageState extends State<ClubFormPage> {
                           children: [
                             _buildTextFieldWithCounter(
                               controller: _titleController,
-                              label: 'Club Name *',
+                              label: 'Student Club Name *',
                               hint: 'e.g., Robotics Club',
                               maxLength: 30,
                               validator: _validateTitle,
@@ -386,7 +409,7 @@ class _ClubFormPageState extends State<ClubFormPage> {
                               controller: _organizationController,
                               label: 'Organization',
                               hint: 'e.g., University Engineering Department',
-                              maxLength: 40,
+                              maxLength: 30,
                               validator: _validateOrganization,
                             ),
                             const SizedBox(height: 16.0),
@@ -408,13 +431,12 @@ class _ClubFormPageState extends State<ClubFormPage> {
                             const SizedBox(height: 16.0),
                             _buildCertificatePicker(),
                             const SizedBox(height: 16.0),
-                            _buildTextFieldWithWordCounter(
+                            _buildTextFieldWithCharCounter(
                               controller: _descriptionController,
                               label: 'Description',
                               hint: 'Describe your activities and contributions...',
                               maxLines: 5,
-                              minWords: 20,
-                              maxLength: 600,
+                              minChars: 200,
                               validator: _validateDescription,
                             ),
                             const SizedBox(height: 24.0),
@@ -438,7 +460,7 @@ class _ClubFormPageState extends State<ClubFormPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Certificate',
+          'Certificate *',
           style: TextStyle(
             fontSize: 14.0,
             fontWeight: FontWeight.w600,
@@ -447,7 +469,13 @@ class _ClubFormPageState extends State<ClubFormPage> {
         ),
         const SizedBox(height: 8.0),
         InkWell(
-          onTap: _pickCertificate,
+          onTap: () {
+            if (_certificateFile != null || _existingCertificateUrl != null) {
+              _showCertificateDialog();
+            } else {
+              _pickCertificate();
+            }
+          },
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -462,9 +490,9 @@ class _ClubFormPageState extends State<ClubFormPage> {
                 Expanded(
                   child: Text(
                     _certificateFile != null
-                        ? 'Certificate selected'
+                        ? 'Certificate selected (tap to view)'
                         : _existingCertificateUrl != null
-                            ? 'Certificate uploaded (tap to change)'
+                            ? 'Certificate uploaded (tap to view)'
                             : 'Tap to upload certificate',
                     style: TextStyle(
                       color: _certificateFile != null || _existingCertificateUrl != null
@@ -497,26 +525,13 @@ class _ClubFormPageState extends State<ClubFormPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 14.0,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF0e0259),
-              ),
-            ),
-            Text(
-              '$currentLength/$maxLength',
-              style: TextStyle(
-                fontSize: 12.0,
-                color: Colors.grey[600],
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14.0,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF0e0259),
+          ),
         ),
         const SizedBox(height: 8.0),
         TextFormField(
@@ -524,51 +539,50 @@ class _ClubFormPageState extends State<ClubFormPage> {
           maxLines: maxLines,
           validator: validator,
           keyboardType: keyboardType,
-          autovalidateMode: AutovalidateMode.disabled,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           inputFormatters: [
             LengthLimitingTextInputFormatter(maxLength),
           ],
           decoration: _inputDecoration(hint),
         ),
+        Padding(
+          padding: const EdgeInsets.only(top: 4.0, right: 4.0),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              '$currentLength/$maxLength',
+              style: TextStyle(
+                fontSize: 12.0,
+                color: currentLength > maxLength ? Colors.red : Colors.grey[600],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildTextFieldWithWordCounter({
+  Widget _buildTextFieldWithCharCounter({
     required TextEditingController controller,
     required String label,
     String? hint,
     int maxLines = 1,
-    required int minWords,
-    required int maxLength,
+    required int minChars,
     String? Function(String?)? validator,
   }) {
     final currentLength = controller.text.length;
-    final wordCount = controller.text.trim().split(RegExp(r'\s+')).where((word) => word.isNotEmpty).length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 14.0,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF0e0259),
-              ),
-            ),
-            Text(
-              '$wordCount/$minWords words • $currentLength/$maxLength chars',
-              style: TextStyle(
-                fontSize: 12.0,
-                color: Colors.grey[600],
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14.0,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF0e0259),
+          ),
         ),
         const SizedBox(height: 8.0),
         TextFormField(
@@ -576,10 +590,21 @@ class _ClubFormPageState extends State<ClubFormPage> {
           maxLines: maxLines,
           validator: validator,
           autovalidateMode: AutovalidateMode.disabled,
-          inputFormatters: [
-            LengthLimitingTextInputFormatter(maxLength),
-          ],
           decoration: _inputDecoration(hint),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 4.0, right: 4.0),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              '$currentLength/$minChars characters',
+              style: TextStyle(
+                fontSize: 12.0,
+                color: Colors.grey[600],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
         ),
       ],
     );
@@ -610,7 +635,7 @@ class _ClubFormPageState extends State<ClubFormPage> {
           maxLines: maxLines,
           validator: validator,
           keyboardType: keyboardType,
-          autovalidateMode: AutovalidateMode.disabled,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           decoration: _inputDecoration(hint),
         ),
       ],
