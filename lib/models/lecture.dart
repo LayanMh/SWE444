@@ -6,9 +6,10 @@ class Lecture {
   final String courseName;
   final String section;
   final String classroom;
-  final int dayOfWeek;   // 0..6
-  final int startTime;   // minutes since midnight
-  final int endTime;     // minutes since midnight
+  final int dayOfWeek;
+  final int startTime;
+  final int endTime;
+  final int hours;
 
   Lecture({
     required this.id,
@@ -19,21 +20,22 @@ class Lecture {
     required this.dayOfWeek,
     required this.startTime,
     required this.endTime,
+    this.hours = 0,
   });
- /// ✅ Factory constructor to create Lecture from Firestore document
-  factory Lecture.fromFirestore(Map<String, dynamic> data, String id) {
-    return Lecture(
-      id: id,
-      courseCode: data['courseCode'] ?? 'UNKNOWN',
-      courseName: data['courseName'] ?? 'Untitled',
-      section: data['section'] ?? '',
-      classroom: data['classroom'] ?? '',
-      dayOfWeek: data['dayOfWeek'] ?? 0,
-      startTime: data['startTime'] ?? 0,
-      endTime: data['endTime'] ?? 0,
-    );
-  }
-  /// Hard-coded semester end for now (change later)
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'courseCode': courseCode,
+        'courseName': courseName,
+        'section': section,
+        'classroom': classroom,
+        'dayOfWeek': dayOfWeek,
+        'startTime': startTime,
+        'endTime': endTime,
+        'hours': hours,
+      };
+
+  ///  Converts a Lecture into a RecurringLecture (for Microsoft Calendar)
   RecurringLecture toRecurringLecture() {
     return RecurringLecture(
       courseCode: courseCode,
@@ -43,7 +45,7 @@ class Lecture {
       dayOfWeek: dayOfWeek,
       startMinutes: startTime,
       endMinutes: endTime,
-      semesterEnd: DateTime(2025, 12, 31),
+      semesterEnd: DateTime(2025, 12, 31), // you can later make this dynamic
     );
   }
 }

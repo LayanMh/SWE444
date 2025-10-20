@@ -78,9 +78,8 @@ class MicrosoftCalendarService {
   }) async {
     final nowUtc = DateTime.now().toUtc();
     final startUtc = (start ?? resolveSemesterStart()).toUtc();
-    final Duration effectiveRange = range <= Duration.zero
-        ? _defaultRange
-        : range;
+    final Duration effectiveRange =
+        range <= Duration.zero ? _defaultRange : range;
     final DateTime proposedEnd = startUtc.add(effectiveRange);
     final DateTime minEnd = nowUtc.add(const Duration(days: 30));
     var endUtc = proposedEnd.isAfter(minEnd) ? proposedEnd : minEnd;
@@ -111,10 +110,7 @@ class MicrosoftCalendarService {
           ? decoded['value'] as List<dynamic>? ?? <dynamic>[]
           : <dynamic>[];
 
-      if (items.isEmpty) {
-        // No events: just return empty list
-        return [];
-      }
+      if (items.isEmpty) return [];
 
       final events = items
           .map(
@@ -126,24 +122,16 @@ class MicrosoftCalendarService {
       events.sort((a, b) {
         final aStart = a.start;
         final bStart = b.start;
-        if (aStart == null && bStart == null) {
-          return 0;
-        }
-        if (aStart == null) {
-          return 1;
-        }
-        if (bStart == null) {
-          return -1;
-        }
+        if (aStart == null && bStart == null) return 0;
+        if (aStart == null) return 1;
+        if (bStart == null) return -1;
         return aStart.compareTo(bStart);
       });
 
       return events;
     } else if (response.statusCode == 404) {
-      // ✅ No calendar yet → treat like empty
       return [];
     } else {
-      // ❌ Real error (bad token, server issue, etc.)
       throw Exception(
         'Failed to load events (${response.statusCode}): ${response.body}',
       );
@@ -168,10 +156,8 @@ class MicrosoftCalendarService {
       );
     }
 
-    final durationMinutes = math.max(
-      1,
-      lecture.endMinutes - lecture.startMinutes,
-    );
+    final durationMinutes =
+        math.max(1, lecture.endMinutes - lecture.startMinutes);
     final endLocal = startLocal.add(Duration(minutes: durationMinutes));
     final startUtc = startLocal.toUtc();
     final endUtc = endLocal.toUtc();
@@ -204,7 +190,28 @@ class MicrosoftCalendarService {
           'endDate': _formatDate(lecture.semesterEnd),
         },
       },
+      // 🆕 Add uniqueness to avoid "already exists" errors
+      'transactionId':
+          '${lecture.section}_${DateTime.now().millisecondsSinceEpoch}',
+      'icalUId':
+          '${lecture.section}_${DateTime.now().millisecondsSinceEpoch}_${math.Random().nextInt(999999)}',
     };
+
+    // 🧹 Clean up hidden duplicates before creating
+    try {
+      final existing = await fetchUpcomingEvents(account);
+      for (final ev in existing) {
+        if (ev.subject == '${lecture.courseCode} - ${lecture.courseName}') {
+          await deleteLecture(
+            account: account,
+            eventId: ev.id,
+            seriesMasterId: ev.seriesMasterId,
+          );
+        }
+      }
+    } catch (_) {
+      // ignore cleanup errors
+    }
 
     final response = await http.post(
       Uri.https(_host, '/v1.0/me/events'),
@@ -235,9 +242,8 @@ class MicrosoftCalendarService {
     String? seriesMasterId,
   }) async {
     final masterId = seriesMasterId?.trim();
-    final targetId = (masterId != null && masterId.isNotEmpty)
-        ? masterId
-        : eventId;
+    final targetId =
+        (masterId != null && masterId.isNotEmpty) ? masterId : eventId;
     final uri = Uri.https(_host, '/v1.0/me/events/$targetId');
 
     final response = await http.delete(
@@ -247,10 +253,7 @@ class MicrosoftCalendarService {
       },
     );
 
-    if (response.statusCode == 404) {
-      // Treat missing events as already deleted to keep the app state in sync.
-      return;
-    }
+    if (response.statusCode == 404) return;
 
     if (response.statusCode != 204) {
       throw Exception(
@@ -265,11 +268,8 @@ class MicrosoftCalendarService {
     DateTime? from,
   }) {
     final baseDate = from ?? DateTime.now();
-    final normalizedBase = DateTime(
-      baseDate.year,
-      baseDate.month,
-      baseDate.day,
-    );
+    final normalizedBase =
+        DateTime(baseDate.year, baseDate.month, baseDate.day);
     final baseWeekday = normalizedBase.weekday % 7;
     final diff = (dayOfWeek - baseWeekday + 7) % 7;
     final targetDate = normalizedBase.add(Duration(days: diff));
@@ -316,14 +316,10 @@ class MicrosoftCalendarService {
 }
 
 DateTime? _parseGraphDateTime(Map<String, dynamic>? value) {
-  if (value == null) {
-    return null;
-  }
+  if (value == null) return null;
 
   final raw = value['dateTime'];
-  if (raw is! String || raw.isEmpty) {
-    return null;
-  }
+  if (raw is! String || raw.isEmpty) return null;
 
   final timeZone = value['timeZone'] as String?;
   final normalized = _normalizeGraphDateTime(raw, timeZone);
@@ -342,15 +338,12 @@ DateTime? _parseGraphDateTime(Map<String, dynamic>? value) {
 }
 
 String _normalizeGraphDateTime(String raw, String? timeZone) {
-  final hasExplicitOffset =
-      raw.endsWith('Z') ||
+  final hasExplicitOffset = raw.endsWith('Z') ||
       (raw.length >= 6 &&
           (raw[raw.length - 6] == '+' || raw[raw.length - 6] == '-') &&
           raw[raw.length - 3] == ':');
 
-  if (hasExplicitOffset) {
-    return raw;
-  }
+  if (hasExplicitOffset) return raw;
 
   if (timeZone != null && timeZone.toUpperCase() == 'UTC') {
     return '${raw}Z';

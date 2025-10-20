@@ -1,39 +1,42 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-
 import '../models/lecture.dart';
 
 class FirebaseLectureService {
-  static final CollectionReference<Map<String, dynamic>> _timetables =
-      FirebaseFirestore.instance.collection('timetables');
-
-  static Future<Lecture?> getLectureBySection(String section) async {
-    final trimmedSection = section.trim();
-    if (trimmedSection.isEmpty) {
-      return null;
-    }
-
-    final querySnapshot = await _timetables
-        .where('section', isEqualTo: trimmedSection)
+  static Future<List<Lecture>> getLectureBySection(String sectionId) async {
+    // 🔹 Find document by section field, not by name
+    final querySnapshot = await FirebaseFirestore.instance
+        .collection('timetables')
+        .where('section', isEqualTo: sectionId)
         .limit(1)
         .get();
-    if (querySnapshot.docs.isEmpty) {
-      return null;
+
+    if (querySnapshot.docs.isEmpty) return [];
+
+    final data = querySnapshot.docs.first.data();
+
+    final List<int> days = List<int>.from(data['dayOfWeek'] ?? []);
+    final List<int> startTimes = List<int>.from(data['startTime'] ?? []);
+    final List<int> endTimes = List<int>.from(data['endTime'] ?? []);
+    final int hours = data['hours'] ?? 0;
+
+    final lectures = <Lecture>[];
+
+    for (int i = 0; i < days.length; i++) {
+      lectures.add(
+        Lecture(
+          id: sectionId,
+          courseCode: data['courseCode'] ?? '',
+          courseName: data['courseName'] ?? '',
+          section: sectionId,
+          classroom: data['classroom'] ?? '',
+          dayOfWeek: days[i],
+          startTime: startTimes[i],
+          endTime: endTimes[i],
+          hours: hours,
+        ),
+      );
     }
 
-    final doc = querySnapshot.docs.first;
-    final data = doc.data();
-
-    int toInt(String key) => (data[key] as num?)?.toInt() ?? 0;
-
-    return Lecture(
-      id: data['id'] as String? ?? doc.id,
-      courseCode: data['courseCode'] as String? ?? '',
-      courseName: data['courseName'] as String? ?? '',
-      section: data['section'] as String? ?? '',
-      classroom: data['classroom'] as String? ?? '',
-      dayOfWeek: toInt('dayOfWeek'),
-      startTime: toInt('startTime'),
-      endTime: toInt('endTime'),
-    );
+    return lectures;
   }
 }

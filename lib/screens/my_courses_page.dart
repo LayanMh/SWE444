@@ -1,365 +1,283 @@
+// lib/screens/my_courses_screen.dart
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-import '../providers/schedule_provider.dart';
-import '../services/schedule_service.dart';
+import 'add_lecture_screen.dart';
+import '../services/microsoft_auth_service.dart';
+import '../services/microsoft_calendar_service.dart';
 
-class MyCoursesPage extends StatefulWidget {
-  const MyCoursesPage({super.key});
+class MyCoursesScreen extends StatefulWidget {
+  const MyCoursesScreen({super.key});
 
   @override
-  State<MyCoursesPage> createState() => _MyCoursesPageState();
+  State<MyCoursesScreen> createState() => _MyCoursesScreenState();
 }
 
-class _MyCoursesPageState extends State<MyCoursesPage> {
-  final Set<String> _deletingIds = <String>{};
-  bool _bulkDeleting = false;
+class _MyCoursesScreenState extends State<MyCoursesScreen> {
+  String? _userDocId; // Firebase UID or microsoft_user_doc_id
+  late CollectionReference<Map<String, dynamic>> _scheduleRef;
+  bool _loadingUser = true;
 
-  static const List<String> _weekdays = <String>[
-    'Sunday',
-    'Monday',
-    'Tuesday',
-    'Wednesday',
-    'Thursday',
-    'Friday',
-    'Saturday',
+  @override
+  void initState() {
+    super.initState();
+    _resolveUserDocId();
+  }
+
+  Future<void> _resolveUserDocId() async {
+    final fbUser = FirebaseAuth.instance.currentUser;
+    if (fbUser != null) {
+      _userDocId = fbUser.uid;
+    } else {
+      final prefs = await SharedPreferences.getInstance();
+      _userDocId = prefs.getString('microsoft_user_doc_id');
+    }
+    if (_userDocId != null && _userDocId!.isNotEmpty) {
+      _scheduleRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(_userDocId)
+          .collection('schedule');
+    }
+    if (mounted) setState(() => _loadingUser = false);
+  }
+
+  // ---------- UI helpers ----------
+  static const _dowNames = [
+    'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'
   ];
+  String _fmtTime(int minutes) {
+    final h = minutes ~/ 60, m = minutes % 60;
+    final ampm = h >= 12 ? 'PM' : 'AM';
+    final hh = (h % 12 == 0) ? 12 : (h % 12);
+    final mm = m.toString().padLeft(2, '0');
+    return '$hh:$mm $ampm';
+  }
 
-  final DateFormat _timeFormatter = DateFormat('hh:mm a');
+  // ---------- Data ops ----------
+  Future<int> _currentTotalHours() async {
+    final snap = await _scheduleRef.get();
+    int total = 0;
+    for (final d in snap.docs) {
+      total += (d.data()['hours'] ?? 0) as int;
+    }
+    return total;
+  }
 
-  Future<void> _refreshProviderSchedule() async {
-    if (!mounted) {
+  Future<void> _onAddPressed() async {
+    if (_userDocId == null || _userDocId!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please sign in first.')),
+      );
       return;
     }
-    final provider = context.read<ScheduleProvider>();
+    final total = await _currentTotalHours();
+    if (total >= 20) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You reached the 20-hour limit.')),
+      );
+      return;
+    }
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AddLectureScreen()),
+    );
+    if (mounted) setState(() {}); // refresh
+  }
+
+  void _confirmDelete(String sectionId) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Remove section'),
+        content: Text('Remove section $sectionId from your schedule?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _deleteSection(sectionId);
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Delete all docs of this section (if you store per-day docs) OR the single doc (if consolidated),
+  /// and remove linked Microsoft Calendar items if present.
+  Future<void> _deleteSection(String sectionId) async {
+    final messenger = ScaffoldMessenger.of(context);
     try {
-      final entries = await ScheduleService.fetchScheduleOnce();
-      if (!mounted) {
+      // Fetch all docs in user's schedule for this section (handles per-day storage)
+      final q = await _scheduleRef.where('section', isEqualTo: sectionId).get();
+      if (q.docs.isEmpty) {
+        messenger.showSnackBar(const SnackBar(content: Text('Section not found.')));
         return;
       }
-      provider.replaceLectures(entries.map((entry) => entry.toLecture()));
-    } catch (_) {
-      // Ignore sync errors; UI already reflects Firestore via the stream.
+
+      // Try to sign in to Microsoft (optional)
+      final account = await MicrosoftAuthService.ensureSignedIn();
+
+      for (final doc in q.docs) {
+        final data = doc.data();
+        final eventId = data['calendarEventId'] as String?;
+        final seriesId = data['calendarSeriesMasterId'] as String?;
+        await _scheduleRef.doc(doc.id).delete();
+
+        if (account != null && (eventId != null || seriesId != null)) {
+          try {
+            await MicrosoftCalendarService.deleteLecture(
+              account: account,
+              eventId: eventId ?? '',
+              seriesMasterId: seriesId,
+            );
+          } catch (_) {
+            // Ignore calendar deletion errors so UI stays responsive
+          }
+        }
+      }
+
+      messenger.showSnackBar(
+        SnackBar(content: Text('Section $sectionId removed.')),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Failed to remove: $e')),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<List<ScheduleEntry>>(
-      stream: ScheduleService.watchSchedule(),
-      builder: (context, snapshot) {
-        final entries = snapshot.data ?? <ScheduleEntry>[];
-        final bool waiting =
-            snapshot.connectionState == ConnectionState.waiting &&
-            !snapshot.hasData;
+    if (_loadingUser) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (_userDocId == null || _userDocId!.isEmpty) {
+      return const Scaffold(
+        body: Center(child: Text('Please sign in to view your courses.')),
+      );
+    }
 
-        Widget body;
-        if (snapshot.hasError) {
-          body = _ErrorView(
-            message: snapshot.error.toString(),
-            onRetry: () => setState(() {}),
-          );
-        } else if (waiting) {
-          body = const Center(child: CircularProgressIndicator());
-        } else if (entries.isEmpty) {
-          body = const _EmptyView();
-        } else {
-          body = ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: entries.length,
-            itemBuilder: (context, index) {
-              final entry = entries[index];
-              final deleting = _deletingIds.contains(entry.id);
-              return Opacity(
-                opacity: deleting ? 0.5 : 1,
-                child: Card(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('My Courses'),
+        actions: [
+          IconButton(icon: const Icon(Icons.add), onPressed: _onAddPressed),
+        ],
+      ),
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: _scheduleRef.snapshots(),
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (!snap.hasData || snap.data!.docs.isEmpty) {
+            return const Center(child: Text('No courses added yet.'));
+          }
+
+          // Group by section → one card per section
+          final Map<String, _SectionGroup> groups = {};
+          for (final d in snap.data!.docs) {
+            final x = d.data();
+            final section = (x['section'] ?? '').toString();
+            if (section.isEmpty) continue;
+
+            final g = groups.putIfAbsent(
+              section,
+              () => _SectionGroup(
+                section: section,
+                courseCode: (x['courseCode'] ?? '').toString(),
+                courseName: (x['courseName'] ?? '').toString(),
+                classroom: (x['classroom'] ?? '').toString(),
+                hours: (x['hours'] ?? 0) as int,
+              ),
+            );
+
+            // Support both "single arrays in one doc" OR "per-day docs"
+            final hasArrays = x['dayOfWeek'] is List && x['startTime'] is List && x['endTime'] is List;
+            if (hasArrays) {
+              final days = List<int>.from(x['dayOfWeek']);
+              final starts = List<int>.from(x['startTime']);
+              final ends = List<int>.from(x['endTime']);
+              for (int i = 0; i < days.length; i++) {
+                g.sessions.add(_Session(days[i], starts[i], ends[i]));
+              }
+            } else {
+              // per-day doc
+              final day = (x['dayOfWeek'] ?? 0) as int;
+              final start = (x['startTime'] ?? 0) as int;
+              final end = (x['endTime'] ?? 0) as int;
+              g.sessions.add(_Session(day, start, end));
+            }
+          }
+
+          // Sort sessions inside each group by day/time
+          for (final g in groups.values) {
+            g.sessions.sort((a, b) {
+              final c = a.day.compareTo(b.day);
+              return c != 0 ? c : a.start.compareTo(b.start);
+            });
+          }
+
+          final groupedList = groups.values.toList()
+            ..sort((a, b) => a.courseCode.compareTo(b.courseCode));
+
+          return ListView.builder(
+            itemCount: groupedList.length,
+            itemBuilder: (_, i) {
+              final g = groupedList[i];
+              final timesText = g.sessions.map((s) =>
+                  '${_dowNames[s.day]} | ${_fmtTime(s.start)} - ${_fmtTime(s.end)}'
+              ).join('\n');
+
+              return Card(
+                margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: ListTile(
+                  title: Text(
+                    '${g.courseCode} - Section ${g.section}',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.all(16),
-                    title: Text(
-                      '${entry.courseCode} - Section ${entry.section}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 8),
-                        Text(entry.courseName),
-                        if (entry.classroom.isNotEmpty)
-                          Text('Room ${entry.classroom}'),
-                        Text(_formatSchedule(entry)),
-                      ],
-                    ),
-                    trailing: deleting
-                        ? const SizedBox(
-                            height: 24,
-                            width: 24,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : IconButton(
-                            icon: const Icon(Icons.delete_outline_rounded),
-                            color: Colors.redAccent,
-                            tooltip: 'Remove from schedule',
-                            onPressed: () => _confirmDelete(entry),
-                          ),
+                  subtitle: Text('${g.courseName}\nRoom ${g.classroom}\n$timesText'),
+                  isThreeLine: true,
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.red),
+                    onPressed: () => _confirmDelete(g.section),
                   ),
                 ),
               );
             },
           );
-        }
-
-        return Scaffold(
-          appBar: AppBar(
-            title: const Text('My Courses'),
-            actions: [
-              if (_bulkDeleting)
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16),
-                  child: SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                )
-              else if (entries.isNotEmpty && !waiting)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: TextButton.icon(
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      backgroundColor: Colors.white.withValues(alpha: 0.16),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                    ),
-                    onPressed: () => _confirmDeleteAll(entries),
-                    icon: const Icon(Icons.delete_sweep_rounded),
-                    label: const Text('Clear all'),
-                  ),
-                ),
-            ],
-          ),
-          body: body,
-        );
-      },
-    );
-  }
-
-  String _formatSchedule(ScheduleEntry entry) {
-    final dayLabel =
-        (entry.dayOfWeek >= 0 && entry.dayOfWeek < _weekdays.length)
-        ? _weekdays[entry.dayOfWeek]
-        : 'Day ${entry.dayOfWeek}';
-
-    String formatTime(int minutes) {
-      final hours = minutes ~/ 60;
-      final mins = minutes % 60;
-      final now = DateTime.now();
-      final dt = DateTime(now.year, now.month, now.day, hours, mins);
-      return _timeFormatter.format(dt);
-    }
-
-    final startLabel = formatTime(entry.startTime);
-    final endLabel = formatTime(entry.endTime);
-    return '$dayLabel | $startLabel - $endLabel';
-  }
-
-  Future<void> _confirmDelete(ScheduleEntry entry) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Remove ${entry.courseCode}?'),
-        content: const Text(
-          'This will delete the course from your weekly schedule and Microsoft calendar.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text(
-              'Delete',
-              style: TextStyle(color: Colors.redAccent),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (!mounted || confirmed != true) {
-      return;
-    }
-
-    await _deleteEntry(entry);
-  }
-
-  Future<void> _confirmDeleteAll(List<ScheduleEntry> entries) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Remove all courses?'),
-        content: Text(
-          'This will remove ${entries.length} course${entries.length == 1 ? '' : 's'} from your schedule and Microsoft calendar.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text(
-              'Delete all',
-              style: TextStyle(color: Colors.redAccent),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (!mounted || confirmed != true) {
-      return;
-    }
-
-    setState(() {
-      _bulkDeleting = true;
-      _deletingIds
-        ..clear()
-        ..addAll(entries.map((e) => e.id));
-    });
-
-    final messenger = ScaffoldMessenger.of(context);
-
-    try {
-      final result = await ScheduleService.deleteAllEntries();
-      if (!mounted) return;
-      if (result.failedCount == 0) {
-        final count = result.deletedCount;
-        final label = count == 1 ? 'course' : 'courses';
-        messenger.showSnackBar(
-          SnackBar(content: Text('Removed $count $label.')),
-        );
-      } else {
-        final errorLabel = result.error?.toString() ?? 'unknown error';
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              'Removed ${result.deletedCount} courses, '
-              '${result.failedCount} failed: $errorLabel',
-            ),
-          ),
-        );
-      }
-      await _refreshProviderSchedule();
-    } catch (error) {
-      if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(content: Text('Could not clear courses: $error')),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _bulkDeleting = false;
-          _deletingIds.clear();
-        });
-      }
-    }
-  }
-
-  Future<void> _deleteEntry(ScheduleEntry entry) async {
-    setState(() {
-      _deletingIds.add(entry.id);
-    });
-
-    final messenger = ScaffoldMessenger.of(context);
-
-    try {
-      await ScheduleService.deleteEntry(entry);
-      if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('${entry.courseCode} removed from your schedule.'),
-        ),
-      );
-      await _refreshProviderSchedule();
-    } catch (error) {
-      if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(content: Text('Could not delete ${entry.courseCode}: $error')),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _deletingIds.remove(entry.id);
-        });
-      }
-    }
-  }
-}
-
-class _EmptyView extends StatelessWidget {
-  const _EmptyView();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.menu_book_outlined, size: 64, color: Colors.grey),
-            const SizedBox(height: 16),
-            Text(
-              'No courses yet.',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Add sections from the Schedule tab to see them here.',
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
+        },
       ),
     );
   }
 }
 
-class _ErrorView extends StatelessWidget {
-  const _ErrorView({required this.message, required this.onRetry});
+// ---------- grouping models (local to this file) ----------
+class _SectionGroup {
+  final String section;
+  final String courseCode;
+  final String courseName;
+  final String classroom;
+  final int hours;
+  final List<_Session> sessions = [];
 
-  final String message;
-  final VoidCallback onRetry;
+  _SectionGroup({
+    required this.section,
+    required this.courseCode,
+    required this.courseName,
+    required this.classroom,
+    required this.hours,
+  });
+}
 
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(message, textAlign: TextAlign.center),
-            const SizedBox(height: 16),
-            ElevatedButton(onPressed: onRetry, child: const Text('Try again')),
-          ],
-        ),
-      ),
-    );
-  }
+class _Session {
+  final int day;
+  final int start;
+  final int end;
+  _Session(this.day, this.start, this.end);
 }

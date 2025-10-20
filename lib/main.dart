@@ -122,7 +122,7 @@ class MyApp extends StatelessWidget {
           '/experience': (_) => const ExperiencePage(),
           '/community': (_) => const CommunityPage(),
           '/absence': (_) => const AbsencePage(),
-          '/my-courses': (_) => const MyCoursesPage(),
+          '/my-courses': (_) => const MyCoursesScreen(),
         },
       ),
     );

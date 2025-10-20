@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/lecture.dart';
 import '../providers/schedule_provider.dart';
 import '../services/microsoft_auth_service.dart';
 import '../services/microsoft_calendar_service.dart';
 import '../services/firebase_lecture_service.dart';
-import '../services/schedule_service.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class AddLectureScreen extends StatefulWidget {
   const AddLectureScreen({super.key});
@@ -41,19 +40,6 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
     setState(() => _isLoading = true);
 
     try {
-      List<ScheduleEntry>? remoteSchedule;
-      try {
-        remoteSchedule = await ScheduleService.fetchScheduleOnce();
-      } catch (_) {
-        remoteSchedule = null;
-      }
-      if (!mounted) return;
-      if (remoteSchedule != null) {
-        scheduleProvider.replaceLectures(
-          remoteSchedule.map((entry) => entry.toLecture()),
-        );
-      }
-
       final section = _controller.text.trim();
 
       if (scheduleProvider.containsSection(section)) {
@@ -65,40 +51,17 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
         return;
       }
 
-      final lecture = await FirebaseLectureService.getLectureBySection(section);
-      if (!mounted) return;
+      // 🔹 Fetch all lectures for this section
+      final lectures = await FirebaseLectureService.getLectureBySection(section);
 
-      if (lecture == null) {
+      if (lectures.isEmpty) {
         messenger.showSnackBar(
           const SnackBar(content: Text('Section not found in Firestore.')),
         );
         return;
       }
 
-      final newLecture = Lecture(
-        id: lecture.section,
-        courseCode: lecture.courseCode,
-        courseName: lecture.courseName,
-        section: lecture.section,
-        classroom: lecture.classroom,
-        dayOfWeek: lecture.dayOfWeek,
-        startTime: lecture.startTime,
-        endTime: lecture.endTime,
-      );
-
-      final conflictingLecture = scheduleProvider.findTimeConflict(newLecture);
-      if (conflictingLecture != null) {
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              'Time conflict with ${conflictingLecture.courseCode} section ${conflictingLecture.section}.',
-            ),
-          ),
-        );
-        return;
-      }
-
-      // Save lecture under current user's schedule in Firestore
+      // 🔹 Get current user
       final firebaseUser = FirebaseAuth.instance.currentUser;
       String? userDocId;
 
@@ -121,70 +84,96 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
       final userScheduleRef = FirebaseFirestore.instance
           .collection('users')
           .doc(userDocId)
-          .collection('schedule')
-          .doc(newLecture.id);
+          .collection('schedule');
 
-      try {
-        await userScheduleRef.set({
-          'courseCode': lecture.courseCode,
-          'courseName': lecture.courseName,
-          'section': lecture.section,
-          'classroom': lecture.classroom,
-          'dayOfWeek': lecture.dayOfWeek,
-          'startTime': lecture.startTime,
-          'endTime': lecture.endTime,
-          'addedAt': FieldValue.serverTimestamp(),
-          'status': 'active',
-        }, SetOptions(merge: true));
-      } catch (error) {
+      // 🔹 Calculate total hours before adding
+      final currentSchedule = await userScheduleRef.get();
+      int currentHours = 0;
+      for (final doc in currentSchedule.docs) {
+        currentHours += (doc.data()['hours'] ?? 0) as int;
+      }
+
+      final int newSectionHours = lectures.first.hours;
+      if (currentHours + newSectionHours > 20) {
         messenger.showSnackBar(
-          SnackBar(content: Text('Failed to save section: $error')),
+          const SnackBar(
+            content: Text('Adding this section exceeds 20 total hours.'),
+          ),
         );
         return;
       }
 
-      scheduleProvider.addLecture(newLecture);
+      // 🔹 Add each lecture session
+      for (final newLecture in lectures) {
+        final conflict = scheduleProvider.findTimeConflict(newLecture);
+        if (conflict != null) {
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(
+                'Time conflict with ${conflict.courseCode} section ${conflict.section}.',
+              ),
+            ),
+          );
+          return;
+        }
+
+        final lectureDocId = '${newLecture.id}_${newLecture.dayOfWeek}';
+        await userScheduleRef.doc(lectureDocId).set({
+          'courseCode': newLecture.courseCode,
+          'courseName': newLecture.courseName,
+          'section': newLecture.section,
+          'classroom': newLecture.classroom,
+          'dayOfWeek': newLecture.dayOfWeek,
+          'startTime': newLecture.startTime,
+          'endTime': newLecture.endTime,
+          'hours': newLecture.hours,
+          'addedAt': FieldValue.serverTimestamp(),
+          'status': 'active',
+        }, SetOptions(merge: true));
+
+        scheduleProvider.addLecture(newLecture);
+      }
 
       messenger.showSnackBar(
         const SnackBar(content: Text('Lecture added to your schedule.')),
       );
 
+      // 🔹 Microsoft Calendar integration
       final account = await MicrosoftAuthService.ensureSignedIn();
       if (!mounted) return;
 
-      if (account == null) {
-        messenger.showSnackBar(
-          const SnackBar(content: Text('Microsoft sign-in cancelled.')),
-        );
-      } else {
-        try {
-          final createdEvent =
-              await MicrosoftCalendarService.addWeeklyRecurringLecture(
-                account: account,
-                lecture: newLecture.toRecurringLecture(),
-              );
+      if (account != null) {
+        for (final newLecture in lectures) {
           try {
-            await userScheduleRef.set({
+            final createdEvent =
+                await MicrosoftCalendarService.addWeeklyRecurringLecture(
+              account: account,
+              lecture: newLecture.toRecurringLecture(),
+            );
+
+            await userScheduleRef
+                .doc('${newLecture.id}_${newLecture.dayOfWeek}')
+                .set({
               'calendarEventId': createdEvent.id,
               if (createdEvent.seriesMasterId != null &&
                   createdEvent.seriesMasterId!.isNotEmpty)
                 'calendarSeriesMasterId': createdEvent.seriesMasterId,
             }, SetOptions(merge: true));
-          } catch (_) {
-            // If we fail to persist the event id, continue; deletion flow can fall back.
+          } catch (error) {
+            messenger.showSnackBar(
+              SnackBar(content: Text('Calendar sync error: $error')),
+            );
           }
-          if (!mounted) return;
-          messenger.showSnackBar(
-            const SnackBar(
-              content: Text('Lecture added to Microsoft Calendar.'),
-            ),
-          );
-        } catch (error) {
-          if (!mounted) return;
-          messenger.showSnackBar(
-            SnackBar(content: Text('Microsoft Calendar error: $error')),
-          );
         }
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Lecture(s) added to Microsoft Calendar.'),
+          ),
+        );
+      } else {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Microsoft sign-in cancelled.')),
+        );
       }
 
       if (!mounted) return;
