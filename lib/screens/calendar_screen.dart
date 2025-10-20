@@ -175,16 +175,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
+        centerTitle: true,
         title: const Text('My Schedule'),
-        actions: [
-          if (_account != null && !_isLoading)
-            IconButton(
-              icon: const Icon(Icons.refresh),
-              color: _CalendarPalette.iconOnGradient,
-              onPressed: () => _loadCalendar(interactive: false),
-              tooltip: 'Refresh events',
-            ),
-        ],
+        
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton:
@@ -499,7 +492,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            _buildPageIndicators(),
           ],
         ),
       ),
@@ -991,7 +983,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
         await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: const Text('Absence all day'),
+            title: const Text('Absent all day'),
             content: Text(
               'Record absence for $pendingCount classes on\n$dayLabel?',
             ),

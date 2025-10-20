@@ -80,13 +80,13 @@ class NotiService {
     String body;
     if (rounded > 25.0) {
       title = 'Attendance Limit Reached';
-      body = 'Absences in $courseId reached $percentText% (over the 25% limit) You’ve got this!! let’s aim for the next classes🤩';
+      body = 'Absences in $courseId reached $percentText% (over the 25% limit) You’ve got this!! let’s aim for the next classes';
     } else if ((rounded - 25.0).abs() < 0.01) {
       title = 'Heads Up on your Attendance!!';
       body = 'Absences in $courseId are now $percentText% Let’s keep future classes on track!';
     } else {
       title = 'Heads Up on your Attendance!!Let’s Get Back on Track';
-      body = 'Absences in $courseId are $percentText% getting close to 25%!! Keeping up this week will keep you safe👍';
+      body = 'Absences in $courseId are $percentText% getting close to 25%!! Keeping up this week will keep you safe 👍';
     }
 
     // Try with custom image (requires res/drawable/absherk_notif.png).
