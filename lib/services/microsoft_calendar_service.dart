@@ -78,9 +78,8 @@ class MicrosoftCalendarService {
   }) async {
     final nowUtc = DateTime.now().toUtc();
     final startUtc = (start ?? resolveSemesterStart()).toUtc();
-    final Duration effectiveRange = range <= Duration.zero
-        ? _defaultRange
-        : range;
+    final Duration effectiveRange =
+        range <= Duration.zero ? _defaultRange : range;
     final DateTime proposedEnd = startUtc.add(effectiveRange);
     final DateTime minEnd = nowUtc.add(const Duration(days: 30));
     var endUtc = proposedEnd.isAfter(minEnd) ? proposedEnd : minEnd;
@@ -88,66 +87,91 @@ class MicrosoftCalendarService {
       endUtc = startUtc.add(_defaultRange);
     }
 
-    final uri = Uri.https(_host, '/v1.0/me/calendarView', <String, String>{
+    final queryParameters = <String, String>{
       'startDateTime': startUtc.toIso8601String(),
       'endDateTime': endUtc.toIso8601String(),
       r'$orderby': 'start/dateTime',
-      r'$top': '50',
+      r'$top': '200',
       r'$select':
           'id,subject,start,end,isAllDay,location,seriesMasterId,type,body',
-    });
+    };
 
-    final response = await http.get(
-      uri,
-      headers: <String, String>{
-        'Authorization': 'Bearer ${account.accessToken}',
-        'Prefer': 'outlook.timezone="UTC"',
-      },
+    final headers = <String, String>{
+      'Authorization': 'Bearer ${account.accessToken}',
+      'Prefer': 'outlook.timezone="UTC"',
+    };
+
+    final List<MicrosoftCalendarEvent> events = <MicrosoftCalendarEvent>[];
+    Uri? requestUri = Uri.https(
+      _host,
+      '/v1.0/me/calendarView',
+      queryParameters,
     );
+    var pageGuard = 0;
 
-    if (response.statusCode == 200) {
-      final decoded = jsonDecode(response.body);
-      final items = decoded is Map<String, dynamic>
-          ? decoded['value'] as List<dynamic>? ?? <dynamic>[]
-          : <dynamic>[];
+    while (requestUri != null && pageGuard < 50) {
+      final response = await http.get(requestUri, headers: headers);
 
-      if (items.isEmpty) {
-        // No events: just return empty list
-        return [];
+      if (response.statusCode == 404) {
+        return <MicrosoftCalendarEvent>[];
+      }
+      if (response.statusCode != 200) {
+        throw Exception(
+          'Failed to load events (${response.statusCode}): ${response.body}',
+        );
       }
 
-      final events = items
-          .map(
-            (dynamic item) =>
-                MicrosoftCalendarEvent.fromJson(item as Map<String, dynamic>),
-          )
-          .toList();
+      final decoded = jsonDecode(response.body);
+      final List<dynamic> items = decoded is Map<String, dynamic>
+          ? decoded['value'] as List<dynamic>? ?? const <dynamic>[]
+          : const <dynamic>[];
 
-      events.sort((a, b) {
-        final aStart = a.start;
-        final bStart = b.start;
-        if (aStart == null && bStart == null) {
-          return 0;
+      for (final item in items) {
+        if (item is Map<String, dynamic>) {
+          events.add(MicrosoftCalendarEvent.fromJson(item));
         }
-        if (aStart == null) {
-          return 1;
-        }
-        if (bStart == null) {
-          return -1;
-        }
-        return aStart.compareTo(bStart);
-      });
+      }
 
-      return events;
-    } else if (response.statusCode == 404) {
-      // ✅ No calendar yet → treat like empty
-      return [];
-    } else {
-      // ❌ Real error (bad token, server issue, etc.)
-      throw Exception(
-        'Failed to load events (${response.statusCode}): ${response.body}',
-      );
+      final String? nextLink = decoded is Map<String, dynamic>
+          ? decoded['@odata.nextLink'] as String?
+          : null;
+
+      if (nextLink == null || nextLink.isEmpty) {
+        requestUri = null;
+      } else {
+        final Uri? parsedNext = Uri.tryParse(nextLink);
+        if (parsedNext == null) {
+          requestUri = null;
+        } else {
+          requestUri = parsedNext.hasScheme
+              ? parsedNext
+              : Uri.parse('https://${_host}${nextLink}');
+        }
+      }
+
+      pageGuard += 1;
     }
+
+    if (events.isEmpty) {
+      return <MicrosoftCalendarEvent>[];
+    }
+
+    events.sort((a, b) {
+      final aStart = a.start;
+      final bStart = b.start;
+      if (aStart == null && bStart == null) {
+        return 0;
+      }
+      if (aStart == null) {
+        return 1;
+      }
+      if (bStart == null) {
+        return -1;
+      }
+      return aStart.compareTo(bStart);
+    });
+
+    return events;
   }
 
   static Future<MicrosoftCalendarEvent> addWeeklyRecurringLecture({
@@ -358,3 +382,4 @@ String _normalizeGraphDateTime(String raw, String? timeZone) {
 
   return raw;
 }
+

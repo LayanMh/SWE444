@@ -133,16 +133,25 @@ class ScheduleService {
     final docRef =
         _db.collection('users').doc(docId).collection('schedule').doc(entry.id);
 
-    final account = await MicrosoftAuthService.ensureSignedIn();
-    if (account == null) {
-      throw StateError('Microsoft sign-in required to delete a course.');
+    MicrosoftAccount? account;
+    try {
+      account = await MicrosoftAuthService.ensureSignedIn();
+    } catch (_) {
+      account = null;
     }
 
-    await _deleteEntryWithAccount(
-      account: account,
-      entry: entry,
-      docRef: docRef,
-    );
+    if (account != null) {
+      await _deleteEntryWithAccount(
+        account: account,
+        entry: entry,
+        docRef: docRef,
+      );
+    } else {
+      await _deleteEntryWithoutCalendar(
+        entry: entry,
+        docRef: docRef,
+      );
+    }
   }
 
   static Future<ScheduleBulkDeleteResult> deleteAllEntries() async {
@@ -155,9 +164,11 @@ class ScheduleService {
       return const ScheduleBulkDeleteResult(deletedCount: 0, failedCount: 0);
     }
 
-    final account = await MicrosoftAuthService.ensureSignedIn();
-    if (account == null) {
-      throw StateError('Microsoft sign-in required to delete courses.');
+    MicrosoftAccount? account;
+    try {
+      account = await MicrosoftAuthService.ensureSignedIn();
+    } catch (_) {
+      account = null;
     }
 
     var deleted = 0;
@@ -167,11 +178,18 @@ class ScheduleService {
     for (final doc in snapshot.docs) {
       final entry = ScheduleEntry.fromSnapshot(doc);
       try {
-        await _deleteEntryWithAccount(
-          account: account,
-          entry: entry,
-          docRef: doc.reference,
-        );
+        if (account != null) {
+          await _deleteEntryWithAccount(
+            account: account,
+            entry: entry,
+            docRef: doc.reference,
+          );
+        } else {
+          await _deleteEntryWithoutCalendar(
+            entry: entry,
+            docRef: doc.reference,
+          );
+        }
         deleted += 1;
       } catch (error) {
         failed += 1;
@@ -186,7 +204,7 @@ class ScheduleService {
     );
   }
 
-  // 🆕 NEW: Delete all documents for a specific section
+  // Delete all documents for a specific section
   static Future<void> deleteSection(String section) async {
     final docId = await _resolveUserDocId();
 
@@ -196,21 +214,30 @@ class ScheduleService {
 
     if (query.docs.isEmpty) return;
 
-    final account = await MicrosoftAuthService.ensureSignedIn();
-    if (account == null) {
-      throw StateError('Microsoft sign-in required to delete a course.');
+    MicrosoftAccount? account;
+    try {
+      account = await MicrosoftAuthService.ensureSignedIn();
+    } catch (_) {
+      account = null;
     }
 
     for (final doc in query.docs) {
       final entry = ScheduleEntry.fromSnapshot(doc);
       try {
-        await _deleteEntryWithAccount(
-          account: account,
-          entry: entry,
-          docRef: doc.reference,
-        );
+        if (account != null) {
+          await _deleteEntryWithAccount(
+            account: account,
+            entry: entry,
+            docRef: doc.reference,
+          );
+        } else {
+          await _deleteEntryWithoutCalendar(
+            entry: entry,
+            docRef: doc.reference,
+          );
+        }
       } catch (e) {
-        // 🆕 Safety: if one fails, continue deleting others
+        // Safety: if one fails, continue deleting others
         print('Warning: could not delete one occurrence of $section: $e');
       }
     }
@@ -244,6 +271,14 @@ class ScheduleService {
       }
     }
 
+    await AttendanceService.clearCourse(entry.courseCode);
+    await docRef.delete();
+  }
+
+  static Future<void> _deleteEntryWithoutCalendar({
+    required ScheduleEntry entry,
+    required DocumentReference<Map<String, dynamic>> docRef,
+  }) async {
     await AttendanceService.clearCourse(entry.courseCode);
     await docRef.delete();
   }
