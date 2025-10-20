@@ -908,7 +908,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final pct = absentMinutes * 100.0 / totalMinutes;
     // Show counts to the user; keep minutes for calculation only.
     final msg =
-        '$courseId absence: ${pct.toStringAsFixed(1)}% (absent $absentEvents of $totalEvents classes)';
+        'Your absence just increased in $courseId absent $absentEvents of $totalEvents classes (${pct.toStringAsFixed(1)}%), Try to make the next class 👍';
 
     if (pct > 20) {
       // ignore: unawaited_futures
@@ -1089,11 +1089,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 
   Future<bool> _isEventAlreadyAbsent(String eventId) async {
-    // If we've just marked it locally, reflect immediately
-    if (_recentlyMarkedAbsent.contains(eventId)) return true;
-
+    // Always consult Firestore; fall back to local cache only on failure.
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return false;
+    if (uid == null) return _recentlyMarkedAbsent.contains(eventId);
     try {
       final snap = await FirebaseFirestore.instance
           .collection('users')
@@ -1102,9 +1100,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
           .doc(eventId)
           .get();
       final status = (snap.data()?['status'] ?? '').toString();
-      return snap.exists && status == 'absent';
+      final isAbsent = snap.exists && status == 'absent';
+      if (!isAbsent) {
+        _recentlyMarkedAbsent.remove(eventId);
+      }
+      return isAbsent || _recentlyMarkedAbsent.contains(eventId);
     } catch (_) {
-      return false;
+      // Network/permission error: best effort fallback to local cache
+      return _recentlyMarkedAbsent.contains(eventId);
     }
   }
 

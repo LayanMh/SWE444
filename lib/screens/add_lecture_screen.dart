@@ -54,6 +54,17 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
         );
       }
 
+      if (scheduleProvider.hasReachedSectionLimit) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              'You can only add up to ${ScheduleProvider.maxSections} sections. Remove one before adding another.',
+            ),
+          ),
+        );
+        return;
+      }
+
       final section = _controller.text.trim();
 
       if (scheduleProvider.containsSection(section)) {
@@ -70,7 +81,7 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
 
       if (lecture == null) {
         messenger.showSnackBar(
-          const SnackBar(content: Text('Section not found in Firestore.')),
+          const SnackBar(content: Text('Section not found. Please check the number and try again.')),
         );
         return;
       }
