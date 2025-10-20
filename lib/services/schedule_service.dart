@@ -51,12 +51,8 @@ class ScheduleEntry {
 
     int _toMinutes(String key) {
       final value = data[key];
-      if (value is int) {
-        return value;
-      }
-      if (value is num) {
-        return value.toInt();
-      }
+      if (value is int) return value;
+      if (value is num) return value.toInt();
       return 0;
     }
 
@@ -84,6 +80,7 @@ class ScheduleEntry {
       dayOfWeek: dayOfWeek,
       startTime: startTime,
       endTime: endTime,
+      
     );
   }
 }
@@ -95,15 +92,11 @@ class ScheduleService {
 
   static Future<String> _resolveUserDocId() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid != null && uid.isNotEmpty) {
-      return uid;
-    }
+    if (uid != null && uid.isNotEmpty) return uid;
 
     final prefs = await SharedPreferences.getInstance();
     final fallbackId = prefs.getString('microsoft_user_doc_id');
-    if (fallbackId != null && fallbackId.isNotEmpty) {
-      return fallbackId;
-    }
+    if (fallbackId != null && fallbackId.isNotEmpty) return fallbackId;
 
     throw StateError('You must be signed in to manage your schedule.');
   }
@@ -137,11 +130,8 @@ class ScheduleService {
 
   static Future<void> deleteEntry(ScheduleEntry entry) async {
     final docId = await _resolveUserDocId();
-    final docRef = _db
-        .collection('users')
-        .doc(docId)
-        .collection('schedule')
-        .doc(entry.id);
+    final docRef =
+        _db.collection('users').doc(docId).collection('schedule').doc(entry.id);
 
     final account = await MicrosoftAuthService.ensureSignedIn();
     if (account == null) {
@@ -157,10 +147,8 @@ class ScheduleService {
 
   static Future<ScheduleBulkDeleteResult> deleteAllEntries() async {
     final docId = await _resolveUserDocId();
-    final collection = _db
-        .collection('users')
-        .doc(docId)
-        .collection('schedule');
+    final collection =
+        _db.collection('users').doc(docId).collection('schedule');
     final snapshot = await collection.get();
 
     if (snapshot.docs.isEmpty) {
@@ -198,6 +186,36 @@ class ScheduleService {
     );
   }
 
+  // 🆕 NEW: Delete all documents for a specific section
+  static Future<void> deleteSection(String section) async {
+    final docId = await _resolveUserDocId();
+
+    final collection =
+        _db.collection('users').doc(docId).collection('schedule');
+    final query = await collection.where('section', isEqualTo: section).get();
+
+    if (query.docs.isEmpty) return;
+
+    final account = await MicrosoftAuthService.ensureSignedIn();
+    if (account == null) {
+      throw StateError('Microsoft sign-in required to delete a course.');
+    }
+
+    for (final doc in query.docs) {
+      final entry = ScheduleEntry.fromSnapshot(doc);
+      try {
+        await _deleteEntryWithAccount(
+          account: account,
+          entry: entry,
+          docRef: doc.reference,
+        );
+      } catch (e) {
+        // 🆕 Safety: if one fails, continue deleting others
+        print('Warning: could not delete one occurrence of $section: $e');
+      }
+    }
+  }
+
   static Future<void> _deleteEntryWithAccount({
     required MicrosoftAccount account,
     required ScheduleEntry entry,
@@ -219,18 +237,14 @@ class ScheduleService {
         );
       } catch (error) {
         final message = error.toString();
-        final notFound =
-            message.contains('404') ||
+        final notFound = message.contains('404') ||
             message.contains('ErrorItemNotFound') ||
             message.contains('The specified object was not found');
-        if (!notFound) {
-          rethrow;
-        }
+        if (!notFound) rethrow;
       }
     }
 
     await AttendanceService.clearCourse(entry.courseCode);
-
     await docRef.delete();
   }
 
@@ -245,16 +259,15 @@ class ScheduleService {
     if (eventId != null && eventId.isNotEmpty) {
       return _CalendarDeleteTarget(
         eventId: eventId,
-        seriesMasterId: (seriesMasterId != null && seriesMasterId.isNotEmpty)
-            ? seriesMasterId
-            : null,
+        seriesMasterId:
+            (seriesMasterId != null && seriesMasterId.isNotEmpty)
+                ? seriesMasterId
+                : null,
       );
     }
 
     try {
-      final events = await MicrosoftCalendarService.fetchUpcomingEvents(
-        account,
-      );
+      final events = await MicrosoftCalendarService.fetchUpcomingEvents(account);
       for (final event in events) {
         if (_matchesEvent(event, entry)) {
           final resolvedSeriesId = _resolveSeriesId(event);
@@ -269,7 +282,7 @@ class ScheduleService {
                 'calendarSeriesMasterId': target.seriesMasterId,
             }, SetOptions(merge: true));
           } catch (_) {
-            // Ignore persistence errors; deletion can proceed.
+            // Ignore persistence errors; deletion can continue
           }
           return target;
         }
@@ -284,28 +297,20 @@ class ScheduleService {
   static bool _matchesEvent(MicrosoftCalendarEvent event, ScheduleEntry entry) {
     final subject = event.subject.toUpperCase();
     final normalizedCourseCode = entry.courseCode.toUpperCase();
-    if (!subject.contains(normalizedCourseCode)) {
-      return false;
-    }
+    if (!subject.contains(normalizedCourseCode)) return false;
 
     final body = event.bodyContent?.toLowerCase() ?? '';
     if (entry.section.isNotEmpty) {
       final sectionNeedle = 'section ${entry.section}'.toLowerCase();
-      if (!body.contains(sectionNeedle)) {
-        return false;
-      }
+      if (!body.contains(sectionNeedle)) return false;
     }
 
     final start = event.start;
     if (start != null) {
       final eventDay = start.weekday % 7;
-      if (entry.dayOfWeek != eventDay) {
-        return false;
-      }
+      if (entry.dayOfWeek != eventDay) return false;
       final eventMinutes = start.hour * 60 + start.minute;
-      if ((eventMinutes - entry.startTime).abs() > 5) {
-        return false;
-      }
+      if ((eventMinutes - entry.startTime).abs() > 5) return false;
     }
 
     return true;
@@ -313,13 +318,9 @@ class ScheduleService {
 
   static String? _resolveSeriesId(MicrosoftCalendarEvent event) {
     final candidate = event.seriesMasterId?.trim();
-    if (candidate != null && candidate.isNotEmpty) {
-      return candidate;
-    }
+    if (candidate != null && candidate.isNotEmpty) return candidate;
     final type = event.eventType?.toLowerCase();
-    if (type == 'seriesmaster') {
-      return event.id;
-    }
+    if (type == 'seriesmaster') return event.id;
     return null;
   }
 }

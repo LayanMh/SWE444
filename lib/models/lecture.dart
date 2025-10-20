@@ -9,6 +9,7 @@ class Lecture {
   final int dayOfWeek;   // 0..6
   final int startTime;   // minutes since midnight
   final int endTime;     // minutes since midnight
+  final int hour;        //  course credit hours
 
   Lecture({
     required this.id,
@@ -19,8 +20,10 @@ class Lecture {
     required this.dayOfWeek,
     required this.startTime,
     required this.endTime,
+    this.hour = 0,       //  default 
   });
- /// ✅ Factory constructor to create Lecture from Firestore document
+
+  /// Factory constructor to create Lecture from Firestore document
   factory Lecture.fromFirestore(Map<String, dynamic> data, String id) {
     return Lecture(
       id: id,
@@ -28,12 +31,14 @@ class Lecture {
       courseName: data['courseName'] ?? 'Untitled',
       section: data['section'] ?? '',
       classroom: data['classroom'] ?? '',
-      dayOfWeek: data['dayOfWeek'] ?? 0,
-      startTime: data['startTime'] ?? 0,
-      endTime: data['endTime'] ?? 0,
+      dayOfWeek: (data['dayOfWeek'] as List?)?.first ?? 0, // handles list
+      startTime: (data['startTime'] as List?)?.first ?? 0, // handles list
+      endTime: (data['endTime'] as List?)?.first ?? 0,     // handles list
+      hour: (data['hour'] as num?)?.toInt() ?? 0,          // added
     );
   }
-  /// Hard-coded semester end for now (change later)
+
+  /// Convert to recurring lecture for Microsoft Calendar
   RecurringLecture toRecurringLecture() {
     return RecurringLecture(
       courseCode: courseCode,
