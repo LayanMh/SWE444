@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:absherk/services/schedule_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -197,7 +198,7 @@ docIdToDelete = microsoftDocId;
 docIdToDelete = _auth.currentUser!.uid;
 }
 
-if (docIdToDelete != null) {
+  if (docIdToDelete != null) {
 final userDoc =
 await _firestore.collection('users').doc(docIdToDelete).get();
 final userData = userDoc.data();
@@ -239,9 +240,39 @@ return;
 }
 }
 
-debugPrint('Deleting user document: $docIdToDelete');
-await _firestore.collection('users').doc(docIdToDelete).delete();
-debugPrint('Firestore document deleted');
+    // 1) Best-effort: remove Microsoft Calendar events and schedule docs
+    try {
+      final result = await ScheduleService.deleteAllEntries();
+      debugPrint('Schedule delete result: deleted=' + result.deletedCount.toString() + ', failed=' + result.failedCount.toString());
+    } catch (e) {
+      debugPrint('deleteAllEntries failed or Microsoft sign-in cancelled: ' + e.toString());
+    }
+
+    // 2) Force-delete any remaining schedule docs and all absences in Firestore
+    try {
+      final schedCol = _firestore.collection('users').doc(docIdToDelete).collection('schedule');
+      final schedSnap = await schedCol.get();
+      for (final d in schedSnap.docs) {
+        try { await d.reference.delete(); } catch (_) {}
+      }
+    } catch (e) {
+      debugPrint('Failed to clear Firestore schedule subcollection: ' + e.toString());
+    }
+
+    try {
+      final absCol = _firestore.collection('users').doc(docIdToDelete).collection('absences');
+      final absSnap = await absCol.get();
+      for (final d in absSnap.docs) {
+        try { await d.reference.delete(); } catch (_) {}
+      }
+    } catch (e) {
+      debugPrint('Failed to clear Firestore absences subcollection: ' + e.toString());
+    }
+
+    // 3) Delete the user document itself
+    debugPrint('Deleting user document: $docIdToDelete');
+    await _firestore.collection('users').doc(docIdToDelete).delete();
+    debugPrint('Firestore document deleted');
 
 if (_auth.currentUser != null) {
 await _auth.currentUser!.delete();
