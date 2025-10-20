@@ -262,7 +262,10 @@ class _EmptyView extends StatelessWidget {
     return const Center(
       child: Padding(
         padding: EdgeInsets.symmetric(horizontal: 24),
-        child: Text('No courses yet. Add sections from the Schedule tab.'),
+        child: Text(
+          'No courses yet\n Add sections from the Schedule tab',
+        textAlign: TextAlign.center,
+        ),
       ),
     );
   }
