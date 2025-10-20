@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/services.dart';
 
 class ProjectFormPage extends StatefulWidget {
   final Map<String, dynamic>? existingItem;
@@ -29,6 +30,8 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
   int? _endYear;
   bool _isCurrentlyActive = false;
   bool _isSaving = false;
+  
+  String? _dateError;
 
   final List<String> _months = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -43,6 +46,11 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
     _linkController = TextEditingController(text: widget.existingItem?['link'] ?? '');
     _descriptionController = TextEditingController(text: widget.existingItem?['description'] ?? '');
     _isCurrentlyActive = widget.existingItem?['isCurrentlyActive'] ?? false;
+    
+    // Add listeners to trigger rebuild for character counter
+    _titleController.addListener(() => setState(() {}));
+    _organizationController.addListener(() => setState(() {}));
+    _descriptionController.addListener(() => setState(() {}));
     
     if (widget.existingItem?['startDate'] != null) {
       final parts = widget.existingItem!['startDate'].split(' ');
@@ -82,8 +90,156 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
     return null;
   }
 
+  // Validation: Title
+  String? _validateTitle(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Please enter a project title';
+    }
+    
+    final trimmedValue = value.trim();
+    
+    if (trimmedValue.length > 30) {
+      return 'Title must be 30 characters or less';
+    }
+    
+    if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
+      return 'Title cannot contain only numbers';
+    }
+    
+    return null;
+  }
+
+  // Validation: Organization
+  String? _validateOrganization(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return null;
+    }
+    
+    final trimmedValue = value.trim();
+    
+    if (trimmedValue.length > 40) {
+      return 'Organization name must be 40 characters or less';
+    }
+    
+    if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
+      return 'Organization name cannot contain only numbers';
+    }
+    
+    return null;
+  }
+
+  // Validation: Link/URL
+  String? _validateLink(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return null;
+    }
+    
+    final trimmedValue = value.trim();
+    
+    if (!trimmedValue.startsWith('http://github.com/') &&
+        !trimmedValue.startsWith('https://github.com/')) {
+      return 'Link must be a GitHub URL';
+    }
+    
+    if (trimmedValue.length > 500) {
+      return 'URL must be 500 characters or less';
+    }
+    
+    return null;
+  }
+// Validation: Description
+String? _validateDescription(String? value) {
+  if (value == null || value.trim().isEmpty) {
+    return 'Please enter a description';
+  }
+  
+  final trimmedValue = value.trim();
+  final wordCount = trimmedValue.split(RegExp(r'\s+')).where((word) => word.isNotEmpty).length;
+  
+  if (wordCount < 50) {
+    return 'Description must be at least 50 words';
+  }
+  
+  if (trimmedValue.length > 600) {
+    return 'Description must be 600 characters or less';
+  }
+  
+  if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
+    return 'Description cannot contain only numbers';
+  }
+  
+  return null;
+}
+  // Validation: Date Range
+  String? _validateDateRange() {
+    if (_startMonth == null || _startYear == null || _isCurrentlyActive) {
+      return null;
+    }
+    
+    if (_endMonth == null || _endYear == null) {
+      return null;
+    }
+    
+    final startMonthIndex = _months.indexOf(_startMonth!);
+    final endMonthIndex = _months.indexOf(_endMonth!);
+    
+    if (_endYear! < _startYear!) {
+      return 'End date must be after start date';
+    }
+    
+    if (_endYear == _startYear && endMonthIndex < startMonthIndex) {
+      return 'End date must be after start date';
+    }
+    
+    return null;
+  }
+
+  // Validation: Future Date
+  String? _validateFutureDate() {
+    final now = DateTime.now();
+    final currentYear = now.year;
+    final currentMonthIndex = now.month - 1;
+    
+    if (_startMonth != null && _startYear != null) {
+      final startMonthIndex = _months.indexOf(_startMonth!);
+      
+      if (_startYear! > currentYear) {
+        return 'Start date cannot be in the future';
+      }
+      
+      if (_startYear == currentYear && startMonthIndex > currentMonthIndex) {
+        return 'Start date cannot be in the future';
+      }
+    }
+    
+    if (!_isCurrentlyActive && _endMonth != null && _endYear != null) {
+      final endMonthIndex = _months.indexOf(_endMonth!);
+      
+      if (_endYear! > currentYear) {
+        return 'End date cannot be in the future';
+      }
+      
+      if (_endYear == currentYear && endMonthIndex > currentMonthIndex) {
+        return 'End date cannot be in the future';
+      }
+    }
+    
+    return null;
+  }
+
+  void _validateDates() {
+    setState(() {
+      final dateRangeError = _validateDateRange();
+      final futureDateError = _validateFutureDate();
+      _dateError = dateRangeError ?? futureDateError;
+    });
+  }
+
   Future<void> _saveProject() async {
     if (!_formKey.currentState!.validate()) return;
+
+    _validateDates();
+    if (_dateError != null) return;
 
     setState(() => _isSaving = true);
 
@@ -108,6 +264,10 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
       List<dynamic> items = doc.data()?['projects'] ?? [];
 
       if (widget.existingItem != null && widget.itemIndex != null) {
+        if (widget.itemIndex! < 0 || widget.itemIndex! >= items.length) {
+          _showErrorMessage('Invalid project index');
+          return;
+        }
         items[widget.itemIndex!] = projectItem;
       } else {
         items.add(projectItem);
@@ -123,19 +283,41 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
       }
     } catch (e) {
       debugPrint('Error saving project: $e');
-      _showErrorMessage('Failed to save project');
+      
+      if (e is FirebaseException) {
+        switch (e.code) {
+          case 'permission-denied':
+            _showErrorMessage('You do not have permission to save this project');
+            break;
+          case 'unavailable':
+            _showErrorMessage('Network error. Please check your connection');
+            break;
+          case 'not-found':
+            _showErrorMessage('User document not found');
+            break;
+          default:
+            _showErrorMessage('Failed to save project: ${e.message}');
+        }
+      } else {
+        _showErrorMessage('Failed to save project');
+      }
     } finally {
-      setState(() => _isSaving = false);
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
     }
   }
 
   void _showErrorMessage(String message) {
+    if (!mounted) return;
+    
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
         backgroundColor: Colors.red[400],
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        duration: const Duration(seconds: 4),
       ),
     );
   }
@@ -197,36 +379,41 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            _buildTextField(
+                            _buildTextFieldWithCounter(
                               controller: _titleController,
                               label: 'Project Title *',
                               hint: 'e.g., AI Research Project',
-                              validator: (value) {
-                                if (value == null || value.trim().isEmpty) {
-                                  return 'Please enter a project title';
-                                }
-                                return null;
-                              },
+                              maxLength: 30,
+                              validator: _validateTitle,
                             ),
                             const SizedBox(height: 16.0),
-                            _buildTextField(
+                            _buildTextFieldWithCounter(
                               controller: _organizationController,
                               label: 'Organization',
                               hint: 'e.g., Google Developer Student Club',
+                              maxLength: 40,
+                              validator: _validateOrganization,
                             ),
                             const SizedBox(height: 16.0),
                             _buildTextField(
                               controller: _linkController,
                               label: 'Link/Attachment',
                               hint: 'e.g., https://github.com/yourproject',
+                              validator: _validateLink,
                             ),
                             const SizedBox(height: 16.0),
                             _buildDatePicker(
                               label: 'Start Date',
                               selectedMonth: _startMonth,
                               selectedYear: _startYear,
-                              onMonthChanged: (month) => setState(() => _startMonth = month),
-                              onYearChanged: (year) => setState(() => _startYear = year),
+                              onMonthChanged: (month) {
+                                setState(() => _startMonth = month);
+                                _validateDates();
+                              },
+                              onYearChanged: (year) {
+                                setState(() => _startYear = year);
+                                _validateDates();
+                              },
                             ),
                             const SizedBox(height: 16.0),
                             CheckboxListTile(
@@ -240,24 +427,46 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
                                     _endYear = null;
                                   }
                                 });
+                                _validateDates();
                               },
                               activeColor: const Color(0xFF0097b2),
                               contentPadding: EdgeInsets.zero,
                             ),
-                            if (!_isCurrentlyActive)
+                            if (!_isCurrentlyActive) ...[
                               _buildDatePicker(
                                 label: 'End Date',
                                 selectedMonth: _endMonth,
                                 selectedYear: _endYear,
-                                onMonthChanged: (month) => setState(() => _endMonth = month),
-                                onYearChanged: (year) => setState(() => _endYear = year),
+                                onMonthChanged: (month) {
+                                  setState(() => _endMonth = month);
+                                  _validateDates();
+                                },
+                                onYearChanged: (year) {
+                                  setState(() => _endYear = year);
+                                  _validateDates();
+                                },
+                              ),
+                            ],
+                            if (_dateError != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8.0),
+                                child: Text(
+                                  _dateError!,
+                                  style: const TextStyle(
+                                    color: Colors.red,
+                                    fontSize: 12,
+                                  ),
+                                ),
                               ),
                             const SizedBox(height: 16.0),
-                            _buildTextField(
+                            _buildTextFieldWithWordCounter(
                               controller: _descriptionController,
-                              label: 'Description',
+                              label: 'Description *',
                               hint: 'Describe your project...',
                               maxLines: 5,
+                              minWords: 50,
+                              maxLength: 600,
+                              validator: _validateDescription,
                             ),
                             const SizedBox(height: 24.0),
                             _buildSaveButton(),
@@ -324,6 +533,104 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
     );
   }
 
+  Widget _buildTextFieldWithCounter({
+    required TextEditingController controller,
+    required String label,
+    String? hint,
+    int maxLines = 1,
+    required int maxLength,
+    String? Function(String?)? validator,
+  }) {
+    final currentLength = controller.text.length;
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 14.0,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF0e0259),
+              ),
+            ),
+            Text(
+              '$currentLength/$maxLength',
+              style: TextStyle(
+                fontSize: 12.0,
+                color: currentLength > maxLength ? Colors.red : Colors.grey[600],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8.0),
+        TextFormField(
+          controller: controller,
+          maxLines: maxLines,
+          validator: validator,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+          inputFormatters: [
+            LengthLimitingTextInputFormatter(maxLength),
+          ],
+          decoration: _inputDecoration(hint),
+        ),
+      ],
+    );
+  }
+Widget _buildTextFieldWithWordCounter({
+  required TextEditingController controller,
+  required String label,
+  String? hint,
+  int maxLines = 1,
+  required int minWords,
+  required int maxLength,
+  String? Function(String?)? validator,
+}) {
+  final currentLength = controller.text.length;
+  final wordCount = controller.text.trim().split(RegExp(r'\s+')).where((word) => word.isNotEmpty).length;
+  
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 14.0,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF0e0259),
+            ),
+          ),
+          Text(
+            '$wordCount/$minWords words • $currentLength/$maxLength chars',
+            style: TextStyle(
+              fontSize: 12.0,
+              color: Colors.grey[600],
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 8.0),
+      TextFormField(
+        controller: controller,
+        maxLines: maxLines,
+        validator: validator,
+        autovalidateMode: AutovalidateMode.disabled, // Changed from onUserInteraction
+        inputFormatters: [
+          LengthLimitingTextInputFormatter(maxLength),
+        ],
+        decoration: _inputDecoration(hint),
+      ),
+    ],
+  );
+}
   Widget _buildTextField({
     required TextEditingController controller,
     required String label,
@@ -347,6 +654,7 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
           controller: controller,
           maxLines: maxLines,
           validator: validator,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           decoration: _inputDecoration(hint),
         ),
       ],

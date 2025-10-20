@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter/services.dart';
 import 'dart:io';
 
 class ClubFormPage extends StatefulWidget {
@@ -22,13 +23,13 @@ class _ClubFormPageState extends State<ClubFormPage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final ImagePicker _picker = ImagePicker();
-  
+
   late TextEditingController _titleController;
   late TextEditingController _organizationController;
   late TextEditingController _roleController;
   late TextEditingController _hoursController;
   late TextEditingController _descriptionController;
-  
+
   File? _certificateFile;
   String? _existingCertificateUrl;
   bool _isSaving = false;
@@ -42,6 +43,12 @@ class _ClubFormPageState extends State<ClubFormPage> {
     _hoursController = TextEditingController(text: widget.existingItem?['hours']?.toString() ?? '');
     _descriptionController = TextEditingController(text: widget.existingItem?['description'] ?? '');
     _existingCertificateUrl = widget.existingItem?['certificateUrl'];
+
+    // Add listeners to trigger rebuild for character counter
+    _titleController.addListener(() => setState(() {}));
+    _organizationController.addListener(() => setState(() {}));
+    _roleController.addListener(() => setState(() {}));
+    _descriptionController.addListener(() => setState(() {}));
   }
 
   @override
@@ -57,7 +64,7 @@ class _ClubFormPageState extends State<ClubFormPage> {
   Future<String?> _getUserDocId() async {
     final prefs = await SharedPreferences.getInstance();
     final microsoftDocId = prefs.getString('microsoft_user_doc_id');
-    
+
     if (microsoftDocId != null) {
       return microsoftDocId;
     } else if (_auth.currentUser != null) {
@@ -66,15 +73,126 @@ class _ClubFormPageState extends State<ClubFormPage> {
     return null;
   }
 
+  // Validation: Title (Club Name)
+  String? _validateTitle(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Please enter a club name';
+    }
+
+    final trimmedValue = value.trim();
+
+    if (trimmedValue.length > 30) {
+      return 'Club name must be 30 characters or less';
+    }
+
+    if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
+      return 'Club name cannot contain only numbers';
+    }
+
+    return null;
+  }
+
+  // Validation: Organization
+  String? _validateOrganization(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return null;
+    }
+
+    final trimmedValue = value.trim();
+
+    if (trimmedValue.length > 40) {
+      return 'Organization name must be 40 characters or less';
+    }
+
+    if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
+      return 'Organization name cannot contain only numbers';
+    }
+
+    return null;
+  }
+
+  // Validation: Role
+  String? _validateRole(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Please enter your role';
+    }
+
+    final trimmedValue = value.trim();
+
+    if (trimmedValue.length > 30) {
+      return 'Role must be 30 characters or less';
+    }
+
+    if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
+      return 'Role cannot contain only numbers';
+    }
+
+    return null;
+  }
+
+  // Validation: Hours
+  String? _validateHours(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return null; // Hours is optional
+    }
+
+    final trimmedValue = value.trim();
+    final hours = int.tryParse(trimmedValue);
+
+    if (hours == null) {
+      return 'Please enter a valid number';
+    }
+
+    if (hours < 0) {
+      return 'Hours cannot be negative';
+    }
+
+    if (hours > 10000) {
+      return 'Hours must be less than 10,000';
+    }
+
+    return null;
+  }
+
+  // Validation: Description
+  String? _validateDescription(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return null; // Description is optional
+    }
+
+    final trimmedValue = value.trim();
+    final wordCount = trimmedValue.split(RegExp(r'\s+')).where((word) => word.isNotEmpty).length;
+
+    if (wordCount < 20) {
+      return 'Description must be at least 20 words';
+    }
+
+    if (trimmedValue.length > 600) {
+      return 'Description must be 600 characters or less';
+    }
+
+    if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
+      return 'Description cannot contain only numbers';
+    }
+
+    return null;
+  }
+
   Future<void> _pickCertificate() async {
     try {
-      final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+      final XFile? image = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 85,
+      );
       if (image != null) {
         setState(() {
           _certificateFile = File(image.path);
         });
       }
     } catch (e) {
+      debugPrint('Error picking image: $e');
       _showErrorMessage('Failed to pick image');
     }
   }
@@ -85,10 +203,31 @@ class _ClubFormPageState extends State<ClubFormPage> {
     try {
       final String fileName = 'clubs/${userId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
       final Reference ref = _storage.ref().child(fileName);
-      await ref.putFile(_certificateFile!);
-      return await ref.getDownloadURL();
+
+      final UploadTask uploadTask = ref.putFile(_certificateFile!);
+      final TaskSnapshot snapshot = await uploadTask;
+
+      return await snapshot.ref.getDownloadURL();
     } catch (e) {
       debugPrint('Error uploading certificate: $e');
+
+      if (e is FirebaseException) {
+        switch (e.code) {
+          case 'unauthorized':
+            _showErrorMessage('You do not have permission to upload files');
+            break;
+          case 'canceled':
+            _showErrorMessage('Upload was canceled');
+            break;
+          case 'unknown':
+            _showErrorMessage('An unknown error occurred during upload');
+            break;
+          default:
+            _showErrorMessage('Failed to upload certificate: ${e.message}');
+        }
+      } else {
+        _showErrorMessage('Failed to upload certificate');
+      }
       return null;
     }
   }
@@ -109,10 +248,10 @@ class _ClubFormPageState extends State<ClubFormPage> {
 
       final clubItem = {
         'title': _titleController.text.trim(),
-        'organization': _organizationController.text.trim(),
+        'organization': _organizationController.text.trim().isEmpty ? null : _organizationController.text.trim(),
         'role': _roleController.text.trim(),
-        'hours': int.tryParse(_hoursController.text.trim()),
-        'description': _descriptionController.text.trim(),
+        'hours': _hoursController.text.trim().isEmpty ? null : int.tryParse(_hoursController.text.trim()),
+        'description': _descriptionController.text.trim().isEmpty ? null : _descriptionController.text.trim(),
         'certificateUrl': certificateUrl,
       };
 
@@ -120,6 +259,10 @@ class _ClubFormPageState extends State<ClubFormPage> {
       List<dynamic> items = doc.data()?['clubs'] ?? [];
 
       if (widget.existingItem != null && widget.itemIndex != null) {
+        if (widget.itemIndex! < 0 || widget.itemIndex! >= items.length) {
+          _showErrorMessage('Invalid club index');
+          return;
+        }
         items[widget.itemIndex!] = clubItem;
       } else {
         items.add(clubItem);
@@ -135,19 +278,41 @@ class _ClubFormPageState extends State<ClubFormPage> {
       }
     } catch (e) {
       debugPrint('Error saving club: $e');
-      _showErrorMessage('Failed to save club');
+
+      if (e is FirebaseException) {
+        switch (e.code) {
+          case 'permission-denied':
+            _showErrorMessage('You do not have permission to save this club');
+            break;
+          case 'unavailable':
+            _showErrorMessage('Network error. Please check your connection');
+            break;
+          case 'not-found':
+            _showErrorMessage('User document not found');
+            break;
+          default:
+            _showErrorMessage('Failed to save club: ${e.message}');
+        }
+      } else {
+        _showErrorMessage('Failed to save club');
+      }
     } finally {
-      setState(() => _isSaving = false);
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
     }
   }
 
   void _showErrorMessage(String message) {
+    if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: Colors.red[400],
+        backgroundColor: Colors.red[600],
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        duration: const Duration(seconds: 4),
       ),
     );
   }
@@ -209,58 +374,48 @@ class _ClubFormPageState extends State<ClubFormPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            _buildTextField(
+                            _buildTextFieldWithCounter(
                               controller: _titleController,
                               label: 'Club Name *',
                               hint: 'e.g., Robotics Club',
-                              validator: (value) {
-                                if (value == null || value.trim().isEmpty) {
-                                  return 'Please enter a club name';
-                                }
-                                return null;
-                              },
+                              maxLength: 30,
+                              validator: _validateTitle,
                             ),
                             const SizedBox(height: 16.0),
-                            _buildTextField(
+                            _buildTextFieldWithCounter(
                               controller: _organizationController,
                               label: 'Organization',
                               hint: 'e.g., University Engineering Department',
+                              maxLength: 40,
+                              validator: _validateOrganization,
                             ),
                             const SizedBox(height: 16.0),
-                            _buildTextField(
+                            _buildTextFieldWithCounter(
                               controller: _roleController,
                               label: 'Role *',
                               hint: 'e.g., President, Member, Volunteer',
-                              validator: (value) {
-                                if (value == null || value.trim().isEmpty) {
-                                  return 'Please enter your role';
-                                }
-                                return null;
-                              },
+                              maxLength: 30,
+                              validator: _validateRole,
                             ),
                             const SizedBox(height: 16.0),
                             _buildTextField(
                               controller: _hoursController,
                               label: 'Participation Hours',
                               hint: 'e.g., 50',
-                              validator: (value) {
-                                if (value != null && value.trim().isNotEmpty) {
-                                  final hours = int.tryParse(value.trim());
-                                  if (hours == null || hours < 0) {
-                                    return 'Please enter valid hours';
-                                  }
-                                }
-                                return null;
-                              },
+                              keyboardType: TextInputType.number,
+                              validator: _validateHours,
                             ),
                             const SizedBox(height: 16.0),
                             _buildCertificatePicker(),
                             const SizedBox(height: 16.0),
-                            _buildTextField(
+                            _buildTextFieldWithWordCounter(
                               controller: _descriptionController,
                               label: 'Description',
                               hint: 'Describe your activities and contributions...',
                               maxLines: 5,
+                              minWords: 20,
+                              maxLength: 600,
+                              validator: _validateDescription,
                             ),
                             const SizedBox(height: 24.0),
                             _buildSaveButton(),
@@ -283,7 +438,7 @@ class _ClubFormPageState extends State<ClubFormPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Certificate (Optional)',
+          'Certificate',
           style: TextStyle(
             fontSize: 14.0,
             fontWeight: FontWeight.w600,
@@ -328,12 +483,115 @@ class _ClubFormPageState extends State<ClubFormPage> {
     );
   }
 
+  Widget _buildTextFieldWithCounter({
+    required TextEditingController controller,
+    required String label,
+    String? hint,
+    int maxLines = 1,
+    required int maxLength,
+    String? Function(String?)? validator,
+    TextInputType? keyboardType,
+  }) {
+    final currentLength = controller.text.length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 14.0,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF0e0259),
+              ),
+            ),
+            Text(
+              '$currentLength/$maxLength',
+              style: TextStyle(
+                fontSize: 12.0,
+                color: Colors.grey[600],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8.0),
+        TextFormField(
+          controller: controller,
+          maxLines: maxLines,
+          validator: validator,
+          keyboardType: keyboardType,
+          autovalidateMode: AutovalidateMode.disabled,
+          inputFormatters: [
+            LengthLimitingTextInputFormatter(maxLength),
+          ],
+          decoration: _inputDecoration(hint),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTextFieldWithWordCounter({
+    required TextEditingController controller,
+    required String label,
+    String? hint,
+    int maxLines = 1,
+    required int minWords,
+    required int maxLength,
+    String? Function(String?)? validator,
+  }) {
+    final currentLength = controller.text.length;
+    final wordCount = controller.text.trim().split(RegExp(r'\s+')).where((word) => word.isNotEmpty).length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 14.0,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF0e0259),
+              ),
+            ),
+            Text(
+              '$wordCount/$minWords words • $currentLength/$maxLength chars',
+              style: TextStyle(
+                fontSize: 12.0,
+                color: Colors.grey[600],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8.0),
+        TextFormField(
+          controller: controller,
+          maxLines: maxLines,
+          validator: validator,
+          autovalidateMode: AutovalidateMode.disabled,
+          inputFormatters: [
+            LengthLimitingTextInputFormatter(maxLength),
+          ],
+          decoration: _inputDecoration(hint),
+        ),
+      ],
+    );
+  }
+
   Widget _buildTextField({
     required TextEditingController controller,
     required String label,
     String? hint,
     int maxLines = 1,
     String? Function(String?)? validator,
+    TextInputType? keyboardType,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -351,7 +609,8 @@ class _ClubFormPageState extends State<ClubFormPage> {
           controller: controller,
           maxLines: maxLines,
           validator: validator,
-          keyboardType: label.contains('Hours') ? TextInputType.number : TextInputType.text,
+          keyboardType: keyboardType,
+          autovalidateMode: AutovalidateMode.disabled,
           decoration: _inputDecoration(hint),
         ),
       ],
@@ -361,7 +620,7 @@ class _ClubFormPageState extends State<ClubFormPage> {
   InputDecoration _inputDecoration(String? hint) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: TextStyle(color: Colors.grey[400]),
+      hintStyle: TextStyle(color: Colors.grey[600]),
       filled: true,
       fillColor: Colors.white,
       border: OutlineInputBorder(

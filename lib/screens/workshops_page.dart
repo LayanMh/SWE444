@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter/services.dart';
 import 'dart:io';
 
 class WorkshopFormPage extends StatefulWidget {
@@ -22,12 +23,12 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final ImagePicker _picker = ImagePicker();
-  
+
   late TextEditingController _titleController;
   late TextEditingController _organizationController;
   late TextEditingController _yearController;
   late TextEditingController _descriptionController;
-  
+
   File? _certificateFile;
   String? _existingCertificateUrl;
   bool _isSaving = false;
@@ -40,6 +41,11 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
     _yearController = TextEditingController(text: widget.existingItem?['year']?.toString() ?? '');
     _descriptionController = TextEditingController(text: widget.existingItem?['description'] ?? '');
     _existingCertificateUrl = widget.existingItem?['certificateUrl'];
+
+    // Add listeners to trigger rebuild for character counter
+    _titleController.addListener(() => setState(() {}));
+    _organizationController.addListener(() => setState(() {}));
+    _descriptionController.addListener(() => setState(() {}));
   }
 
   @override
@@ -54,7 +60,7 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
   Future<String?> _getUserDocId() async {
     final prefs = await SharedPreferences.getInstance();
     final microsoftDocId = prefs.getString('microsoft_user_doc_id');
-    
+
     if (microsoftDocId != null) {
       return microsoftDocId;
     } else if (_auth.currentUser != null) {
@@ -63,15 +69,109 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
     return null;
   }
 
+  // Validation: Title
+  String? _validateTitle(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Please enter a workshop title';
+    }
+
+    final trimmedValue = value.trim();
+
+    if (trimmedValue.length > 30) {
+      return 'Title must be 30 characters or less';
+    }
+
+    if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
+      return 'Title cannot contain only numbers';
+    }
+
+    return null;
+  }
+
+  // Validation: Organization
+  String? _validateOrganization(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return null;
+    }
+
+    final trimmedValue = value.trim();
+
+    if (trimmedValue.length > 40) {
+      return 'Organization name must be 40 characters or less';
+    }
+
+    if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
+      return 'Organization name cannot contain only numbers';
+    }
+
+    return null;
+  }
+
+  // Validation: Year
+  String? _validateYear(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Please enter a year';
+    }
+
+    final trimmedValue = value.trim();
+    final year = int.tryParse(trimmedValue);
+
+    if (year == null) {
+      return 'Please enter a valid year';
+    }
+
+    final currentYear = DateTime.now().year;
+
+    if (year < 2000) {
+      return 'Year must be 2000 or later';
+    }
+
+    if (year > currentYear) {
+      return 'Year cannot be in the future';
+    }
+
+    return null;
+  }
+
+  // Validation: Description
+  String? _validateDescription(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return null; // Description is optional
+    }
+
+    final trimmedValue = value.trim();
+    final wordCount = trimmedValue.split(RegExp(r'\s+')).where((word) => word.isNotEmpty).length;
+
+    if (wordCount < 20) {
+      return 'Description must be at least 20 words';
+    }
+
+    if (trimmedValue.length > 600) {
+      return 'Description must be 600 characters or less';
+    }
+
+    if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
+      return 'Description cannot contain only numbers';
+    }
+
+    return null;
+  }
+
   Future<void> _pickCertificate() async {
     try {
-      final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+      final XFile? image = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 85,
+      );
       if (image != null) {
         setState(() {
           _certificateFile = File(image.path);
         });
       }
     } catch (e) {
+      debugPrint('Error picking image: $e');
       _showErrorMessage('Failed to pick image');
     }
   }
@@ -82,10 +182,31 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
     try {
       final String fileName = 'workshops/${userId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
       final Reference ref = _storage.ref().child(fileName);
-      await ref.putFile(_certificateFile!);
-      return await ref.getDownloadURL();
+      
+      final UploadTask uploadTask = ref.putFile(_certificateFile!);
+      final TaskSnapshot snapshot = await uploadTask;
+      
+      return await snapshot.ref.getDownloadURL();
     } catch (e) {
       debugPrint('Error uploading certificate: $e');
+      
+      if (e is FirebaseException) {
+        switch (e.code) {
+          case 'unauthorized':
+            _showErrorMessage('You do not have permission to upload files');
+            break;
+          case 'canceled':
+            _showErrorMessage('Upload was canceled');
+            break;
+          case 'unknown':
+            _showErrorMessage('An unknown error occurred during upload');
+            break;
+          default:
+            _showErrorMessage('Failed to upload certificate: ${e.message}');
+        }
+      } else {
+        _showErrorMessage('Failed to upload certificate');
+      }
       return null;
     }
   }
@@ -108,7 +229,7 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
         'title': _titleController.text.trim(),
         'organization': _organizationController.text.trim(),
         'year': int.tryParse(_yearController.text.trim()),
-        'description': _descriptionController.text.trim(),
+        'description': _descriptionController.text.trim().isEmpty ? null : _descriptionController.text.trim(),
         'certificateUrl': certificateUrl,
       };
 
@@ -116,6 +237,10 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
       List<dynamic> items = doc.data()?['workshops'] ?? [];
 
       if (widget.existingItem != null && widget.itemIndex != null) {
+        if (widget.itemIndex! < 0 || widget.itemIndex! >= items.length) {
+          _showErrorMessage('Invalid workshop index');
+          return;
+        }
         items[widget.itemIndex!] = workshopItem;
       } else {
         items.add(workshopItem);
@@ -131,19 +256,41 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
       }
     } catch (e) {
       debugPrint('Error saving workshop: $e');
-      _showErrorMessage('Failed to save workshop');
+
+      if (e is FirebaseException) {
+        switch (e.code) {
+          case 'permission-denied':
+            _showErrorMessage('You do not have permission to save this workshop');
+            break;
+          case 'unavailable':
+            _showErrorMessage('Network error. Please check your connection');
+            break;
+          case 'not-found':
+            _showErrorMessage('User document not found');
+            break;
+          default:
+            _showErrorMessage('Failed to save workshop: ${e.message}');
+        }
+      } else {
+        _showErrorMessage('Failed to save workshop');
+      }
     } finally {
-      setState(() => _isSaving = false);
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
     }
   }
 
   void _showErrorMessage(String message) {
+    if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: Colors.red[400],
+        backgroundColor: Colors.red[600],
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        duration: const Duration(seconds: 4),
       ),
     );
   }
@@ -205,45 +352,38 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            _buildTextField(
+                            _buildTextFieldWithCounter(
                               controller: _titleController,
                               label: 'Workshop Title *',
                               hint: 'e.g., Machine Learning Workshop',
-                              validator: (value) {
-                                if (value == null || value.trim().isEmpty) {
-                                  return 'Please enter a workshop title';
-                                }
-                                return null;
-                              },
+                              maxLength: 30,
+                              validator: _validateTitle,
                             ),
                             const SizedBox(height: 16.0),
-                            _buildTextField(
+                            _buildTextFieldWithCounter(
                               controller: _organizationController,
                               label: 'Organization',
                               hint: 'e.g., IEEE Student Branch',
+                              maxLength: 40,
+                              validator: _validateOrganization,
                             ),
                             const SizedBox(height: 16.0),
                             _buildTextField(
                               controller: _yearController,
                               label: 'Year *',
                               hint: 'e.g., 2024',
-                              validator: (value) {
-                                if (value == null || value.trim().isEmpty) {
-                                  return 'Please enter a year';
-                                }
-                                final year = int.tryParse(value.trim());
-                                if (year == null || year < 2000 || year > 2025) {
-                                  return 'Please enter a valid year (2000-2025)';
-                                }
-                                return null;
-                              },
+                              validator: _validateYear,
+                              keyboardType: TextInputType.number,
                             ),
                             const SizedBox(height: 16.0),
-                            _buildTextField(
+                            _buildTextFieldWithWordCounter(
                               controller: _descriptionController,
                               label: 'Description',
                               hint: 'What did you learn?',
                               maxLines: 5,
+                              minWords: 20,
+                              maxLength: 600,
+                              validator: _validateDescription,
                             ),
                             const SizedBox(height: 16.0),
                             _buildCertificatePicker(),
@@ -313,12 +453,115 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
     );
   }
 
+  Widget _buildTextFieldWithCounter({
+    required TextEditingController controller,
+    required String label,
+    String? hint,
+    int maxLines = 1,
+    required int maxLength,
+    String? Function(String?)? validator,
+    TextInputType? keyboardType,
+  }) {
+    final currentLength = controller.text.length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 14.0,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF0e0259),
+              ),
+            ),
+            Text(
+              '$currentLength/$maxLength',
+              style: TextStyle(
+                fontSize: 12.0,
+                color: Colors.grey[600],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8.0),
+        TextFormField(
+          controller: controller,
+          maxLines: maxLines,
+          validator: validator,
+          keyboardType: keyboardType,
+          autovalidateMode: AutovalidateMode.disabled,
+          inputFormatters: [
+            LengthLimitingTextInputFormatter(maxLength),
+          ],
+          decoration: _inputDecoration(hint),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTextFieldWithWordCounter({
+    required TextEditingController controller,
+    required String label,
+    String? hint,
+    int maxLines = 1,
+    required int minWords,
+    required int maxLength,
+    String? Function(String?)? validator,
+  }) {
+    final currentLength = controller.text.length;
+    final wordCount = controller.text.trim().split(RegExp(r'\s+')).where((word) => word.isNotEmpty).length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 14.0,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF0e0259),
+              ),
+            ),
+            Text(
+              '$wordCount/$minWords words • $currentLength/$maxLength chars',
+              style: TextStyle(
+                fontSize: 12.0,
+                color: Colors.grey[600],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8.0),
+        TextFormField(
+          controller: controller,
+          maxLines: maxLines,
+          validator: validator,
+          autovalidateMode: AutovalidateMode.disabled,
+          inputFormatters: [
+            LengthLimitingTextInputFormatter(maxLength),
+          ],
+          decoration: _inputDecoration(hint),
+        ),
+      ],
+    );
+  }
+
   Widget _buildTextField({
     required TextEditingController controller,
     required String label,
     String? hint,
     int maxLines = 1,
     String? Function(String?)? validator,
+    TextInputType? keyboardType,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -336,6 +579,8 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
           controller: controller,
           maxLines: maxLines,
           validator: validator,
+          keyboardType: keyboardType,
+          autovalidateMode: AutovalidateMode.disabled,
           decoration: _inputDecoration(hint),
         ),
       ],
