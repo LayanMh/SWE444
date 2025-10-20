@@ -2,11 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timezone/data/latest.dart' show initializeTimeZones;
 
 import 'calendar_screen.dart';
 import 'experience.dart';
 import 'community.dart';
 import 'profile.dart';
+
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/timezone.dart';
+
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -16,13 +21,87 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+   
+  final FlutterLocalNotificationsPlugin notificationsPlugin =
+    FlutterLocalNotificationsPlugin();
+  @override
+  void initState(){
+    init();
+    super.initState();
+  }
+
+Future<void> init() async {
+  initializeTimeZones();
+  //! https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+  setLocalLocation(
+    getLocation('Asia/Riyadh'),
+  );
+  const androidSettings =
+    AndroidInitializationSettings('@mipmap/launcher_icon');
+  const InitializationSettings initializationSettings =
+      InitializationSettings(
+        android: androidSettings,
+  );
+
+await notificationsPlugin.initialize(initializationSettings);
+}
+
+Future<void> showInstantNotification({
+  required int id,
+  required String title,
+  required String body,
+}) async {
+  await notificationsPlugin.show(
+    id,
+    title,
+    body,
+    const NotificationDetails(
+      android: AndroidNotificationDetails(
+        'instant_notification_channel_id',
+        'Instant Notifications',
+        channelDescription: 'Instant notification channel',
+        importance: Importance.max,
+        priority: Priority.high,
+      ), // AndroidNotificationDetails
+    ), // NotificationDetails
+  );
+}
+
+Future<void> scheduleReminder({
+  required int id,
+  required String title,
+  String? body,
+}) async {
+  TZDateTime now = TZDateTime.now(local);
+  TZDateTime scheduledDate = now.add(
+    Duration (seconds: 3),
+  );
+await notificationsPlugin.zonedSchedule(
+  id,
+  title,
+  body,
+  scheduledDate,
+  const NotificationDetails(
+    android: AndroidNotificationDetails (
+      'daily_reminder_channel_id', // A unique ID to group notifications together.
+      'Daily Reminders', // A human-readable name shown to users in their notification settings.
+      channelDescription: 'Reminder to complete daily habits',
+      importance: Importance.max,
+      priority: Priority.high,
+    ), // AndroidNotificationDetails
+  ), // NotificationDetails
+  androidScheduleMode: AndroidScheduleMode. inexactAllowWhileIdle,
+  matchDateTimeComponents:
+      DateTimeComponents.dayOfWeekAndTime, // or dateAndTime
+  );
+}
 
   int _selectedIndex = 2; 
 final GlobalKey<ProfileScreenState> _profileKey = GlobalKey<ProfileScreenState>();
 late final List<Widget> _tabs = <Widget>[
   ProfileScreen(key: _profileKey),  // ← add key here
   const CalendarScreen(),
-  const _HomeTab(),
+  //const _HomeTab(),
   const ExperiencePage(),
   const CommunityPage(),
 ];
@@ -63,8 +142,34 @@ late final List<Widget> _tabs = <Widget>[
   setState(() => _selectedIndex = i);
 }
 
+@override
+Widget build (BuildContext context) {
+  return Scaffold(
+    appBar: AppBar(
+      backgroundColor: Theme. of (context).colorScheme.inversePrimary,
+      title: Text('Flutter Pro'),
+      ), // AppBar
+    body: Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: <Widget>[
+          FilledButton(
+            onPressed: () {
+              showInstantNotification(
+                id: 0, title: 'Instant notif', body: 'body');
+            },
+            child: Text('Instant notif'),
+          ), // FilledButton
+          FilledButton(
+            onPressed: () {},
+            child: Text('Scheduled notif'),
+          ), // FilledButton
+        ], // <Widget>[]
+      ), // Column
+    ), // Center
+  ); // Scaffold
 
-  @override
+  /*@override
   Widget build(BuildContext context) {
     return Scaffold(
       body: IndexedStack(index: _selectedIndex, children: _tabs),
@@ -96,10 +201,10 @@ late final List<Widget> _tabs = <Widget>[
         ],
       ),
     );
-  }
+  }*/
 }
 
-class _HomeTab extends StatefulWidget {
+/*class _HomeTab extends StatefulWidget {
   const _HomeTab();
 
   @override
@@ -348,5 +453,5 @@ class _FeatureCard extends StatelessWidget {
         ),
       ),
     );
-  }
+  }*/
 }

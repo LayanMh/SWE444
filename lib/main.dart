@@ -20,6 +20,9 @@ import 'screens/welcome_screen.dart';
 import 'screens/calendar_screen.dart';
 import 'screens/add_lecture_screen.dart';
 
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/timezone.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
@@ -36,9 +39,9 @@ Future<void> main() async {
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class MyApp extends StatelessWidget { 
 
+const MyApp({super.key});
   @override
   Widget build(BuildContext context) {
     final colorScheme = const ColorScheme.light(
