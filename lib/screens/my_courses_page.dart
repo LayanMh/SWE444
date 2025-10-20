@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
+import '../providers/schedule_provider.dart';
 import '../services/schedule_service.dart';
 
 class MyCoursesPage extends StatefulWidget {
@@ -25,6 +27,22 @@ class _MyCoursesPageState extends State<MyCoursesPage> {
   ];
 
   final DateFormat _timeFormatter = DateFormat('hh:mm a');
+
+  Future<void> _refreshProviderSchedule() async {
+    if (!mounted) {
+      return;
+    }
+    final provider = context.read<ScheduleProvider>();
+    try {
+      final entries = await ScheduleService.fetchScheduleOnce();
+      if (!mounted) {
+        return;
+      }
+      provider.replaceLectures(entries.map((entry) => entry.toLecture()));
+    } catch (_) {
+      // Ignore sync errors; UI already reflects Firestore via the stream.
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -246,6 +264,7 @@ class _MyCoursesPageState extends State<MyCoursesPage> {
           ),
         );
       }
+      await _refreshProviderSchedule();
     } catch (error) {
       if (!mounted) return;
       messenger.showSnackBar(
@@ -276,6 +295,7 @@ class _MyCoursesPageState extends State<MyCoursesPage> {
           content: Text('${entry.courseCode} removed from your schedule.'),
         ),
       );
+      await _refreshProviderSchedule();
     } catch (error) {
       if (!mounted) return;
       messenger.showSnackBar(

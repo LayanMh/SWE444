@@ -10,12 +10,20 @@ class ScheduleProvider with ChangeNotifier {
     return _lectures.any((lecture) => lecture.section == section);
   }
 
+  void replaceLectures(Iterable<Lecture> lectures) {
+    _lectures
+      ..clear()
+      ..addAll(lectures);
+    notifyListeners();
+  }
+
   Lecture? findTimeConflict(Lecture candidate) {
     for (final lecture in _lectures) {
       if (candidate.dayOfWeek != lecture.dayOfWeek) {
         continue;
       }
-      final bool overlap = candidate.startTime < lecture.endTime &&
+      final bool overlap =
+          candidate.startTime < lecture.endTime &&
           candidate.endTime > lecture.startTime;
       if (overlap) {
         return lecture;
@@ -51,4 +59,3 @@ class ScheduleProvider with ChangeNotifier {
     notifyListeners();
   }
 }
-

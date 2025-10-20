@@ -50,6 +50,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
   int _currentPage = 0;
   bool _isLoading = false;
   String? _error;
+  // Local cache so icons flip immediately after marking without waiting for Firestore
+  final Set<String> _recentlyMarkedAbsent = <String>{};
 
   @override
   void initState() {
@@ -140,7 +142,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
         _isLoading = false;
       });
     }
-    // âœ… Use existing session
+    // ✅ Use existing session
     final account =
         MicrosoftAuthService.currentAccount ??
         await MicrosoftAuthService.ensureSignedIn(interactive: interactive);
@@ -194,8 +196,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 
   Widget _buildAddSectionButton({
-    EdgeInsetsGeometry padding = const EdgeInsets.only(right: 16, bottom: 8),
-    double width = 170,
+    EdgeInsetsGeometry padding = const EdgeInsets.only(right: 16, bottom: 12),
+    double width = 152,
   }) {
     return Padding(
       padding: padding,
@@ -213,7 +215,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
             decoration: const BoxDecoration(
               borderRadius: BorderRadius.all(Radius.circular(24)),
               gradient: LinearGradient(
-                colors: <Color>[_CalendarPalette.accentPrimary, _CalendarPalette.accentSecondary],
+                colors: <Color>[
+                  _CalendarPalette.accentPrimary,
+                  _CalendarPalette.accentSecondary,
+                ],
                 begin: Alignment.centerLeft,
                 end: Alignment.centerRight,
               ),
@@ -241,6 +246,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   Widget _decorateBackground(Widget child) {
     return Container(
+      constraints: const BoxConstraints.expand(),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           colors: <Color>[
@@ -286,57 +292,44 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   Widget _buildEmptyState() {
     final theme = Theme.of(context);
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: <Color>[
-            _CalendarPalette.gradientStart,
-            _CalendarPalette.gradientEnd,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: RefreshIndicator(
+    return _decorateBackground(
+      RefreshIndicator(
         onRefresh: _handleRefresh,
-        child: SingleChildScrollView(
+        child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.calendar_today_rounded,
-                size: 64,
-                color: _CalendarPalette.accentPrimary,
+          children: [
+            Icon(
+              Icons.calendar_today_rounded,
+              size: 64,
+              color: _CalendarPalette.accentPrimary,
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Build your calendar',
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
               ),
-              const SizedBox(height: 24),
-              Text(
-                'Build your calendar',
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: _CalendarPalette.textStrong,
-                ),
-                textAlign: TextAlign.center,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Tap "Add Section" to start crafting your schedule.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: Colors.white70,
               ),
-              const SizedBox(height: 12),
-              Text(
-                'Tap "Add Section" to start crafting your schedule.',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: _CalendarPalette.textMuted,
-                ),
-                textAlign: TextAlign.center,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            Align(
+              alignment: Alignment.center,
+              child: _buildAddSectionButton(
+                padding: const EdgeInsets.only(bottom: 24),
+                width: 168,
               ),
-              const SizedBox(height: 32),
-              Align(
-                alignment: Alignment.center,
-                child: _buildAddSectionButton(
-                  padding: EdgeInsets.zero,
-                  width: 200,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -361,6 +354,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final isToday = _isSameDay(currentDay, DateTime.now());
 
     return Container(
+      constraints: const BoxConstraints.expand(),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           colors: <Color>[
@@ -467,14 +461,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
                       ),
                     if (currentDayEvents.isNotEmpty &&
                         !isToday &&
-                        _dayKeys.any(
-                          (day) => _isSameDay(day, DateTime.now()),
-                        ))
+                        _dayKeys.any((day) => _isSameDay(day, DateTime.now())))
                       const SizedBox(width: 12),
                     if (!isToday &&
-                        _dayKeys.any(
-                          (day) => _isSameDay(day, DateTime.now()),
-                        ))
+                        _dayKeys.any((day) => _isSameDay(day, DateTime.now())))
                       TextButton.icon(
                         style: TextButton.styleFrom(
                           foregroundColor: _CalendarPalette.headerStrong,
@@ -581,51 +571,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       borderRadius: BorderRadius.circular(22),
       child: InkWell(
         borderRadius: BorderRadius.circular(22),
-        onTap: () async {
-          final start = event.start;
-          if (start == null) return;
-          final now = DateTime.now();
-          final eventDay = DateTime(start.year, start.month, start.day);
-          final today = DateTime(now.year, now.month, now.day);
-          final isFutureDay = eventDay.isAfter(today);
-          if (isFutureDay) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'You can only record absence for today or past classes.',
-                ),
-                duration: Duration(seconds: 2),
-              ),
-            );
-            return;
-          }
-
-          // Prevent opening if absence already recorded for this event
-          final uid = FirebaseAuth.instance.currentUser?.uid;
-          if (uid != null) {
-            try {
-              final snap = await FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(uid)
-                  .collection('absences')
-                  .doc(event.id)
-                  .get();
-              final status = (snap.data()?['status'] ?? '').toString();
-              if (snap.exists && status == 'absent') {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Absence already recorded for this class.'),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
-                return;
-              }
-            } catch (_) {
-              // If check fails, fall through to allow dialog
-            }
-          }
-          _openAbsenceDialog(event);
-        },
+        onTap: null, // Recording absence is via the icon only
         child: Ink(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(22),
@@ -734,13 +680,45 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 ),
                 // Hide the action icon for future events
                 if (!(event.start != null &&
-                    DateTime(event.start!.year, event.start!.month, event.start!.day)
-                        .isAfter(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day)))) ...[
+                    DateTime(
+                      event.start!.year,
+                      event.start!.month,
+                      event.start!.day,
+                    ).isAfter(
+                      DateTime(
+                        DateTime.now().year,
+                        DateTime.now().month,
+                        DateTime.now().day,
+                      ),
+                    ))) ...[
                   const SizedBox(width: 12),
-                  IconButton(
-                    icon: const Icon(Icons.event_available_rounded),
-                    color: _CalendarPalette.accentPrimary,
-                    onPressed: () => _openAbsenceDialog(event),
+                  FutureBuilder<bool>(
+                    future: _isEventAlreadyAbsent(event.id),
+                    builder: (context, snap) {
+                      final isAbsent = snap.data == true;
+                      final icon = isAbsent
+                          ? const Icon(Icons.person_off_outlined)
+                          : const Icon(Icons.person_outline);
+                      final color = isAbsent
+                          ? Colors.redAccent
+                          : _CalendarPalette.accentPrimary;
+                      final tooltip = isAbsent
+                          ? 'Absence recorded'
+                          : 'Record absence';
+                      return IconButton(
+                        tooltip: tooltip,
+                        visualDensity: VisualDensity.compact,
+                        icon: icon,
+                        color: color,
+                        onPressed: () async {
+                          await _confirmAbsenceToggle(
+                            event,
+                            isAbsent: isAbsent,
+                          );
+                          if (mounted) setState(() {});
+                        },
+                      );
+                    },
                   ),
                 ],
               ],
@@ -861,74 +839,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
     return '$startLabel - ${formatter.format(end)}';
   }
 
-  /// Extract a course code from the event subject, e.g. "CS101 ï¿½ Lecture 5".
+  /// Extract a course code from the event subject, e.g. "CS101 � Lecture 5".
   String _resolveCourseId(MicrosoftCalendarEvent e) {
     final s = (e.subject).toUpperCase();
     final m = RegExp(r'[A-Z]{2,}\s?\d{2,}').firstMatch(s); // CS101 or CS 101
     return (m?.group(0)?.replaceAll(' ', '')) ?? 'UNASSIGNED';
   }
 
-  /// Show dialog to mark Absent / Cancelled / Clear (present).
-  void _openAbsenceDialog(MicrosoftCalendarEvent event) {
-    final String eventId = event.id; // Microsoft event id (must be non-null)
-    final String courseId = _resolveCourseId(event);
-    final String title = event.subject.isNotEmpty ? event.subject : 'Lecture';
-    final DateTime start = event.start ?? DateTime.now();
-    final DateTime end = event.end ?? start.add(const Duration(minutes: 1));
-
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Row(
-          children: [
-            const Expanded(child: Text('Record absence')),
-            IconButton(
-              icon: const Icon(Icons.close),
-              tooltip: 'Close',
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-          ],
-        ),
-        content: Text(title),
-        actionsAlignment: MainAxisAlignment.center,
-        actions: [
-          TextButton(
-            child: const Text('Absent'),
-            onPressed: () async {
-              // Allow marking absence for today or any past day; block future days.
-              final now = DateTime.now();
-              final eventDay = DateTime(start.year, start.month, start.day);
-              final today = DateTime(now.year, now.month, now.day);
-              final isFutureDay = eventDay.isAfter(today);
-              if (isFutureDay) {
-                if (mounted) {
-                  ScaffoldMessenger.of(this.context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'You can only record absence for today or past classes.',
-                      ),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-                }
-                return;
-              }
-              await AttendanceService.mark(
-                courseId: courseId,
-                eventId: eventId,
-                status: 'absent',
-                title: title,
-                start: start,
-                end: end,
-              );
-              await _recomputeAndWarn(courseId);
-              if (mounted) Navigator.pop(context);
-            },
-          ),
-        ],
-      ),
-    );
-  }
+  // _openAbsenceDialog removed; icon-only flow handles confirmations now.
 
   /// Recompute absence % for a course and show a SnackBar warning if > 20%.
   ///
@@ -1014,7 +932,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('You can only record absence for today or past days.'),
+          content: Text(
+            'You can only record absence for today or past classes.',
+          ),
           duration: Duration(seconds: 2),
         ),
       );
@@ -1121,6 +1041,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           start: start,
           end: end,
         );
+        _recentlyMarkedAbsent.add(e.id);
         changedCourses.add(courseId);
         newMarks += 1;
       } catch (_) {
@@ -1164,9 +1085,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
         await _recomputeAndWarn(c);
       } catch (_) {}
     }
+    if (mounted) setState(() {});
   }
 
   Future<bool> _isEventAlreadyAbsent(String eventId) async {
+    // If we've just marked it locally, reflect immediately
+    if (_recentlyMarkedAbsent.contains(eventId)) return true;
+
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return false;
     try {
@@ -1231,6 +1156,76 @@ class _CalendarScreenState extends State<CalendarScreen> {
       }
     }
     return pending;
+  }
+
+  /// Confirm from the icon and record absence (no clearing from calendar).
+  Future<void> _confirmAbsenceToggle(
+    MicrosoftCalendarEvent event, {
+    required bool isAbsent,
+  }) async {
+    final start = event.start ?? DateTime.now();
+    final now = DateTime.now();
+    final eventDay = DateTime(start.year, start.month, start.day);
+    final today = DateTime(now.year, now.month, now.day);
+    if (eventDay.isAfter(today)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'You can only record absence for today or past classes.',
+          ),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    if (isAbsent) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Absence already recorded for this class.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    final bool? ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Record absence?'),
+        content: Text(event.subject.isNotEmpty ? event.subject : 'Lecture'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Record'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true) return;
+
+    final String eventId = event.id;
+    final String courseId = _resolveCourseId(event);
+    final String title = event.subject.isNotEmpty ? event.subject : 'Lecture';
+    final DateTime end = event.end ?? start.add(const Duration(minutes: 1));
+
+    await AttendanceService.mark(
+      courseId: courseId,
+      eventId: eventId,
+      status: 'absent',
+      title: title,
+      start: start,
+      end: end,
+    );
+    _recentlyMarkedAbsent.add(eventId);
+    await _recomputeAndWarn(courseId);
   }
 
   /// Compute totals per normalized course code and publish to shared state
@@ -1409,12 +1404,3 @@ class _SignInPrompt extends StatelessWidget {
     );
   }
 }
-
-
-
-
-
-
-
-
-
