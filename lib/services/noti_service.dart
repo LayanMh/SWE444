@@ -79,14 +79,14 @@ class NotiService {
     String title;
     String body;
     if (rounded > 25.0) {
-      title = 'Attendance At Risk';
-      body = 'You exceeded the 25% limit in $courseId ($percentText%).';
+      title = 'Let’s Get Back on Track';
+      body = 'Absences in $courseId reached $percentText% (over the 25% limit) You’ve got this!! let’s aim for the next classes🤩';
     } else if ((rounded - 25.0).abs() < 0.01) {
       title = 'Attendance Limit Reached';
-      body = 'You hit the 25% absence limit in $courseId ($percentText%).';
+      body = 'Absences in $courseId are now $percentText% Let’s keep future classes on track!';
     } else {
-      title = 'Attendance Warning';
-      body = 'You exceeded 20% absences in $courseId ($percentText%).';
+      title = 'Heads Up on your Attendance!!';
+      body = 'Absences in $courseId are $percentText% getting close to 25%!! Keeping up this week will keep you safe👍';
     }
 
     // Try with custom image (requires res/drawable/absherk_notif.png).
