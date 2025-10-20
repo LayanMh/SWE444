@@ -900,7 +900,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final pct = absentMinutes * 100.0 / totalMinutes;
     // Show counts to the user; keep minutes for calculation only.
     final msg =
-        'Your absence just increased in $courseId absent $absentEvents of $totalEvents classes (${pct.toStringAsFixed(1)}%), Try to make the next class 👍';
+        'Your absence just increased in $courseId absent $absentEvents of $totalEvents classes (${pct.toStringAsFixed(1)}%), Try to make the next class';
 
     if (pct > 20) {
       // ignore: unawaited_futures
