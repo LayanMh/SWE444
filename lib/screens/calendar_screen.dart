@@ -54,10 +54,29 @@ class _CalendarScreenState extends State<CalendarScreen> {
   final Set<String> _recentlyMarkedAbsent = <String>{};
 
   @override
-  void initState() {
-    super.initState();
-    _loadCalendar(interactive: false);
+@override
+void initState() {
+  super.initState();
+
+  //  Refresh automatically when user’s schedule changes
+  final user = FirebaseAuth.instance.currentUser;
+  if (user != null) {
+    FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('schedule')
+        .snapshots()
+        .listen((_) {
+      if (mounted && !_isLoading) {
+        _loadCalendar(interactive: false, showSpinner: false);
+      }
+    });
   }
+
+  _loadCalendar(interactive: false);
+}
+
+
 
   @override
   void dispose() {
@@ -142,7 +161,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
         _isLoading = false;
       });
     }
-    // ✅ Use existing session
+    //  Use existing session
     final account =
         MicrosoftAuthService.currentAccount ??
         await MicrosoftAuthService.ensureSignedIn(interactive: interactive);
@@ -175,16 +194,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
+        centerTitle: true,
         title: const Text('My Schedule'),
-        actions: [
-          if (_account != null && !_isLoading)
-            IconButton(
-              icon: const Icon(Icons.refresh),
-              color: _CalendarPalette.iconOnGradient,
-              onPressed: () => _loadCalendar(interactive: false),
-              tooltip: 'Refresh events',
-            ),
-        ],
+        
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton:
@@ -499,7 +511,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            _buildPageIndicators(),
           ],
         ),
       ),
@@ -521,14 +532,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
             Icon(
               Icons.emoji_emotions_outlined,
               size: 52,
-              color: _CalendarPalette.accentPrimary,
+              color: const Color.fromARGB(255, 255, 255, 255),
             ),
             const SizedBox(height: 18),
             Text(
               'No classes scheduled',
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w600,
-                color: _CalendarPalette.textStrong,
+                color: const Color.fromARGB(255, 246, 248, 250),
               ),
               textAlign: TextAlign.center,
             ),
@@ -536,7 +547,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
             Text(
               'Enjoy your day or add a new section to stay ahead.',
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: _CalendarPalette.textMuted,
+                color: const Color.fromARGB(255, 251, 251, 251),
               ),
               textAlign: TextAlign.center,
             ),
@@ -754,17 +765,37 @@ class _CalendarScreenState extends State<CalendarScreen> {
     );
   }
 
-  List<DateTime> _extractDayKeys(List<MicrosoftCalendarEvent> events) {
-    final days = <DateTime>{};
-    for (final event in events) {
-      final start = event.start;
-      if (start != null) {
-        days.add(_normalizeDate(start));
-      }
-    }
-    final result = days.toList()..sort();
-    return result;
+ List<DateTime> _extractDayKeys(List<MicrosoftCalendarEvent> events) {
+  final days = <DateTime>{};
+
+  for (final event in events) {
+    final start = event.start;
+    if (start != null) days.add(_normalizeDate(start));
   }
+
+  // 🆕 Fill missing days in range OR show full week if none exist
+  if (days.isNotEmpty) {
+    final sorted = days.toList()..sort();
+    final firstDay = sorted.first;
+    final lastDay = sorted.last;
+    var current = firstDay;
+    while (!current.isAfter(lastDay)) {
+      days.add(current);
+      current = current.add(const Duration(days: 1));
+    }
+  } else {
+    // Show full current week when there are no events
+    final today = _normalizeDate(DateTime.now());
+    final startOfWeek = today.subtract(Duration(days: today.weekday % 7));
+    for (int i = 0; i < 7; i++) {
+      days.add(startOfWeek.add(Duration(days: i)));
+    }
+  }
+
+  final result = days.toList()..sort();
+  return result;
+}
+
 
   int _resolveInitialPage(List<DateTime> days) {
     if (days.isEmpty) {
@@ -908,7 +939,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final pct = absentMinutes * 100.0 / totalMinutes;
     // Show counts to the user; keep minutes for calculation only.
     final msg =
-        'Your absence just increased in $courseId absent $absentEvents of $totalEvents classes (${pct.toStringAsFixed(1)}%), Try to make the next class 👍';
+        'Your absence just increased in $courseId absent $absentEvents of $totalEvents classes (${pct.toStringAsFixed(1)}%), Try to make the next class';
 
     if (pct > 20) {
       // ignore: unawaited_futures
@@ -991,7 +1022,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
         await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: const Text('Absence all day'),
+            title: const Text('Absent all day'),
             content: Text(
               'Record absence for $pendingCount classes on\n$dayLabel?',
             ),
