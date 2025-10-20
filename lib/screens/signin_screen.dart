@@ -401,6 +401,50 @@ Future<Map<String, dynamic>?> _findExistingUserByEmail(String email) async {
   }
 
   Future<void> _clearMicrosoftSessionForEmailLogin() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      return;
+    }
+
+    MicrosoftAccount? account;
+    try {
+      account = await MicrosoftAuthService.ensureSignedIn(
+        interactive: false,
+      );
+    } catch (error) {
+      debugPrint('Failed to restore Microsoft session silently: $error');
+    }
+
+    final userEmail = user.email;
+    final normalizedUserEmail =
+        userEmail != null ? userEmail.trim().toLowerCase() : null;
+    final accountEmail = account?.email;
+    final normalizedAccountEmail =
+        accountEmail != null ? accountEmail.trim().toLowerCase() : null;
+
+    if (account != null &&
+        normalizedUserEmail != null &&
+        normalizedAccountEmail == normalizedUserEmail) {
+      try {
+        final existingUser = await _findExistingUserByEmail(account.email);
+        final prefs = await SharedPreferences.getInstance();
+
+        await prefs.setString('microsoft_user_email', account.email);
+        if (existingUser != null && existingUser['docId'] is String) {
+          await prefs.setString(
+            'microsoft_user_doc_id',
+            existingUser['docId'] as String,
+          );
+        } else {
+          await prefs.setString('microsoft_user_doc_id', user.uid);
+        }
+        await prefs.setBool('microsoft_remember_me', true);
+      } catch (error) {
+        debugPrint('Failed to persist Microsoft session metadata: $error');
+      }
+      return;
+    }
+
     try {
       await MicrosoftAuthService.signOut();
     } catch (error) {
