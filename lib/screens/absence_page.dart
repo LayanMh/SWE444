@@ -7,6 +7,7 @@ import 'package:absherk/services/attendance_service.dart';
 import '../services/attendance_totals.dart';
 import 'package:absherk/services/absence_calculator.dart';
 import 'package:absherk/services/noti_service.dart';
+import 'package:absherk/services/schedule_service.dart';
 
 class AbsencePage extends StatefulWidget {
   const AbsencePage({super.key});
@@ -15,30 +16,15 @@ class AbsencePage extends StatefulWidget {
 }
 
 class _AbsencePageState extends State<AbsencePage> {
-  Future<Set<String>> _loadCourseCodesFallback() async {
+  // Load course codes from the user's Firebase schedule so courses with
+  // zero absences still appear.
+  Future<Set<String>> _loadScheduleCourseCodes() async {
     try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid == null) return {};
-      final q = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .collection('lectures')
-          .get();
-      final Set<String> codes = {};
-      for (final d in q.docs) {
-        final raw = (d.data()['courseCode'] ?? '').toString();
-        if (raw.isEmpty) continue;
-        codes.add(_normalize(raw));
-      }
-      if (codes.isNotEmpty) return codes;
-      // optional root fallback
-      final r = await FirebaseFirestore.instance.collection('lectures').get();
-      for (final d in r.docs) {
-        final raw = (d.data()['courseCode'] ?? '').toString();
-        if (raw.isEmpty) continue;
-        codes.add(_normalize(raw));
-      }
-      return codes;
+      final entries = await ScheduleService.fetchScheduleOnce();
+      return entries
+          .map((e) => _normalize(e.courseCode))
+          .where((code) => code.isNotEmpty)
+          .toSet();
     } catch (_) {
       return {};
     }
@@ -68,71 +54,55 @@ class _AbsencePageState extends State<AbsencePage> {
             grouped.putIfAbsent(key, () => []).add({'id': d.id, ...data});
           }
 
-          // Merge with known courses from totals (Calendar) so courses with
-          // zero absences still appear.
-          final totalsCourses =
-              AttendanceTotals.instance.totalsByCourse.value.keys.toSet();
-          final allCodes = <String>{...grouped.keys, ...totalsCourses};
+          // Show courses from user's Firestore schedule, plus any that have
+          // actual absence records. This ensures deleted courses disappear
+          // without needing a calendar refresh.
+          return StreamBuilder<List<ScheduleEntry>>(
+            stream: ScheduleService.watchSchedule(),
+            builder: (context, scheduleSnap) {
+              final scheduleEntries = scheduleSnap.data ?? const <ScheduleEntry>[];
+              final scheduleCodes = scheduleEntries
+                  .map((e) => _normalize(e.courseCode))
+                  .where((c) => c.isNotEmpty)
+                  .toSet();
 
-          // If we still don't know any courses, try fetching from lectures.
-          if (allCodes.isEmpty) {
-            return FutureBuilder<Set<String>>(
-              future: _loadCourseCodesFallback(),
-              builder: (context, fsnap) {
-                if (fsnap.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+              // Only list codes that are in the schedule OR have recorded absences.
+              final allCodes = <String>{
+                ...scheduleCodes,
+                ...grouped.keys,
+              };
+
+              if (scheduleSnap.connectionState == ConnectionState.waiting && allCodes.isEmpty) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              if (allCodes.isEmpty) {
+                return const Center(child: Text('No courses found.'));
+              }
+
+              final List<_CourseItem> items = allCodes.map((code) {
+                final recs = grouped[code] ?? <Map<String, dynamic>>[];
+                if (recs.isNotEmpty) {
+                  recs.sort((a, b) {
+                    final da = _asDateTime(a['start']) ?? DateTime(0);
+                    final db = _asDateTime(b['start']) ?? DateTime(0);
+                    return db.compareTo(da);
+                  });
                 }
-                final codes = fsnap.data ?? {};
-                if (codes.isEmpty && docs.isEmpty) {
-                  return const Center(child: Text('No courses found.'));
-                }
-                final List<_CourseItem> items = codes.map((code) {
-                  final recs = grouped[code] ?? <Map<String, dynamic>>[];
-                  if (recs.isNotEmpty) {
-                    recs.sort((a, b) {
-                      final da = _asDateTime(a['start']) ?? DateTime(0);
-                      final db = _asDateTime(b['start']) ?? DateTime(0);
-                      return db.compareTo(da);
-                    });
-                  }
-                  return _CourseItem(
-                    code: code,
-                    records: recs,
-                    latest: recs.isNotEmpty ? _asDateTime(recs.first['start']) : null,
-                  );
-                }).toList()
-                  ..sort((a, b) => a.code.compareTo(b.code));
-                return ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  itemCount: items.length,
-                  itemBuilder: (context, i) => _CourseCard(item: items[i]),
+                return _CourseItem(
+                  code: code,
+                  records: recs,
+                  latest: recs.isNotEmpty ? _asDateTime(recs.first['start']) : null,
                 );
-              },
-            );
-          }
+              }).toList()
+                ..sort((a, b) => a.code.compareTo(b.code));
 
-          // 3) Build items for union of codes (sorted by course code)
-          final List<_CourseItem> items = allCodes.map((code) {
-            final recs = grouped[code] ?? <Map<String, dynamic>>[];
-            if (recs.isNotEmpty) {
-              recs.sort((a, b) {
-                final da = _asDateTime(a['start']) ?? DateTime(0);
-                final db = _asDateTime(b['start']) ?? DateTime(0);
-                return db.compareTo(da);
-              });
-            }
-            return _CourseItem(
-              code: code,
-              records: recs,
-              latest: recs.isNotEmpty ? _asDateTime(recs.first['start']) : null,
-            );
-          }).toList()
-            ..sort((a, b) => a.code.compareTo(b.code));
-
-          return ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            itemCount: items.length,
-            itemBuilder: (context, i) => _CourseCard(item: items[i]),
+              return ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                itemCount: items.length,
+                itemBuilder: (context, i) => _CourseCard(item: items[i]),
+              );
+            },
           );
         },
       ),
@@ -335,52 +305,33 @@ class _Denom {
 }
 
 Future<_Denom> _computeDenominatorMinutes(String normalizedCourseCode) async {
-  final uid = FirebaseAuth.instance.currentUser?.uid;
-  if (uid == null) return const _Denom(totalEvents: 0, totalMinutes: 0);
+  try {
+    final schedule = await ScheduleService.fetchScheduleOnce();
+    final entries = schedule
+        .where((e) => _normalize(e.courseCode) == normalizedCourseCode)
+        .toList(growable: false);
+    if (entries.isEmpty) {
+      return const _Denom(totalEvents: 0, totalMinutes: 0);
+    }
 
-  // 1) Read user's lectures for this course.
-  final userLects = await FirebaseFirestore.instance
-      .collection('users')
-      .doc(uid)
-      .collection('lectures')
-      .where('courseCode', isEqualTo: normalizedCourseCode)
-      .get();
+    final now = DateTime.now();
+    final startOfYear = DateTime(now.year, 9, 1); // simple default
+    int totalEvents = 0;
+    int totalMinutes = 0;
 
-  // If nothing in users/{uid}/lectures, try a fallback root collection (optional).
-  var lectDocs = userLects.docs;
-  if (lectDocs.isEmpty) {
-    final root = await FirebaseFirestore.instance
-        .collection('lectures')
-        .where('courseCode', isEqualTo: normalizedCourseCode)
-        .get();
-    lectDocs = root.docs;
-  }
+    for (final e in entries) {
+      final int lectMins = (e.endTime - e.startTime) > 0
+          ? (e.endTime - e.startTime)
+          : 1;
+      final occ = _countWeekdayOccurrences(startOfYear, now, e.dayOfWeek);
+      totalEvents += occ;
+      totalMinutes += occ * lectMins;
+    }
 
-  if (lectDocs.isEmpty) {
-    // No schedule found; return zeros so UI falls back gracefully.
+    return _Denom(totalEvents: totalEvents, totalMinutes: totalMinutes);
+  } catch (_) {
     return const _Denom(totalEvents: 0, totalMinutes: 0);
   }
-
-  // 2) Generate occurrences from semester start to today.
-  final now = DateTime.now();
-  final startOfYear = DateTime(now.year, 9, 1); // simple default
-  int totalEvents = 0;
-  int totalMinutes = 0;
-
-  for (final d in lectDocs) {
-    final data = d.data();
-    final int dayOfWeek = (data['dayOfWeek'] as num).toInt(); // 0..6
-    final int startTime = (data['startTime'] as num?)?.toInt() ?? 0;
-    final int endTime = (data['endTime'] as num?)?.toInt() ?? 0;
-    final int lectMins = (endTime - startTime) > 0 ? (endTime - startTime) : 1;
-
-    // Count each week's occurrence.
-    final occ = _countWeekdayOccurrences(startOfYear, now, dayOfWeek);
-    totalEvents += occ;
-    totalMinutes += occ * lectMins;
-  }
-
-  return _Denom(totalEvents: totalEvents, totalMinutes: totalMinutes);
 }
 
 Future<_Denom> _computeDenominator(String normalizedCourseCode) async {
