@@ -38,6 +38,7 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
       context,
       listen: false,
     );
+
     setState(() => _isLoading = true);
 
     try {
@@ -47,6 +48,7 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
       } catch (_) {
         remoteSchedule = null;
       }
+
       if (!mounted) return;
       if (remoteSchedule != null) {
         scheduleProvider.replaceLectures(
@@ -76,40 +78,35 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
         return;
       }
 
-      final lecture = await FirebaseLectureService.getLectureBySection(section);
-      if (!mounted) return;
+     final lectures = await FirebaseLectureService.getLecturesBySectionMulti(section);
+if (!mounted) return;
 
-      if (lecture == null) {
-        messenger.showSnackBar(
-          const SnackBar(content: Text('Section not found. Please check the number and try again.')),
-        );
-        return;
-      }
+if (lectures.isEmpty) {
+  messenger.showSnackBar(
+    const SnackBar(
+        content: Text('Section not found. Please check the number and try again.')),
+  );
+  return;
+}
 
-      final newLecture = Lecture(
-        id: lecture.section,
-        courseCode: lecture.courseCode,
-        courseName: lecture.courseName,
-        section: lecture.section,
-        classroom: lecture.classroom,
-        dayOfWeek: lecture.dayOfWeek,
-        startTime: lecture.startTime,
-        endTime: lecture.endTime,
-      );
+//  Validate total registered hours before adding
+final currentLectures = scheduleProvider.lectures;
+final totalHours = currentLectures.fold<int>(0, (sum, l) => sum + l.hour);
 
-      final conflictingLecture = scheduleProvider.findTimeConflict(newLecture);
-      if (conflictingLecture != null) {
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              'Time conflict with ${conflictingLecture.courseCode} section ${conflictingLecture.section}.',
-            ),
-          ),
-        );
-        return;
-      }
 
-      // Save lecture under current user's schedule in Firestore
+final newHour = lectures.first.hour;
+
+if (totalHours + newHour > 20) {
+  messenger.showSnackBar(
+    SnackBar(
+      content: Text(
+        'You already have $totalHours hours. Adding ${lectures.first.courseCode} (${newHour}h) would exceed the 20-hour limit.',
+      ),
+    ),
+  );
+  return;
+}
+
       final firebaseUser = FirebaseAuth.instance.currentUser;
       String? userDocId;
 
@@ -129,32 +126,57 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
         return;
       }
 
-      final userScheduleRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(userDocId)
-          .collection('schedule')
-          .doc(newLecture.id);
-
-      try {
-        await userScheduleRef.set({
-          'courseCode': lecture.courseCode,
-          'courseName': lecture.courseName,
-          'section': lecture.section,
-          'classroom': lecture.classroom,
-          'dayOfWeek': lecture.dayOfWeek,
-          'startTime': lecture.startTime,
-          'endTime': lecture.endTime,
-          'addedAt': FieldValue.serverTimestamp(),
-          'status': 'active',
-        }, SetOptions(merge: true));
-      } catch (error) {
-        messenger.showSnackBar(
-          SnackBar(content: Text('Failed to save section: $error')),
+      for (final lecture in lectures) {
+        final newLecture = Lecture(
+          id: '${lecture.section}_${lecture.dayOfWeek}',
+          courseCode: lecture.courseCode,
+          courseName: lecture.courseName,
+          section: lecture.section,
+          classroom: lecture.classroom,
+          dayOfWeek: lecture.dayOfWeek,
+          startTime: lecture.startTime,
+          endTime: lecture.endTime,
         );
-        return;
-      }
 
-      scheduleProvider.addLecture(newLecture);
+        final conflictingLecture = scheduleProvider.findTimeConflict(newLecture);
+        if (conflictingLecture != null) {
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(
+                'Time conflict with ${conflictingLecture.courseCode} section ${conflictingLecture.section}.',
+              ),
+            ),
+          );
+          continue;
+        }
+
+        final userScheduleRef = FirebaseFirestore.instance
+            .collection('users')
+            .doc(userDocId)
+            .collection('schedule')
+            .doc(newLecture.id);
+
+        try {
+          await userScheduleRef.set({
+            'courseCode': lecture.courseCode,
+            'courseName': lecture.courseName,
+            'section': lecture.section,
+            'classroom': lecture.classroom,
+            'dayOfWeek': lecture.dayOfWeek,
+            'startTime': lecture.startTime,
+            'endTime': lecture.endTime,
+            'addedAt': FieldValue.serverTimestamp(),
+            'status': 'active',
+          }, SetOptions(merge: true));
+        } catch (error) {
+          messenger.showSnackBar(
+            SnackBar(content: Text('Failed to save section: $error')),
+          );
+          continue;
+        }
+
+        scheduleProvider.addLecture(newLecture);
+      }
 
       messenger.showSnackBar(
         const SnackBar(content: Text('Lecture added to your schedule.')),
@@ -168,33 +190,31 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
           const SnackBar(content: Text('Microsoft sign-in cancelled.')),
         );
       } else {
-        try {
-          final createdEvent =
-              await MicrosoftCalendarService.addWeeklyRecurringLecture(
-                account: account,
-                lecture: newLecture.toRecurringLecture(),
-              );
+        for (final lecture in lectures) {
           try {
+            final createdEvent =
+                await MicrosoftCalendarService.addWeeklyRecurringLecture(
+              account: account,
+              lecture: lecture.toRecurringLecture(),
+            );
+
+            final userScheduleRef = FirebaseFirestore.instance
+                .collection('users')
+                .doc(userDocId)
+                .collection('schedule')
+                .doc('${lecture.section}_${lecture.dayOfWeek}');
+
             await userScheduleRef.set({
               'calendarEventId': createdEvent.id,
               if (createdEvent.seriesMasterId != null &&
                   createdEvent.seriesMasterId!.isNotEmpty)
                 'calendarSeriesMasterId': createdEvent.seriesMasterId,
             }, SetOptions(merge: true));
-          } catch (_) {
-            // If we fail to persist the event id, continue; deletion flow can fall back.
+          } catch (error) {
+            messenger.showSnackBar(
+              SnackBar(content: Text('Microsoft Calendar error: $error')),
+            );
           }
-          if (!mounted) return;
-          messenger.showSnackBar(
-            const SnackBar(
-              content: Text('Lecture added to Microsoft Calendar.'),
-            ),
-          );
-        } catch (error) {
-          if (!mounted) return;
-          messenger.showSnackBar(
-            SnackBar(content: Text('Microsoft Calendar error: $error')),
-          );
         }
       }
 
