@@ -266,12 +266,28 @@ class _MyCoursesPageState extends State<MyCoursesPage> {
       }
     });
 
+    int success = 0;
+    int failed = 0;
     for (final s in sessions) {
-      await _deleteEntry(s);
+      try {
+        await _deleteEntry(s, silent: true);
+        success++;
+      } catch (_) {
+        failed++;
+      }
     }
+
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final course = sessions.isNotEmpty ? sessions.first.courseCode : '';
+    final sectionLabel = section.isNotEmpty ? ' - Section $section' : '';
+    final msg = failed == 0
+        ? '$course$sectionLabel removed from your schedule.'
+        : 'Removed $success of ${sessions.length} for $course$sectionLabel. $failed failed.';
+    messenger.showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  Future<void> _deleteEntry(ScheduleEntry entry) async {
+  Future<void> _deleteEntry(ScheduleEntry entry, {bool silent = false}) async {
     final messenger = ScaffoldMessenger.of(context);
 
     // Optimistic removal
@@ -281,11 +297,16 @@ class _MyCoursesPageState extends State<MyCoursesPage> {
 
     try {
       await ScheduleService.deleteEntry(entry);
-      messenger.showSnackBar(
-        SnackBar(content: Text('${entry.courseCode} removed from your schedule.')),
-      );
+      if (!silent) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('${entry.courseCode} removed from your schedule.')),
+        );
+      }
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Error deleting: $e')));
+      if (!silent) {
+        messenger.showSnackBar(SnackBar(content: Text('Error deleting: $e')));
+      }
+      rethrow;
     } finally {
       setState(() {
         _deletingIds.remove(entry.id);

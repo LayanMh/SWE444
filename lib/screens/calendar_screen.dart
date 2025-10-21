@@ -129,6 +129,16 @@ class _CalendarScreenState extends State<CalendarScreen> {
           _absenceByEventId[d.id] = status;
         }
       }
+      // Reconcile local optimistic cache with server: if an absence was deleted,
+      // ensure the UI icon flips back to "record absence" by clearing it here.
+      if (_recentlyMarkedAbsent.isNotEmpty) {
+        final toRemove = _recentlyMarkedAbsent
+            .where((id) => _absenceByEventId[id] != 'absent')
+            .toList();
+        for (final id in toRemove) {
+          _recentlyMarkedAbsent.remove(id);
+        }
+      }
       if (mounted) setState(() => _absencesReady = true);
     });
   }
@@ -962,7 +972,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final pct = absentMinutes * 100.0 / totalMinutes;
 
     final msg =
-        'Your absence just increased in $courseId absent $absentEvents of $totalEvents classes (${pct.toStringAsFixed(1)}%), Try to make the next class';
+        'Your absence just increased in $courseId absent $absentEvents of $totalEvents classes (${pct.toStringAsFixed(1)}%)\n Try to make the next class!';
 
     if (pct > 20) {
       // ignore: unawaited_futures
@@ -971,7 +981,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(pct > 20 ? 'Warning: $msg - over 20%!' : msg),
+        content: Text(
+          pct > 20 ? 'Warning: $msg - over 20%!' : msg,
+          textAlign: TextAlign.center,
+        ),
         backgroundColor: pct > 20 ? Colors.red : null,
         duration: const Duration(seconds: 3),
       ),

@@ -207,12 +207,13 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
         return;
       }
 
+      final first = addedLectures.first;
+      final course = first.courseCode;
+      final sectionLabel = first.section.isNotEmpty ? ' - Section ${first.section}' : '';
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            addedLectures.length == 1
-                ? 'Lecture added to your schedule.'
-                : '${addedLectures.length} lectures added to your schedule.',
+            '$course$sectionLabel has been added to your schedule.',
           ),
         ),
       );
