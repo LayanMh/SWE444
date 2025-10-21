@@ -2,13 +2,9 @@ import 'package:flutter/foundation.dart';
 import '../models/lecture.dart';
 
 class ScheduleProvider with ChangeNotifier {
-  static const int maxSections = 10;
-
   final List<Lecture> _lectures = [];
 
   List<Lecture> get lectures => List.unmodifiable(_lectures);
-
-  bool get hasReachedSectionLimit => _lectures.length >= maxSections;
 
   bool containsSection(String section) {
     return _lectures.any((lecture) => lecture.section == section);

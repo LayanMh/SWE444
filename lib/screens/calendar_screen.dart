@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../services/microsoft_auth_service.dart';
@@ -58,7 +58,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
 void initState() {
   super.initState();
 
-  //  Refresh automatically when user’s schedule changes
+  //  Refresh automatically when user�s schedule changes
   final user = FirebaseAuth.instance.currentUser;
   if (user != null) {
     FirebaseFirestore.instance
@@ -136,7 +136,11 @@ void initState() {
         return aStart.compareTo(bStart);
       });
 
-      final dayKeys = _extractDayKeys(events);
+      final dayKeys = _extractDayKeys(
+        events,
+        windowStart: _calendarWindowStart,
+        windowRange: _calendarWindowRange,
+      );
       final initialIndex = dayKeys.isEmpty ? 0 : _resolveInitialPage(dayKeys);
       final previousController = _pageController;
       final newController = dayKeys.isEmpty
@@ -765,36 +769,42 @@ void initState() {
     );
   }
 
- List<DateTime> _extractDayKeys(List<MicrosoftCalendarEvent> events) {
-  final days = <DateTime>{};
 
-  for (final event in events) {
-    final start = event.start;
-    if (start != null) days.add(_normalizeDate(start));
-  }
+  List<DateTime> _extractDayKeys(
+    List<MicrosoftCalendarEvent> events, {
+    required DateTime windowStart,
+    required Duration windowRange,
+  }) {
+    final Set<DateTime> days = <DateTime>{};
+    final DateTime normalizedStart = _normalizeDate(windowStart);
+    final int span = windowRange.inDays > 0 ? windowRange.inDays : 0;
+    final DateTime normalizedEnd =
+        _normalizeDate(normalizedStart.add(Duration(days: span)));
 
-  // 🆕 Fill missing days in range OR show full week if none exist
-  if (days.isNotEmpty) {
-    final sorted = days.toList()..sort();
-    final firstDay = sorted.first;
-    final lastDay = sorted.last;
-    var current = firstDay;
-    while (!current.isAfter(lastDay)) {
-      days.add(current);
-      current = current.add(const Duration(days: 1));
+    var cursor = normalizedStart;
+    while (!cursor.isAfter(normalizedEnd)) {
+      days.add(cursor);
+      cursor = cursor.add(const Duration(days: 1));
     }
-  } else {
-    // Show full current week when there are no events
-    final today = _normalizeDate(DateTime.now());
-    final startOfWeek = today.subtract(Duration(days: today.weekday % 7));
-    for (int i = 0; i < 7; i++) {
-      days.add(startOfWeek.add(Duration(days: i)));
-    }
-  }
 
-  final result = days.toList()..sort();
-  return result;
-}
+    for (final event in events) {
+      final start = event.start;
+      if (start != null) {
+        days.add(_normalizeDate(start));
+      }
+    }
+
+    if (days.isEmpty) {
+      final today = _normalizeDate(DateTime.now());
+      final startOfWeek = today.subtract(Duration(days: today.weekday % 7));
+      for (int i = 0; i < 7; i++) {
+        days.add(startOfWeek.add(Duration(days: i)));
+      }
+    }
+
+    final result = days.toList()..sort();
+    return result;
+  }
 
 
   int _resolveInitialPage(List<DateTime> days) {
@@ -870,7 +880,7 @@ void initState() {
     return '$startLabel - ${formatter.format(end)}';
   }
 
-  /// Extract a course code from the event subject, e.g. "CS101 � Lecture 5".
+  /// Extract a course code from the event subject, e.g. "CS101 ? Lecture 5".
   String _resolveCourseId(MicrosoftCalendarEvent e) {
     final s = (e.subject).toUpperCase();
     final m = RegExp(r'[A-Z]{2,}\s?\d{2,}').firstMatch(s); // CS101 or CS 101
@@ -1438,3 +1448,4 @@ class _SignInPrompt extends StatelessWidget {
     );
   }
 }
+
