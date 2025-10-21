@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -41,47 +43,94 @@ class CalendarScreen extends StatefulWidget {
 class _CalendarScreenState extends State<CalendarScreen> {
   static const Duration _calendarWindowRange = Duration(days: 210);
 
+  // Cached formatters (faster than recreating)
+  static final DateFormat _dayOfWeekFmt = DateFormat('EEEE');
+  static final DateFormat _fullDateFmt = DateFormat('MMMM d, yyyy');
+  static final DateFormat _timeFmt = DateFormat('hh:mm a');
+
+  // Semester start from service
   late final DateTime _calendarWindowStart =
       MicrosoftCalendarService.resolveSemesterStart();
+
   MicrosoftAccount? _account;
   List<MicrosoftCalendarEvent> _events = <MicrosoftCalendarEvent>[];
-  List<DateTime> _dayKeys = <DateTime>[];
+
+  // Fast per-day index
+  Map<DateTime, List<MicrosoftCalendarEvent>> _eventsByDay = {};
+  List<DateTime> _orderedDays = <DateTime>[];
+
   PageController? _pageController;
   int _currentPage = 0;
   bool _isLoading = false;
   String? _error;
+
   // Local cache so icons flip immediately after marking without waiting for Firestore
   final Set<String> _recentlyMarkedAbsent = <String>{};
 
-  @override
-@override
-void initState() {
-  super.initState();
+  // Live absence map & listeners
+  StreamSubscription<QuerySnapshot>? _absencesSub;
+  final Map<String, String> _absenceByEventId = {}; // eventId -> 'absent'
+  bool _absencesReady = false;
 
-  //  Refresh automatically when user’s schedule changes
-  final user = FirebaseAuth.instance.currentUser;
-  if (user != null) {
-    FirebaseFirestore.instance
+  // Debounced schedule refresh
+  StreamSubscription? _scheduleSub;
+  Timer? _scheduleDebounce;
+
+  @override
+  void initState() {
+    super.initState();
+    _listenScheduleChanges();
+    _listenAbsences();
+    _loadCalendar(interactive: false);
+  }
+
+  @override
+  void dispose() {
+    _scheduleDebounce?.cancel();
+    _scheduleSub?.cancel();
+    _absencesSub?.cancel();
+    _pageController?.dispose();
+    super.dispose();
+  }
+
+  void _listenScheduleChanges() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    _scheduleSub?.cancel();
+    _scheduleSub = FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
         .collection('schedule')
         .snapshots()
         .listen((_) {
-      if (mounted && !_isLoading) {
-        _loadCalendar(interactive: false, showSpinner: false);
-      }
+      _scheduleDebounce?.cancel();
+      _scheduleDebounce = Timer(const Duration(milliseconds: 400), () {
+        if (mounted && !_isLoading) {
+          _loadCalendar(interactive: false, showSpinner: false);
+        }
+      });
     });
   }
 
-  _loadCalendar(interactive: false);
-}
-
-
-
-  @override
-  void dispose() {
-    _pageController?.dispose();
-    super.dispose();
+  void _listenAbsences() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    _absencesSub?.cancel();
+    _absencesSub = FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('absences')
+        .snapshots()
+        .listen((snap) {
+      _absenceByEventId.clear();
+      for (final d in snap.docs) {
+        final status = (d.data()['status'] ?? '').toString();
+        if (status.isNotEmpty) {
+          _absenceByEventId[d.id] = status;
+        }
+      }
+      if (mounted) setState(() => _absencesReady = true);
+    });
   }
 
   Future<void> _loadCalendar({
@@ -100,9 +149,11 @@ void initState() {
     }
 
     try {
-      final account =
-          MicrosoftAuthService.currentAccount ??
-          await MicrosoftAuthService.ensureSignedIn(interactive: interactive);
+      // Ensure account (once)
+      final account = MicrosoftAuthService.currentAccount ??
+          await MicrosoftAuthService.ensureSignedIn(
+            interactive: interactive,
+          );
 
       if (!mounted) return;
 
@@ -111,7 +162,8 @@ void initState() {
         setState(() {
           _account = null;
           _events = <MicrosoftCalendarEvent>[];
-          _dayKeys = <DateTime>[];
+          _eventsByDay.clear();
+          _orderedDays.clear();
           _currentPage = 0;
           _pageController = null;
           _isLoading = false;
@@ -121,6 +173,7 @@ void initState() {
         return;
       }
 
+      // Fetch & sort
       final fetchedEvents = await MicrosoftCalendarService.fetchUpcomingEvents(
         account,
         start: _calendarWindowStart,
@@ -136,21 +189,23 @@ void initState() {
         return aStart.compareTo(bStart);
       });
 
-      final dayKeys = _extractDayKeys(
-        events,
-        windowStart: _calendarWindowStart,
-        windowRange: _calendarWindowRange,
-      );
+      // Build fast per-day index
+      _rebuildIndex(events);
+
+      // Decide day keys for paging (lightweight + small padding)
+      final dayKeys = _orderedDays.isEmpty
+          ? _extractDayKeysLight(events)
+          : List<DateTime>.from(_orderedDays);
+
       final initialIndex = dayKeys.isEmpty ? 0 : _resolveInitialPage(dayKeys);
+
       final previousController = _pageController;
-      final newController = dayKeys.isEmpty
-          ? null
-          : PageController(initialPage: initialIndex);
+      final newController =
+          dayKeys.isEmpty ? null : PageController(initialPage: initialIndex);
 
       setState(() {
         _account = account;
         _events = events;
-        _dayKeys = dayKeys;
         _currentPage = dayKeys.isEmpty ? 0 : initialIndex;
         _pageController = newController;
         _isLoading = false;
@@ -165,19 +220,22 @@ void initState() {
         _isLoading = false;
       });
     }
-    //  Use existing session
-    final account =
-        MicrosoftAuthService.currentAccount ??
-        await MicrosoftAuthService.ensureSignedIn(interactive: interactive);
+  }
 
-    if (account == null) {
-      setState(() {
-        _account = null;
-        _events = <MicrosoftCalendarEvent>[];
-        _isLoading = false;
-      });
-      return;
+  void _rebuildIndex(List<MicrosoftCalendarEvent> events) {
+    final map = <DateTime, List<MicrosoftCalendarEvent>>{};
+    for (final e in events) {
+      final s = e.start;
+      if (s == null) continue;
+      final d = DateTime(s.year, s.month, s.day);
+      (map[d] ??= <MicrosoftCalendarEvent>[]).add(e);
     }
+    for (final list in map.values) {
+      list.sort((a, b) => (a.start ?? DateTime(0))
+          .compareTo(b.start ?? DateTime(0)));
+    }
+    _eventsByDay = map;
+    _orderedDays = _eventsByDay.keys.toList()..sort();
   }
 
   Future<void> _handleRefresh() {
@@ -200,13 +258,12 @@ void initState() {
         automaticallyImplyLeading: false,
         centerTitle: true,
         title: const Text('My Schedule'),
-        
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton:
           (_account != null && _events.isNotEmpty && !_isLoading)
-          ? _buildAddSectionButton()
-          : null,
+              ? _buildAddSectionButton()
+              : null,
       body: _buildBody(),
     );
   }
@@ -315,7 +372,7 @@ void initState() {
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
           children: [
-            Icon(
+            const Icon(
               Icons.calendar_today_rounded,
               size: 64,
               color: _CalendarPalette.accentPrimary,
@@ -353,35 +410,28 @@ void initState() {
 
   Widget _buildCalendarPager() {
     final controller = _pageController;
-    if (controller == null || _dayKeys.isEmpty) {
+    final dayKeys = _orderedDays.isEmpty
+        ? _extractDayKeysLight(_events)
+        : _orderedDays;
+
+    if (controller == null || dayKeys.isEmpty) {
       return _buildEmptyState();
     }
 
     var pageIndex = _currentPage;
     if (pageIndex < 0) {
       pageIndex = 0;
-    } else if (pageIndex >= _dayKeys.length) {
-      pageIndex = _dayKeys.length - 1;
+    } else if (pageIndex >= dayKeys.length) {
+      pageIndex = dayKeys.length - 1;
     }
 
-    final currentDay = _dayKeys[pageIndex];
-    final currentDayEvents = _eventsForDay(currentDay);
+    final currentDay = dayKeys[pageIndex];
+    final currentDayEvents = _eventsForDayFast(currentDay);
     final theme = Theme.of(context);
     final isToday = _isSameDay(currentDay, DateTime.now());
 
-    return Container(
-      constraints: const BoxConstraints.expand(),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: <Color>[
-            _CalendarPalette.gradientStart,
-            _CalendarPalette.gradientEnd,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: SafeArea(
+    return _decorateBackground(
+      SafeArea(
         bottom: true,
         minimum: const EdgeInsets.only(bottom: 24),
         child: Column(
@@ -391,9 +441,8 @@ void initState() {
               child: Row(
                 children: [
                   IconButton(
-                    onPressed: pageIndex > 0
-                        ? () => _goToPage(pageIndex - 1)
-                        : null,
+                    onPressed:
+                        pageIndex > 0 ? () => _goToPage(pageIndex - 1) : null,
                     icon: const Icon(Icons.chevron_left_rounded),
                     color: _CalendarPalette.iconOnGradient,
                     splashRadius: 24,
@@ -403,7 +452,7 @@ void initState() {
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Text(
-                          DateFormat('EEEE').format(currentDay),
+                          _dayOfWeekFmt.format(currentDay),
                           style: theme.textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.w700,
                             color: _CalendarPalette.headerStrong,
@@ -411,7 +460,7 @@ void initState() {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          DateFormat('MMMM d, yyyy').format(currentDay),
+                          _fullDateFmt.format(currentDay),
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: _CalendarPalette.headerMuted,
                           ),
@@ -439,7 +488,7 @@ void initState() {
                     ),
                   ),
                   IconButton(
-                    onPressed: pageIndex < _dayKeys.length - 1
+                    onPressed: pageIndex < dayKeys.length - 1
                         ? () => _goToPage(pageIndex + 1)
                         : null,
                     icon: const Icon(Icons.chevron_right_rounded),
@@ -450,7 +499,7 @@ void initState() {
               ),
             ),
             if ((!isToday &&
-                    _dayKeys.any((day) => _isSameDay(day, DateTime.now()))) ||
+                    dayKeys.any((day) => _isSameDay(day, DateTime.now()))) ||
                 currentDayEvents.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -477,10 +526,10 @@ void initState() {
                       ),
                     if (currentDayEvents.isNotEmpty &&
                         !isToday &&
-                        _dayKeys.any((day) => _isSameDay(day, DateTime.now())))
+                        dayKeys.any((day) => _isSameDay(day, DateTime.now())))
                       const SizedBox(width: 12),
                     if (!isToday &&
-                        _dayKeys.any((day) => _isSameDay(day, DateTime.now())))
+                        dayKeys.any((day) => _isSameDay(day, DateTime.now())))
                       TextButton.icon(
                         style: TextButton.styleFrom(
                           foregroundColor: _CalendarPalette.headerStrong,
@@ -505,11 +554,11 @@ void initState() {
             Expanded(
               child: PageView.builder(
                 controller: controller,
-                itemCount: _dayKeys.length,
+                itemCount: dayKeys.length,
                 onPageChanged: (page) => setState(() => _currentPage = page),
                 itemBuilder: (context, pageIndex) {
-                  final day = _dayKeys[pageIndex];
-                  final dailyEvents = _eventsForDay(day);
+                  final day = dayKeys[pageIndex];
+                  final dailyEvents = _eventsForDayFast(day);
                   return _buildDayPage(day, dailyEvents);
                 },
               ),
@@ -533,10 +582,10 @@ void initState() {
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
           children: [
-            Icon(
+            const Icon(
               Icons.emoji_emotions_outlined,
               size: 52,
-              color: const Color.fromARGB(255, 255, 255, 255),
+              color: Color.fromARGB(255, 255, 255, 255),
             ),
             const SizedBox(height: 18),
             Text(
@@ -581,6 +630,16 @@ void initState() {
     final location = event.location?.trim() ?? '';
     final timeLabel = _formatEventTime(event);
 
+    final bool isFutureDay = (event.start != null &&
+        DateTime(event.start!.year, event.start!.month, event.start!.day)
+            .isAfter(DateTime(
+          DateTime.now().year,
+          DateTime.now().month,
+          DateTime.now().day,
+        )));
+
+    final bool isAbsent = _isAbsentCached(event.id);
+
     return Material(
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(22),
@@ -599,11 +658,11 @@ void initState() {
               end: Alignment.bottomRight,
             ),
             border: Border.all(
-              color: _CalendarPalette.cardBorder.withValues(alpha: 0.55),
+              color: _CalendarPalette.cardBorder.withOpacity(0.55),
             ),
             boxShadow: <BoxShadow>[
               BoxShadow(
-                color: _CalendarPalette.cardBorder.withValues(alpha: 0.25),
+                color: _CalendarPalette.cardBorder.withOpacity(0.25),
                 blurRadius: 18,
                 offset: const Offset(0, 12),
               ),
@@ -693,46 +752,24 @@ void initState() {
                     ],
                   ),
                 ),
-                // Hide the action icon for future events
-                if (!(event.start != null &&
-                    DateTime(
-                      event.start!.year,
-                      event.start!.month,
-                      event.start!.day,
-                    ).isAfter(
-                      DateTime(
-                        DateTime.now().year,
-                        DateTime.now().month,
-                        DateTime.now().day,
-                      ),
-                    ))) ...[
+                if (!isFutureDay) ...[
                   const SizedBox(width: 12),
-                  FutureBuilder<bool>(
-                    future: _isEventAlreadyAbsent(event.id),
-                    builder: (context, snap) {
-                      final isAbsent = snap.data == true;
-                      final icon = isAbsent
-                          ? const Icon(Icons.person_off_outlined)
-                          : const Icon(Icons.person_outline);
-                      final color = isAbsent
-                          ? Colors.redAccent
-                          : _CalendarPalette.accentPrimary;
-                      final tooltip = isAbsent
-                          ? 'Absence recorded'
-                          : 'Record absence';
-                      return IconButton(
-                        tooltip: tooltip,
-                        visualDensity: VisualDensity.compact,
-                        icon: icon,
-                        color: color,
-                        onPressed: () async {
-                          await _confirmAbsenceToggle(
-                            event,
-                            isAbsent: isAbsent,
-                          );
-                          if (mounted) setState(() {});
-                        },
-                      );
+                  IconButton(
+                    tooltip:
+                        isAbsent ? 'Absence recorded' : 'Record absence',
+                    visualDensity: VisualDensity.compact,
+                    icon: isAbsent
+                        ? const Icon(Icons.person_off_outlined)
+                        : const Icon(Icons.person_outline),
+                    color: isAbsent
+                        ? Colors.redAccent
+                        : _CalendarPalette.accentPrimary,
+                    onPressed: () async {
+                      await _confirmAbsenceToggle(event, isAbsent: isAbsent);
+                      // Local instant flip
+                      _absenceByEventId[event.id] = 'absent';
+                      _recentlyMarkedAbsent.add(event.id);
+                      if (mounted) setState(() {});
                     },
                   ),
                 ],
@@ -744,14 +781,54 @@ void initState() {
     );
   }
 
+  List<DateTime> _extractDayKeysLight(List<MicrosoftCalendarEvent> events) {
+    // If no events: show current week
+    if (events.isEmpty) {
+      final today = _normalizeDate(DateTime.now());
+      final startOfWeek = today.subtract(Duration(days: today.weekday % 7));
+      return List<DateTime>.generate(
+        7,
+        (i) => _normalizeDate(startOfWeek.add(Duration(days: i))),
+      )..sort();
+    }
+
+    final set = <DateTime>{};
+    for (final e in events) {
+      final s = e.start;
+      if (s == null) continue;
+      set.add(_normalizeDate(s));
+    }
+    final days = set.toList()..sort();
+
+    // Small padding around data for a nicer pager experience
+    final List<DateTime> padded = [];
+    final first = days.first.subtract(const Duration(days: 3));
+    final last = days.last.add(const Duration(days: 3));
+    for (DateTime d = _normalizeDate(first);
+        !d.isAfter(last);
+        d = d.add(const Duration(days: 1))) {
+      padded.add(d);
+    }
+    return padded;
+  }
+
+  List<MicrosoftCalendarEvent> _eventsForDayFast(DateTime day) {
+    final d = _normalizeDate(day);
+    return _eventsByDay[d] ?? const <MicrosoftCalendarEvent>[];
+  }
+
   Widget _buildPageIndicators() {
-    if (_dayKeys.length <= 1) {
+    final dayKeys = _orderedDays.isEmpty
+        ? _extractDayKeysLight(_events)
+        : _orderedDays;
+
+    if (dayKeys.length <= 1) {
       return const SizedBox(height: 8);
     }
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(_dayKeys.length, (index) {
+      children: List.generate(dayKeys.length, (index) {
         final isActive = index == _currentPage;
         return AnimatedContainer(
           duration: const Duration(milliseconds: 250),
@@ -769,57 +846,13 @@ void initState() {
     );
   }
 
-
-  List<DateTime> _extractDayKeys(
-    List<MicrosoftCalendarEvent> events, {
-    required DateTime windowStart,
-    required Duration windowRange,
-  }) {
-    final Set<DateTime> days = <DateTime>{};
-    final DateTime normalizedStart = _normalizeDate(windowStart);
-    final int span = windowRange.inDays > 0 ? windowRange.inDays : 0;
-    final DateTime normalizedEnd =
-        _normalizeDate(normalizedStart.add(Duration(days: span)));
-
-    var cursor = normalizedStart;
-    while (!cursor.isAfter(normalizedEnd)) {
-      days.add(cursor);
-      cursor = cursor.add(const Duration(days: 1));
-    }
-
-    for (final event in events) {
-      final start = event.start;
-      if (start != null) {
-        days.add(_normalizeDate(start));
-      }
-    }
-
-    if (days.isEmpty) {
-      final today = _normalizeDate(DateTime.now());
-      final startOfWeek = today.subtract(Duration(days: today.weekday % 7));
-      for (int i = 0; i < 7; i++) {
-        days.add(startOfWeek.add(Duration(days: i)));
-      }
-    }
-
-    final result = days.toList()..sort();
-    return result;
-  }
-
-
   int _resolveInitialPage(List<DateTime> days) {
-    if (days.isEmpty) {
-      return 0;
-    }
+    if (days.isEmpty) return 0;
     final today = _normalizeDate(DateTime.now());
     final todayIndex = days.indexWhere((day) => _isSameDay(day, today));
-    if (todayIndex != -1) {
-      return todayIndex;
-    }
+    if (todayIndex != -1) return todayIndex;
     for (var i = 0; i < days.length; i++) {
-      if (days[i].isAfter(today)) {
-        return i;
-      }
+      if (days[i].isAfter(today)) return i;
     }
     return days.length - 1;
   }
@@ -827,25 +860,13 @@ void initState() {
   DateTime _normalizeDate(DateTime date) =>
       DateTime(date.year, date.month, date.day);
 
-  List<MicrosoftCalendarEvent> _eventsForDay(DateTime day) {
-    final normalized = _normalizeDate(day);
-    final events = _events.where((event) {
-      final start = event.start;
-      if (start == null) return false;
-      return _isSameDay(start, normalized);
-    }).toList();
-    events.sort((a, b) {
-      final aStart = a.start ?? DateTime.fromMillisecondsSinceEpoch(0);
-      final bStart = b.start ?? DateTime.fromMillisecondsSinceEpoch(0);
-      return aStart.compareTo(bStart);
-    });
-    return events;
-  }
-
   void _goToPage(int index) {
     final controller = _pageController;
+    final dayKeys = _orderedDays.isEmpty
+        ? _extractDayKeysLight(_events)
+        : _orderedDays;
     if (controller == null) return;
-    if (index < 0 || index >= _dayKeys.length) return;
+    if (index < 0 || index >= dayKeys.length) return;
     controller.animateToPage(
       index,
       duration: const Duration(milliseconds: 320),
@@ -854,7 +875,11 @@ void initState() {
   }
 
   void _jumpToToday() {
-    final todayIndex = _dayKeys.indexWhere(
+    final dayKeys = _orderedDays.isEmpty
+        ? _extractDayKeysLight(_events)
+        : _orderedDays;
+
+    final todayIndex = dayKeys.indexWhere(
       (day) => _isSameDay(day, DateTime.now()),
     );
     if (todayIndex != -1) {
@@ -869,39 +894,30 @@ void initState() {
 
   String _formatEventTime(MicrosoftCalendarEvent event) {
     if (event.isAllDay) return 'All day';
-
     final start = event.start;
     final end = event.end;
     if (start == null) return 'Time not specified';
-
-    final formatter = DateFormat('hh:mm a');
-    final startLabel = formatter.format(start);
+    final startLabel = _timeFmt.format(start);
     if (end == null || start.isAtSameMomentAs(end)) return startLabel;
-    return '$startLabel - ${formatter.format(end)}';
+    return '$startLabel - ${_timeFmt.format(end)}';
   }
 
-  /// Extract a course code from the event subject, e.g. "CS101 ? Lecture 5".
+  /// Extract a course code from the event subject, e.g. "CS101 â€“ Lecture 5".
   String _resolveCourseId(MicrosoftCalendarEvent e) {
     final s = (e.subject).toUpperCase();
     final m = RegExp(r'[A-Z]{2,}\s?\d{2,}').firstMatch(s); // CS101 or CS 101
     return (m?.group(0)?.replaceAll(' ', '')) ?? 'UNASSIGNED';
   }
 
-  // _openAbsenceDialog removed; icon-only flow handles confirmations now.
+  bool _isAbsentCached(String eventId) =>
+      _absenceByEventId[eventId] == 'absent' ||
+      _recentlyMarkedAbsent.contains(eventId);
 
   /// Recompute absence % for a course and show a SnackBar warning if > 20%.
-  ///
-  /// Duration-weighted rule:
-  /// - Present = default (no doc in Firestore)
-  /// - We only store exceptions: 'absent'
-  /// - Percentage = SUM(absent minutes) / SUM(all event minutes) * 100
   Future<void> _recomputeAndWarn(String courseId) async {
-    final courseEvents = _events
-        .where((e) => _resolveCourseId(e) == courseId)
-        .toList();
-    if (courseEvents.isEmpty) {
-      return;
-    }
+    final courseEvents =
+        _events.where((e) => _resolveCourseId(e) == courseId).toList();
+    if (courseEvents.isEmpty) return;
 
     Map<String, String> byEvent;
     try {
@@ -921,11 +937,9 @@ void initState() {
       final start = e.start;
       final end = e.end;
       if (start == null) return 0;
-      final dtEnd = (end == null || !end.isAfter(start))
-          ? start.add(const Duration(minutes: 1))
-          : end;
+      final dtEnd =
+          (end == null || !end.isAfter(start)) ? start.add(const Duration(minutes: 1)) : end;
       final mins = dtEnd.difference(start).inMinutes;
-      // Guard against zero/negative; treat as at least 1 minute.
       return mins <= 0 ? 1 : mins;
     }
 
@@ -933,6 +947,7 @@ void initState() {
     int absentMinutes = 0;
     int totalEvents = courseEvents.length;
     int absentEvents = 0;
+
     for (final e in courseEvents) {
       final m = _durationMinutes(e);
       totalMinutes += m;
@@ -942,12 +957,10 @@ void initState() {
       }
     }
 
-    if (totalMinutes == 0 || !mounted) {
-      return;
-    }
+    if (totalMinutes == 0 || !mounted) return;
 
     final pct = absentMinutes * 100.0 / totalMinutes;
-    // Show counts to the user; keep minutes for calculation only.
+
     final msg =
         'Your absence just increased in $courseId absent $absentEvents of $totalEvents classes (${pct.toStringAsFixed(1)}%), Try to make the next class';
 
@@ -983,7 +996,7 @@ void initState() {
     }
 
     final dayLabel = DateFormat('EEE, MMM d, yyyy').format(target);
-    final totalCount = _eventsForDay(target).length;
+    final totalCount = _eventsForDayFast(target).length;
     if (totalCount == 0) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1006,7 +1019,7 @@ void initState() {
         return;
       }
     } catch (_) {
-      // If check fails, proceed to dialog; marking will still work.
+      // Proceed even if check fails.
     }
 
     // Compute how many are pending to mark (not already absent)
@@ -1014,7 +1027,6 @@ void initState() {
     try {
       pendingCount = await _countPendingAbsencesForDay(target);
     } catch (_) {
-      // If this fails, fall back to totalCount in UI
       pendingCount = totalCount;
     }
     if (pendingCount <= 0) {
@@ -1028,8 +1040,7 @@ void initState() {
       return;
     }
 
-    final ok =
-        await showDialog<bool>(
+    final ok = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
             title: const Text('Absent all day'),
@@ -1055,7 +1066,7 @@ void initState() {
   }
 
   Future<void> _markAbsenceAllDay(DateTime day) async {
-    final events = _eventsForDay(day);
+    final events = _eventsForDayFast(day);
     if (events.isEmpty) return;
 
     final messenger = ScaffoldMessenger.of(context);
@@ -1082,6 +1093,7 @@ void initState() {
           start: start,
           end: end,
         );
+        _absenceByEventId[e.id] = 'absent';
         _recentlyMarkedAbsent.add(e.id);
         changedCourses.add(courseId);
         newMarks += 1;
@@ -1111,14 +1123,15 @@ void initState() {
         ),
       );
     } else {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('Recorded absence for $newMarks classes.'),
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
+  messenger.showSnackBar(
+    SnackBar(
+      content: Text('Recorded absence for $newMarks classes.'),
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(seconds: 2),
+    ),
+  );
+}
+
 
     // Recompute and warn only for courses that actually changed
     for (final c in changedCourses) {
@@ -1130,7 +1143,11 @@ void initState() {
   }
 
   Future<bool> _isEventAlreadyAbsent(String eventId) async {
-    // Always consult Firestore; fall back to local cache only on failure.
+    // Prefer live map; fallback to Firestore only if needed
+    if (_absenceByEventId[eventId] == 'absent' ||
+        _recentlyMarkedAbsent.contains(eventId)) {
+      return true;
+    }
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return _recentlyMarkedAbsent.contains(eventId);
     try {
@@ -1155,7 +1172,7 @@ void initState() {
   Future<bool> _areAllEventsAbsentForDay(DateTime day) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return false;
-    final events = _eventsForDay(day);
+    final events = _eventsForDayFast(day);
     if (events.isEmpty) return false;
     for (final e in events) {
       try {
@@ -1179,7 +1196,7 @@ void initState() {
   Future<int> _countPendingAbsencesForDay(DateTime day) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return 0;
-    final events = _eventsForDay(day);
+    final events = _eventsForDayFast(day);
     if (events.isEmpty) return 0;
     int pending = 0;
     for (final e in events) {
@@ -1268,6 +1285,7 @@ void initState() {
       start: start,
       end: end,
     );
+    _absenceByEventId[eventId] = 'absent';
     _recentlyMarkedAbsent.add(eventId);
     await _recomputeAndWarn(courseId);
   }
@@ -1279,9 +1297,8 @@ void initState() {
       final start = e.start;
       final end = e.end;
       if (start == null) return 0;
-      final dtEnd = (end == null || !end.isAfter(start))
-          ? start.add(const Duration(minutes: 1))
-          : end;
+      final dtEnd =
+          (end == null || !end.isAfter(start)) ? start.add(const Duration(minutes: 1)) : end;
       final mins = dtEnd.difference(start).inMinutes;
       return mins <= 0 ? 1 : mins;
     }
@@ -1313,13 +1330,13 @@ class _ErrorView extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(24),
-          color: Colors.white.withValues(alpha: 0.9),
+          color: Colors.white.withOpacity(0.9),
           border: Border.all(
-            color: _CalendarPalette.cardBorder.withValues(alpha: 0.4),
+            color: _CalendarPalette.cardBorder.withOpacity(0.4),
           ),
           boxShadow: <BoxShadow>[
             BoxShadow(
-              color: _CalendarPalette.cardBorder.withValues(alpha: 0.2),
+              color: _CalendarPalette.cardBorder.withOpacity(0.2),
               blurRadius: 18,
               offset: const Offset(0, 12),
             ),
@@ -1328,7 +1345,7 @@ class _ErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
+            const Icon(
               Icons.wifi_off_rounded,
               size: 40,
               color: _CalendarPalette.accentPrimary,
@@ -1396,11 +1413,11 @@ class _SignInPrompt extends StatelessWidget {
             end: Alignment.bottomRight,
           ),
           border: Border.all(
-            color: _CalendarPalette.cardBorder.withValues(alpha: 0.5),
+            color: _CalendarPalette.cardBorder.withOpacity(0.5),
           ),
           boxShadow: <BoxShadow>[
             BoxShadow(
-              color: _CalendarPalette.cardBorder.withValues(alpha: 0.25),
+              color: _CalendarPalette.cardBorder.withOpacity(0.25),
               blurRadius: 20,
               offset: const Offset(0, 16),
             ),
@@ -1409,7 +1426,7 @@ class _SignInPrompt extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
+            const Icon(
               Icons.cloud_sync_rounded,
               size: 48,
               color: _CalendarPalette.accentPrimary,
@@ -1448,4 +1465,3 @@ class _SignInPrompt extends StatelessWidget {
     );
   }
 }
-
