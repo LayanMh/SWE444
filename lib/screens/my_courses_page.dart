@@ -145,9 +145,29 @@ class _MyCoursesPageState extends State<MyCoursesPage> {
                       const SizedBox(height: 12),
                       Align(
                         alignment: Alignment.centerRight,
-                        child: IconButton(
-                          icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                          onPressed: () => _confirmDeleteGroup(section, sessions),
+                        child: Builder(
+                          builder: (context) {
+                            final isDeletingSection = sessions.any((s) => _deletingIds.contains(s.id));
+                            return IconButton(
+                              icon: isDeletingSection
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.redAccent,
+                                      ),
+                                    )
+                                  : const Icon(
+                                      Icons.delete_outline_rounded,
+                                      color: Colors.redAccent,
+                                    ),
+                              onPressed: isDeletingSection
+                                  ? null
+                                  : () => _confirmDeleteGroup(section, sessions),
+                              tooltip: isDeletingSection ? 'Deleting…' : 'Remove section',
+                            );
+                          },
                         ),
                       ),
                     ],
