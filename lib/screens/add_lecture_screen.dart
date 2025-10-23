@@ -207,13 +207,16 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
         return;
       }
 
+      final addedCourseLabels = addedLectures
+          .map(describeLecture)
+          .toSet()
+          .toList(growable: false);
+      final addedMessage = addedCourseLabels.length == 1
+          ? '${addedCourseLabels.first} added to your schedule.'
+          : '${addedCourseLabels.join(', ')} added to your schedule.';
       messenger.showSnackBar(
         SnackBar(
-          content: Text(
-            addedLectures.length == 1
-                ? 'Lecture added to your schedule.'
-                : '${addedLectures.length} lectures added to your schedule.',
-          ),
+          content: Text(addedMessage),
         ),
       );
 
