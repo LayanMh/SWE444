@@ -10,6 +10,7 @@ import '../services/attendance_totals.dart';
 import 'package:absherk/services/noti_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class _CalendarPalette {
   static const Color gradientStart = Color(0xFF0092A5);
@@ -52,13 +53,29 @@ class _CalendarScreenState extends State<CalendarScreen> {
   String? _error;
   // Local cache so icons flip immediately after marking without waiting for Firestore
   final Set<String> _recentlyMarkedAbsent = <String>{};
+  Future<String?> _resolveUserDocId() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null && uid.isNotEmpty) {
+      return uid;
+    }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final fallback = prefs.getString('microsoft_user_doc_id');
+      if (fallback != null && fallback.isNotEmpty) {
+        return fallback;
+      }
+    } catch (_) {
+      // Ignore preference read errors; fall back to local cache only.
+    }
+    return null;
+  }
 
   @override
 @override
 void initState() {
   super.initState();
 
-  //  Refresh automatically when user’s schedule changes
+  //  Refresh automatically when user's schedule changes
   final user = FirebaseAuth.instance.currentUser;
   if (user != null) {
     FirebaseFirestore.instance
@@ -367,7 +384,10 @@ void initState() {
     final currentDay = _dayKeys[pageIndex];
     final currentDayEvents = _eventsForDay(currentDay);
     final theme = Theme.of(context);
-    final isToday = _isSameDay(currentDay, DateTime.now());
+    final normalizedToday = _normalizeDate(DateTime.now());
+    final isToday = _isSameDay(currentDay, normalizedToday);
+    final isFutureDay = currentDay.isAfter(normalizedToday);
+    final hasToday = _dayKeys.any((day) => _isSameDay(day, normalizedToday));
 
     return Container(
       constraints: const BoxConstraints.expand(),
@@ -449,15 +469,13 @@ void initState() {
                 ],
               ),
             ),
-            if ((!isToday &&
-                    _dayKeys.any((day) => _isSameDay(day, DateTime.now()))) ||
-                currentDayEvents.isNotEmpty)
+            if ((!isToday && hasToday) || currentDayEvents.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    if (currentDayEvents.isNotEmpty)
+                    if (currentDayEvents.isNotEmpty && !isFutureDay)
                       TextButton.icon(
                         style: TextButton.styleFrom(
                           foregroundColor: _CalendarPalette.headerMuted,
@@ -476,11 +494,11 @@ void initState() {
                         ),
                       ),
                     if (currentDayEvents.isNotEmpty &&
+                        !isFutureDay &&
                         !isToday &&
-                        _dayKeys.any((day) => _isSameDay(day, DateTime.now())))
+                        hasToday)
                       const SizedBox(width: 12),
-                    if (!isToday &&
-                        _dayKeys.any((day) => _isSameDay(day, DateTime.now())))
+                    if (!isToday && hasToday)
                       TextButton.icon(
                         style: TextButton.styleFrom(
                           foregroundColor: _CalendarPalette.headerStrong,
@@ -770,6 +788,11 @@ void initState() {
   }
 
 
+  bool _shouldIncludeDate(DateTime date) {
+    final weekday = date.weekday;
+    return weekday != DateTime.friday && weekday != DateTime.saturday;
+  }
+
   List<DateTime> _extractDayKeys(
     List<MicrosoftCalendarEvent> events, {
     required DateTime windowStart,
@@ -783,14 +806,19 @@ void initState() {
 
     var cursor = normalizedStart;
     while (!cursor.isAfter(normalizedEnd)) {
-      days.add(cursor);
+      if (_shouldIncludeDate(cursor)) {
+        days.add(cursor);
+      }
       cursor = cursor.add(const Duration(days: 1));
     }
 
     for (final event in events) {
       final start = event.start;
       if (start != null) {
-        days.add(_normalizeDate(start));
+        final normalized = _normalizeDate(start);
+        if (_shouldIncludeDate(normalized)) {
+          days.add(normalized);
+        }
       }
     }
 
@@ -798,7 +826,10 @@ void initState() {
       final today = _normalizeDate(DateTime.now());
       final startOfWeek = today.subtract(Duration(days: today.weekday % 7));
       for (int i = 0; i < 7; i++) {
-        days.add(startOfWeek.add(Duration(days: i)));
+        final day = startOfWeek.add(Duration(days: i));
+        if (_shouldIncludeDate(day)) {
+          days.add(day);
+        }
       }
     }
 
@@ -854,11 +885,21 @@ void initState() {
   }
 
   void _jumpToToday() {
-    final todayIndex = _dayKeys.indexWhere(
-      (day) => _isSameDay(day, DateTime.now()),
+    final today = _normalizeDate(DateTime.now());
+    final exactIndex = _dayKeys.indexWhere(
+      (day) => _isSameDay(day, today),
     );
-    if (todayIndex != -1) {
-      _goToPage(todayIndex);
+    if (exactIndex != -1) {
+      _goToPage(exactIndex);
+      return;
+    }
+    final nextIndex = _dayKeys.indexWhere((day) => day.isAfter(today));
+    if (nextIndex != -1) {
+      _goToPage(nextIndex);
+      return;
+    }
+    if (_dayKeys.isNotEmpty) {
+      _goToPage(_dayKeys.length - 1);
     }
   }
 
@@ -1131,12 +1172,14 @@ void initState() {
 
   Future<bool> _isEventAlreadyAbsent(String eventId) async {
     // Always consult Firestore; fall back to local cache only on failure.
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return _recentlyMarkedAbsent.contains(eventId);
+    final docId = await _resolveUserDocId();
+    if (docId == null) {
+      return _recentlyMarkedAbsent.contains(eventId);
+    }
     try {
       final snap = await FirebaseFirestore.instance
           .collection('users')
-          .doc(uid)
+          .doc(docId)
           .collection('absences')
           .doc(eventId)
           .get();
@@ -1153,15 +1196,15 @@ void initState() {
   }
 
   Future<bool> _areAllEventsAbsentForDay(DateTime day) async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return false;
+    final docId = await _resolveUserDocId();
+    if (docId == null) return false;
     final events = _eventsForDay(day);
     if (events.isEmpty) return false;
     for (final e in events) {
       try {
         final snap = await FirebaseFirestore.instance
             .collection('users')
-            .doc(uid)
+            .doc(docId)
             .collection('absences')
             .doc(e.id)
             .get();
@@ -1177,8 +1220,8 @@ void initState() {
   }
 
   Future<int> _countPendingAbsencesForDay(DateTime day) async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return 0;
+    final docId = await _resolveUserDocId();
+    if (docId == null) return 0;
     final events = _eventsForDay(day);
     if (events.isEmpty) return 0;
     int pending = 0;
@@ -1186,7 +1229,7 @@ void initState() {
       try {
         final snap = await FirebaseFirestore.instance
             .collection('users')
-            .doc(uid)
+            .doc(docId)
             .collection('absences')
             .doc(e.id)
             .get();

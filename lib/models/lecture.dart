@@ -9,7 +9,7 @@ class Lecture {
   final int dayOfWeek;   // 0..6
   final int startTime;   // minutes since midnight
   final int endTime;     // minutes since midnight
-  final int hour;        //  course credit hours
+final int hour;        //  course credit hours
 
   Lecture({
     required this.id,
