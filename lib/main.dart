@@ -10,6 +10,7 @@ import 'package:absherk/services/noti_service.dart';
 import 'screens/home_page.dart';
 import 'screens/gpa_calc.dart';
 import 'screens/swapping_main.dart';
+import 'screens/SwappingEntryPage.dart';  
 import 'screens/experience.dart';
 import 'screens/community.dart';
 import 'screens/absence_page.dart';
@@ -116,7 +117,7 @@ class MyApp extends StatelessWidget {
           '/add-lecture': (_) => const AddLectureScreen(),
 
           '/home': (_) => const HomePage(),
-          '/swapping': (_) => const SwapRequestPage(),
+          '/swapping': (_) => SwappingEntryPage(),
           '/calculator': (_) => const GpaCalculator(),
 
           '/experience': (_) => const ExperiencePage(),
