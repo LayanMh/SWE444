@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'home_page.dart';
+import '../services/noti_service.dart';
 
 class SwapMatchesPage extends StatefulWidget {
   final String userId;
@@ -249,6 +250,11 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
         "confirmationExpiresAt": expiresAt,
       });
       await batch.commit();
+      await _notifySwapPartner(
+        match["userId"],
+        "New Swap Request",
+        "${widget.userRequestData["studentName"] ?? "A student"} wants to swap with you!",
+      );
 
       if (mounted) {
         Navigator.pop(context);
@@ -721,5 +727,18 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
         ],
       ),
     );
+  }
+
+  Future<void> _notifySwapPartner(String partnerId, String title, String body) async {
+    try {
+      await NotiService.sendNotificationToUser(
+        partnerId,
+        title: title,
+        body: body,
+      );
+      debugPrint("📩 Notification sent to $partnerId");
+    } catch (e) {
+      debugPrint("❌ Failed to send notification: $e");
+    }
   }
 }
