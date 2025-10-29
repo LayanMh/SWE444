@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'home_page.dart';
 
 class SwapMatchesPage extends StatefulWidget {
   final String userId;
@@ -22,6 +23,7 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
   List<Map<String, dynamic>> matches = [];
   bool _hasMustPriorityMatch = false;
   String? _missingMustCourseMessage;
+  int _selectedIndex = 2; // ✅ NEW: For bottom navigation
 
   @override
   void initState() {
@@ -41,7 +43,7 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
 
       // Extract user's additional course preferences
       final specialRequests = userData["specialRequests"] ?? {};
-      final myWantCourses = (specialRequests["want"] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      final myWantCourses = (specialRequests["want"] as List?)?.map((item) => Map<String, dynamic>.from(item as Map)).toList() ?? []; // ✅ FIXED: Type conversion
 
       // Step 1: Fetch base matches (gender, major, level, reverse groups, open status)
       final snapshot = await FirebaseFirestore.instance
@@ -60,8 +62,11 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
         return data;
       }).toList();
 
+      // ✅ IMPROVEMENT: Filter out the user's own request
+      final filteredMatches = allMatches.where((match) => match["id"] != widget.userRequestId).toList();
+
       // Step 2: Calculate match scores based on additional courses
-      final scoredMatches = allMatches.map((match) {
+      final scoredMatches = filteredMatches.map((match) {
         final score = _calculateMatchScore(match, myWantCourses);
         return {
           ...match,
@@ -99,6 +104,7 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
   }
 
   /// 🔹 Calculate match score based on additional courses
+  /// ✅ FIXED: Matches by COURSE CODE only (sections don't matter)
   Map<String, dynamic> _calculateMatchScore(
     Map<String, dynamic> match,
     List<Map<String, dynamic>> myWantCourses,
@@ -106,38 +112,75 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
     int score = 0;
     int matchedMustCourses = 0;
     int matchedOptionalCourses = 0;
+    int mutualBenefitScore = 0;
 
     final matchSpecialRequests = match["specialRequests"] ?? {};
-    final matchHaveCourses = (matchSpecialRequests["have"] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final matchHaveCourses = (matchSpecialRequests["have"] as List?)?.map((item) => Map<String, dynamic>.from(item as Map)).toList() ?? [];
+    final matchWantCourses = (matchSpecialRequests["want"] as List?)?.map((item) => Map<String, dynamic>.from(item as Map)).toList() ?? [];
+    
+    // Get my courses from widget data
+    final mySpecialRequests = widget.userRequestData["specialRequests"] ?? {};
+    final myHaveCourses = (mySpecialRequests["have"] as List?)?.map((item) => Map<String, dynamic>.from(item as Map)).toList() ?? [];
 
-    // Check each course I want against what the match has
+    // ✅ DIRECTION 1: Check if THEY HAVE what I WANT
     for (final wantCourse in myWantCourses) {
       final wantCourseCode = wantCourse["course"];
-      final wantSection = wantCourse["section"];
       final priority = wantCourse["priority"] ?? "Optional";
 
-      // Check if match has this course
+      // ✅ FIXED: Only check course code, ignore section
       final hasMatch = matchHaveCourses.any((haveCourse) {
-        return haveCourse["course"] == wantCourseCode && 
-               haveCourse["section"] == wantSection;
+        return haveCourse["course"] == wantCourseCode;  // ← NO section check!
       });
 
       if (hasMatch) {
         if (priority == "Must") {
-          score += 100; // High score for "Must" matches
+          score += 1000;
           matchedMustCourses++;
+          print("   ✓ They HAVE my MUST: $wantCourseCode (+1000)");
         } else {
-          score += 10; // Lower score for "Optional" matches
+          score += 10;
           matchedOptionalCourses++;
+          print("   ✓ They HAVE my Optional: $wantCourseCode (+10)");
         }
       }
     }
 
+    // ✅ DIRECTION 2: Check if I HAVE what THEY WANT
+    for (final theirWant in matchWantCourses) {
+      final theirWantCourse = theirWant["course"];
+      final theirPriority = theirWant["priority"] ?? "Optional";
+
+      // ✅ FIXED: Only check course code, ignore section
+      final iHaveIt = myHaveCourses.any((myHave) {
+        return myHave["course"] == theirWantCourse;  // ← NO section check!
+      });
+
+      if (iHaveIt) {
+        if (theirPriority == "Must") {
+          mutualBenefitScore += 1000;
+          print("   ✓ I HAVE their MUST: $theirWantCourse (+1000)");
+        } else {
+          mutualBenefitScore += 10;
+          print("   ✓ I HAVE their Optional: $theirWantCourse (+10)");
+        }
+      }
+    }
+
+    final totalScore = score + mutualBenefitScore;
+    
+    // 🔍 DEBUG OUTPUT
+    print("🔍 Match: ${match["studentName"] ?? "Unknown"}");
+    print("   Direction 1 (they have what I want): $score points");
+    print("   Direction 2 (I have what they want): $mutualBenefitScore points");
+    print("   TOTAL SCORE: $totalScore points");
+    print("---");
+
     return {
-      "score": score,
+      "score": totalScore,
       "matchedMustCourses": matchedMustCourses,
       "matchedOptionalCourses": matchedOptionalCourses,
       "totalMatchedCourses": matchedMustCourses + matchedOptionalCourses,
+      "mutualBenefit": mutualBenefitScore > 0,
     };
   }
 
@@ -210,14 +253,11 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
       if (mounted) {
         Navigator.pop(context);
         _showSnack("Confirmation sent successfully ✅");
-        Navigator.push(
+        
+        // ✅ IMPROVED: Navigate to home instead of waiting page
+        Navigator.pushReplacement(
           context,
-          MaterialPageRoute(
-            builder: (_) => WaitingForConfirmationPage(
-              expiresAt: expiresAt,
-              partnerName: match["studentName"] ?? "Student",
-            ),
-          ),
+          MaterialPageRoute(builder: (_) => const HomePage()),
         );
       }
     } catch (e) {
@@ -234,6 +274,31 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
     );
   }
 
+  // ✅ NEW: Handle bottom navigation
+  void _onNavTap(int index) {
+    if (index == 2) {
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomePage()));
+      return;
+    }
+    
+    setState(() => _selectedIndex = index);
+    
+    switch (index) {
+      case 0:
+        Navigator.pushReplacementNamed(context, '/profile');
+        break;
+      case 1:
+        Navigator.pushReplacementNamed(context, '/calendar');
+        break;
+      case 3:
+        Navigator.pushReplacementNamed(context, '/experience');
+        break;
+      case 4:
+        Navigator.pushReplacementNamed(context, '/community');
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -246,12 +311,26 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
           ),
         ),
         child: SafeArea(
+          bottom: false, // ✅ NEW: For bottom navigation
           child: _loading
               ? const Center(
                   child: CircularProgressIndicator(color: Colors.white),
                 )
               : _buildContent(),
         ),
+      ),
+      // ✅ NEW: Bottom Navigation Bar
+      bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
+        currentIndex: _selectedIndex,
+        onTap: _onNavTap,
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.person_rounded), label: 'Profile'),
+          BottomNavigationBarItem(icon: Icon(Icons.calendar_today_rounded), label: 'Schedule'),
+          BottomNavigationBarItem(icon: ImageIcon(AssetImage('assets/images/logo.png')), label: 'Home'),
+          BottomNavigationBarItem(icon: Icon(Icons.school_rounded), label: 'Experience'),
+          BottomNavigationBarItem(icon: Icon(Icons.people_alt_rounded), label: 'Community'),
+        ],
       ),
     );
   }
@@ -267,14 +346,14 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
                   child: Padding(
                     padding: EdgeInsets.symmetric(horizontal: 25),
                     child: Text(
-                      "No matching offers found yet.\nIf a reserved match expires, you'll be able to try again.",
+                      "No matching offers found yet.\nCheck back later or adjust your requirements.",
                       style: TextStyle(color: Colors.white70, fontSize: 16),
                       textAlign: TextAlign.center,
                     ),
                   ),
                 )
               : ListView.builder(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 100), // ✅ CHANGED: Extra padding for nav bar
                   itemCount: matches.length,
                   itemBuilder: (context, index) =>
                       _buildMatchCard(context, matches[index], index),
@@ -313,20 +392,20 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
         margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         padding: const EdgeInsets.all(15),
         decoration: BoxDecoration(
-          color: Colors.orange.shade100,
+          color: const Color(0xFFFFF3E0), // ✅ IMPROVED: Light orange
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.orange.shade700, width: 2),
+          border: Border.all(color: const Color(0xFFFF9800), width: 2), // ✅ IMPROVED: Material orange
         ),
         child: Row(
           children: [
-            Icon(Icons.warning_amber_rounded,
-                color: Colors.orange.shade800, size: 30),
+            const Icon(Icons.warning_amber_rounded,
+                color: Color(0xFFFF9800), size: 30), // ✅ IMPROVED
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 _missingMustCourseMessage!,
-                style: TextStyle(
-                  color: Colors.orange.shade900,
+                style: const TextStyle(
+                  color: Color(0xFFE65100), // ✅ IMPROVED: Dark orange text
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
@@ -340,24 +419,24 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
       BuildContext context, Map<String, dynamic> match, int index) {
     final from = match["fromGroup"]?.toString() ?? "-";
     final to = match["toGroup"]?.toString() ?? "-";
-    final name = match["studentName"] ?? "Student";
+    final name = match["studentName"] ?? "Student"; // ✅ Uses new field
     final matchScore = match["matchScore"] as int;
     final matchedMust = match["matchedMustCourses"] as int;
     final matchedOptional = match["matchedOptionalCourses"] as int;
     final totalMatched = match["totalMatchedCourses"] as int;
 
-    // Determine match quality badge
+    // ✅ IMPROVED: Better badge logic
     String badgeText = "";
     Color badgeColor = Colors.grey;
     if (matchedMust > 0) {
-      badgeText = "✨ PERFECT MATCH";
-      badgeColor = Colors.green;
+      badgeText = "⭐ PERFECT MATCH";
+      badgeColor = const Color(0xFF4CAF50); // Green
     } else if (matchedOptional > 0) {
       badgeText = "✓ Good Match";
-      badgeColor = Colors.blue;
+      badgeColor = const Color(0xFF2196F3); // Blue
     } else {
       badgeText = "Basic Match";
-      badgeColor = Colors.grey;
+      badgeColor = const Color(0xFF9E9E9E); // Grey
     }
 
     return Card(
@@ -448,17 +527,17 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
                     const SizedBox(height: 5),
                     if (matchedMust > 0)
                       Text(
-                        "✓ $matchedMust MUST priority course(s)",
-                        style: TextStyle(
-                          color: Colors.green.shade700,
+                        "⭐ $matchedMust MUST priority course(s)",
+                        style: const TextStyle(
+                          color: Color(0xFF4CAF50),
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                     if (matchedOptional > 0)
                       Text(
                         "✓ $matchedOptional Optional course(s)",
-                        style: TextStyle(
-                          color: Colors.blue.shade700,
+                        style: const TextStyle(
+                          color: Color(0xFF2196F3),
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -501,8 +580,8 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
 
   void _viewMatchDetails(Map<String, dynamic> match) {
     final specialRequests = match["specialRequests"] ?? {};
-    final haveCourses = (specialRequests["have"] as List?)?.cast<Map<String, dynamic>>() ?? [];
-    final wantCourses = (specialRequests["want"] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final haveCourses = (specialRequests["have"] as List?)?.map((item) => Map<String, dynamic>.from(item as Map)).toList() ?? []; // ✅ FIXED
+    final wantCourses = (specialRequests["want"] as List?)?.map((item) => Map<String, dynamic>.from(item as Map)).toList() ?? []; // ✅ FIXED
 
     showModalBottomSheet(
       context: context,
@@ -643,173 +722,4 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
       ),
     );
   }
-}
-
-/// 🕒 Live Waiting Page — Auto-Updates When Partner Confirms
-class WaitingForConfirmationPage extends StatefulWidget {
-  final Timestamp expiresAt;
-  final String partnerName;
-
-  const WaitingForConfirmationPage({
-    super.key,
-    required this.expiresAt,
-    required this.partnerName,
-  });
-
-  @override
-  State<WaitingForConfirmationPage> createState() =>
-      _WaitingForConfirmationPageState();
-}
-
-class _WaitingForConfirmationPageState
-    extends State<WaitingForConfirmationPage> {
-  bool _expired = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _startExpiryTimer();
-  }
-
-  /// Automatically mark expired after 6 hours
-  void _startExpiryTimer() {
-    final duration = widget.expiresAt.toDate().difference(DateTime.now());
-    Future.delayed(duration, () {
-      if (mounted && !_expired) {
-        setState(() => _expired = true);
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final expiryTime = widget.expiresAt.toDate();
-    final remaining = expiryTime.difference(DateTime.now());
-    final hours = remaining.inHours;
-    final minutes = remaining.inMinutes % 60;
-
-    return Scaffold(
-      backgroundColor: const Color(0xFFF4FAFB),
-      appBar: AppBar(
-        backgroundColor: Colors.teal,
-        title: const Text("Waiting for Confirmation"),
-      ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection("swap_requests")
-            .where("status", isEqualTo: "confirmed")
-            .snapshots(),
-        builder: (context, snapshot) {
-          // 🔹 Case 1 – confirmed
-          if (snapshot.hasData &&
-              snapshot.data!.docs.isNotEmpty &&
-              !_expired) {
-            return _buildConfirmed(context);
-          }
-
-          // 🔹 Case 2 – expired
-          if (_expired || DateTime.now().isAfter(expiryTime)) {
-            return _buildExpired(context);
-          }
-
-          // 🔹 Default – still pending
-          return _buildPending(context, hours, minutes);
-        },
-      ),
-    );
-  }
-
-  Widget _buildConfirmed(BuildContext context) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(40),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.verified, size: 80, color: Colors.green),
-              const SizedBox(height: 20),
-              Text(
-                "Your swap with ${widget.partnerName} has been CONFIRMED!",
-                style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.green),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 30),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.picture_as_pdf),
-                label: const Text("Generate PDF"),
-                style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 22, vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12))),
-                onPressed: () {
-                  Navigator.pop(context);
-                },
-              ),
-            ],
-          ),
-        ),
-      );
-
-  Widget _buildExpired(BuildContext context) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(30),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.timer_off, size: 80, color: Colors.redAccent),
-              const SizedBox(height: 20),
-              const Text(
-                "Reservation expired.",
-                style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.redAccent),
-              ),
-              const SizedBox(height: 10),
-              const Text(
-                "The 6-hour period ended before confirmation.",
-                style: TextStyle(color: Colors.black54),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      );
-
-  Widget _buildPending(BuildContext context, int hours, int minutes) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(30),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.hourglass_bottom, size: 70, color: Colors.teal),
-              const SizedBox(height: 20),
-              Text(
-                "Waiting for ${widget.partnerName} to confirm...",
-                style:
-                    const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 10),
-              Text(
-                "If no response is received within 6 hours, "
-                "the reservation will expire.",
-                style: TextStyle(color: Colors.grey.shade700),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 30),
-              Text(
-                "Time left: $hours h $minutes m",
-                style: const TextStyle(
-                    fontWeight: FontWeight.bold, color: Colors.teal),
-              ),
-            ],
-          ),
-        ),
-      );
 }
