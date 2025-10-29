@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/foundation.dart';
 
@@ -134,6 +135,52 @@ class NotiService {
       // Try again without the image style
       await _plugin.show(id, title, body, fallback,
           payload: 'course:$courseId;pct:$percentText');
+    }
+  }
+
+  /// Enqueue a remote push notification for the specified user.
+  ///
+  /// This looks up the user's stored FCM tokens and writes a notification job
+  /// into Firestore so the backend worker can fan out the push. Falls back to
+  /// logging if no token is found.
+  static Future<void> sendNotificationToUser(
+    String userId, {
+    required String title,
+    required String body,
+  }) async {
+    try {
+      final userDoc =
+          await FirebaseFirestore.instance.collection('users').doc(userId).get();
+      final data = userDoc.data();
+      if (data == null) {
+        debugPrint("⚠️ No user document found for $userId; skipping notification.");
+        return;
+      }
+
+      final tokens = <String>{};
+      final tokenField = data['fcmToken'];
+      final tokensField = data['fcmTokens'];
+      if (tokenField is String && tokenField.isNotEmpty) tokens.add(tokenField);
+      if (tokensField is Iterable) {
+        tokens.addAll(tokensField.whereType<String>().where((t) => t.isNotEmpty));
+      }
+
+      if (tokens.isEmpty) {
+        debugPrint("⚠️ No FCM tokens stored for $userId; cannot send notification.");
+        return;
+      }
+
+      await FirebaseFirestore.instance.collection('push_notifications').add({
+        'userId': userId,
+        'tokens': tokens.toList(),
+        'title': title,
+        'body': body,
+        'createdAt': FieldValue.serverTimestamp(),
+        'status': 'pending',
+      });
+      debugPrint("📩 Enqueued push notification for $userId");
+    } catch (e) {
+      debugPrint("❌ Failed to enqueue notification for $userId: $e");
     }
   }
 }

@@ -46,6 +46,8 @@ class _SwapRequestPageState extends State<SwapRequestPage> {
   bool showHave = false;
   bool showWant = false;
   bool showDelete = false; // ✅ KEEPING: internal variable name (only UI text changes)
+  bool _addingHaveCourse = false; // Controls showing have-course form
+  bool _addingWantCourse = false; // Controls showing want-course form
 
   int _selectedIndex = 2; // ✅ NEW: Default to home tab
 
@@ -164,9 +166,10 @@ class _SwapRequestPageState extends State<SwapRequestPage> {
     if (!_isValidSection(section)) return _showMsg("Section must be exactly 5 digits", true); // ✅ CHANGED message
     setState(() {
       haveCourses.add({"course": code, "section": section});
-      haveCourseCodeController.clear();
-      haveSectionController.clear();
+      _addingHaveCourse = false;
     });
+    haveCourseCodeController.clear();
+    haveSectionController.clear();
   }
 
   void _addWantCourse() {
@@ -176,10 +179,45 @@ class _SwapRequestPageState extends State<SwapRequestPage> {
     if (!_isValidSection(section)) return _showMsg("Section must be exactly 5 digits", true); // ✅ CHANGED message
     setState(() {
       wantCourses.add({"course": code, "section": section, "priority": priority});
-      wantCourseCodeController.clear();
-      wantSectionController.clear();
+      _addingWantCourse = false;
       priority = "Must";
     });
+    wantCourseCodeController.clear();
+    wantSectionController.clear();
+  }
+
+  void _startHaveCourseEntry() {
+    setState(() {
+      _addingHaveCourse = true;
+    });
+    haveCourseCodeController.clear();
+    haveSectionController.clear();
+  }
+
+  void _cancelHaveCourseEntry() {
+    setState(() {
+      _addingHaveCourse = false;
+    });
+    haveCourseCodeController.clear();
+    haveSectionController.clear();
+  }
+
+  void _startWantCourseEntry() {
+    setState(() {
+      _addingWantCourse = true;
+      priority = "Must";
+    });
+    wantCourseCodeController.clear();
+    wantSectionController.clear();
+  }
+
+  void _cancelWantCourseEntry() {
+    setState(() {
+      _addingWantCourse = false;
+      priority = "Must";
+    });
+    wantCourseCodeController.clear();
+    wantSectionController.clear();
   }
 
   void _addDeletedCourse() { // ✅ KEEPING: function name stays same
@@ -456,14 +494,44 @@ class _SwapRequestPageState extends State<SwapRequestPage> {
 
   Widget _buildHaveSection() => Column(
         children: [
-          _buildCourseInput(haveCourseCodeController, haveSectionController),
-          const SizedBox(height: 10),
-          ElevatedButton.icon(
-            onPressed: _addHaveCourse,
-            icon: const Icon(Icons.add),
-            label: const Text("Add Course"),
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0097B2), foregroundColor: Colors.white),
-          ),
+          if (_addingHaveCourse) ...[
+            _buildCourseInput(haveCourseCodeController, haveSectionController),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _addHaveCourse,
+                    icon: const Icon(Icons.check),
+                    label: const Text("Save Course"),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0097B2),
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _cancelHaveCourseEntry,
+                    child: const Text("Cancel"),
+                  ),
+                ),
+              ],
+            ),
+          ] else
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _startHaveCourseEntry,
+                icon: const Icon(Icons.add),
+                label: const Text("Add Course"),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF0097B2),
+                  side: const BorderSide(color: Color(0xFF0097B2), width: 1.5),
+                ),
+              ),
+            ),
           const SizedBox(height: 10),
           _buildList(haveCourses),
         ],
@@ -471,24 +539,54 @@ class _SwapRequestPageState extends State<SwapRequestPage> {
 
   Widget _buildWantSection() => Column(
         children: [
-          _buildCourseInput(wantCourseCodeController, wantSectionController),
-          const SizedBox(height: 10),
-          DropdownButtonFormField<String>(
-            value: priority,
-            decoration: const InputDecoration(labelText: "Priority", border: OutlineInputBorder()),
-            items: const [
-              DropdownMenuItem(value: "Must", child: Text("Must")),
-              DropdownMenuItem(value: "Optional", child: Text("Optional")),
-            ],
-            onChanged: (val) => setState(() => priority = val!),
-          ),
-          const SizedBox(height: 10),
-          ElevatedButton.icon(
-            onPressed: _addWantCourse,
-            icon: const Icon(Icons.add),
-            label: const Text("Add Course"),
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0E0259), foregroundColor: Colors.white),
-          ),
+          if (_addingWantCourse) ...[
+            _buildCourseInput(wantCourseCodeController, wantSectionController),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              value: priority,
+              decoration: const InputDecoration(labelText: "Priority", border: OutlineInputBorder()),
+              items: const [
+                DropdownMenuItem(value: "Must", child: Text("Must")),
+                DropdownMenuItem(value: "Optional", child: Text("Optional")),
+              ],
+              onChanged: (val) => setState(() => priority = val!),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _addWantCourse,
+                    icon: const Icon(Icons.check),
+                    label: const Text("Save Course"),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0E0259),
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _cancelWantCourseEntry,
+                    child: const Text("Cancel"),
+                  ),
+                ),
+              ],
+            ),
+          ] else
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _startWantCourseEntry,
+                icon: const Icon(Icons.add),
+                label: const Text("Add Course"),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF0E0259),
+                  side: const BorderSide(color: Color(0xFF0E0259), width: 1.5),
+                ),
+              ),
+            ),
           const SizedBox(height: 10),
           _buildList(wantCourses),
         ],

@@ -5,6 +5,7 @@ import 'swapping_main.dart';
 import 'swap_matches_page.dart' as matches;
 import 'generate_pdf_page.dart' as pdf;
 import 'dart:async';
+import '../services/noti_service.dart';
 
 class MySwapRequestPage extends StatefulWidget {
   final String requestId;
@@ -200,10 +201,15 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
       });
 
       await batch.commit();
+      await _notifySwapPartner(
+        partnerId,
+        "Swap Confirmed",
+        "Your swap request has been confirmed!",
+      );
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text("✅ Swap confirmed successfully!"),
+        content: Text(" Swap confirmed successfully!"),
         backgroundColor: Colors.green,
       ));
     } catch (e) {
@@ -231,6 +237,11 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
       });
 
       await batch.commit();
+      await _notifySwapPartner(
+        partnerId,
+        "Swap Declined",
+        "Your swap request was declined.",
+      );
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -238,7 +249,7 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
         backgroundColor: Colors.orange,
       ));
     } catch (e) {
-      debugPrint("❌ Error declining swap: $e");
+      debugPrint("Error declining swap: $e");
     }
   }
 
@@ -331,6 +342,9 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
     final expiresAt = _data?["confirmationExpiresAt"] as Timestamp?; // ✅ NEW
     final confirmationBy = _data?["confirmationBy"]; // ✅ NEW
     final myUserId = _data!["userId"]; // ✅ NEW
+    final isPending = status == "pending_confirmation";
+    final isConfirmed = status == "confirmed";
+    final canEdit = !isPending && !isConfirmed;
 
     Color statusColor;
     String statusText;
@@ -341,7 +355,7 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
         statusColor = const Color(0xFFFF9800); // ✅ Material Orange - Clear & Visible
         // ✅ NEW: Show different text based on who's waiting
         if (confirmationBy == myUserId) {
-          statusText = "Waiting for Response";
+          statusText = "Waiting for confirmation";
           if (expiresAt != null) {
             statusSubtitle = _buildCountdown(expiresAt);
           }
@@ -362,12 +376,10 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
         );
         break;
       default:
-        statusColor = const Color(0xFF2196F3); // ✅ Material Blue - Clear & Visible (instead of grey)
+        statusColor = const Color.fromARGB(255, 236, 237, 239); // ✅ Material Blue - Clear & Visible (instead of grey)
         statusText = "Open";
-        statusSubtitle = const Text(
-          "Looking for matches...",
-          style: TextStyle(color: Color(0xFF2196F3), fontSize: 12),
-        );
+        
+        ;
     }
 
     return SingleChildScrollView(
@@ -389,7 +401,7 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
           const SizedBox(height: 25),
           _statusCard(statusText, statusColor, statusSubtitle), // ✅ CHANGED: Added subtitle
           const SizedBox(height: 30),
-          _detailsCard(fromGroup, toGroup, major, level, gender),
+          _detailsCard(fromGroup, toGroup, major, level, gender, canEdit),
           const SizedBox(height: 25),
           _actionButtons(userId, status, confirmationBy == myUserId), // ✅ CHANGED: Added isWaiting parameter
         ],
@@ -412,7 +424,7 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
         final seconds = remaining.inSeconds % 60;
         
         return Text(
-          "⏰ Time left: ${hours}h ${minutes}m ${seconds}s",
+          "Time left: ${hours}h ${minutes}m ${seconds}s",
           style: const TextStyle(color: Color(0xFFFF9800), fontSize: 12, fontWeight: FontWeight.w600), // ✅ Updated color
         );
       },
@@ -457,7 +469,7 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
       );
 
   Widget _detailsCard(
-      String from, String to, String major, String level, String gender) {
+      String from, String to, String major, String level, String gender, bool canEdit) {
     // ✅ NEW: Extract courses to display
     final specialRequests = _data!["specialRequests"] ?? {};
     final haveCourses = (specialRequests["have"] as List?)?.map((item) => Map<String, dynamic>.from(item as Map)).toList() ?? [];
@@ -473,6 +485,21 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (canEdit)
+              Align(
+                alignment: Alignment.topRight,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: kIndigo.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.edit, color: kIndigo, size: 22),
+                    tooltip: "Edit Request",
+                    onPressed: _openEditRequest,
+                  ),
+                ),
+              ),
             _sectionTitle("Request Details", kIndigo),
             _detailRow(Icons.group, "From Group", "Group $from"),
             _detailRow(Icons.swap_horiz, "To Group", "Group $to"),
@@ -571,23 +598,6 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
               );
             },
           ),
-        if (!isConfirmed && !isPending) // ✅ CHANGED: Hide edit when pending
-          _primaryBtn(
-            color: kIndigo,
-            icon: Icons.edit,
-            label: "Edit Request",
-            onPressed: () {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => SwapRequestPage(
-                    existingRequestId: widget.requestId,
-                    initialData: _data!,
-                  ),
-                ),
-              );
-            },
-          ),
         // ✅ NEW: Show waiting message when user is waiting for confirmation
         if (isPending && isWaiting)
           Container(
@@ -611,15 +621,7 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
             ),
           ),
         const SizedBox(height: 16),
-        if (!isConfirmed)
-          _primaryBtn(
-            color: Colors.redAccent,
-            icon: Icons.delete_outline,
-            label: "Delete Request",
-            onPressed: _deleteRequest,
-          ),
-        const SizedBox(height: 16),
-        if (status == "open")
+        if (status == "open") ...[
           _outlineBtn(
             icon: Icons.group_outlined,
             label: "Find Matches",
@@ -635,6 +637,15 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
                 ),
               );
             },
+          ),
+          const SizedBox(height: 16),
+        ],
+        if (!isConfirmed)
+          _primaryBtn(
+            color: Colors.redAccent,
+            icon: Icons.delete_outline,
+            label: "Delete Request",
+            onPressed: _deleteRequest,
           ),
       ],
     );
@@ -712,6 +723,7 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
                   const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: kTeal)),
           style: OutlinedButton.styleFrom(
             side: const BorderSide(color: kTeal, width: 1.8),
+            backgroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 16),
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -719,6 +731,31 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
           onPressed: onPressed,
         ),
       );
+
+  void _openEditRequest() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SwapRequestPage(
+          existingRequestId: widget.requestId,
+          initialData: _data!,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _notifySwapPartner(String partnerId, String title, String body) async {
+    try {
+      await NotiService.sendNotificationToUser(
+        partnerId,
+        title: title,
+        body: body,
+      );
+      debugPrint("📩 Notification sent to $partnerId");
+    } catch (e) {
+      debugPrint("❌ Failed to send notification: $e");
+    }
+  }
 
   Future<void> _deleteRequest() async {
     // ✅ NEW: Added confirmation dialog
@@ -751,26 +788,36 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
       final data = snapshot.data();
       final partnerId = data?["partnerRequestId"];
 
-      if (partnerId != null) {
-        await FirebaseFirestore.instance
-            .collection("swap_requests")
-            .doc(partnerId)
-            .update({
-          "status": "open",
-          "confirmationBy": FieldValue.delete(),
-          "confirmedBy": FieldValue.delete(),
-          "partnerRequestId": FieldValue.delete(),
-          "confirmationExpiresAt": FieldValue.delete(),
-        });
+      if (!snapshot.exists) {
+        _showDeleteResult(success: false, message: "Request not found or already deleted.");
+        return;
       }
 
-      await docRef.delete();
+      final batch = FirebaseFirestore.instance.batch();
+      batch.delete(docRef);
+
+      if (partnerId != null) {
+        final partnerRef =
+            FirebaseFirestore.instance.collection("swap_requests").doc(partnerId);
+        final partnerSnapshot = await partnerRef.get();
+        if (partnerSnapshot.exists) {
+          batch.update(partnerRef, {
+            "status": "open",
+            "confirmationBy": FieldValue.delete(),
+            "confirmedBy": FieldValue.delete(),
+            "partnerRequestId": FieldValue.delete(),
+            "confirmationExpiresAt": FieldValue.delete(),
+          });
+        } else {
+          debugPrint(
+              "⚠️ Partner request $partnerId already missing when deleting ${widget.requestId}.");
+        }
+      }
+
+      await batch.commit();
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text("Request deleted successfully."),
-        backgroundColor: Colors.redAccent,
-      ));
+      _showDeleteResult(success: true);
 
       Navigator.pushAndRemoveUntil(
         context,
@@ -779,6 +826,19 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
       );
     } catch (e) {
       debugPrint("❌ Error deleting: $e");
+      if (!mounted) return;
+      _showDeleteResult(success: false, message: "Failed to delete request. Please try again.");
     }
+  }
+
+  void _showDeleteResult({required bool success, String? message}) {
+    final text = message ??
+        (success
+            ? "Request deleted successfully."
+            : "Failed to delete request. Please try again.");
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(text),
+      backgroundColor: success ? Colors.redAccent : Colors.red,
+    ));
   }
 }
