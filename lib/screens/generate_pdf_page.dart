@@ -1,218 +1,572 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
+import 'dart:ui' as ui;
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:printing/printing.dart';
+import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 class GeneratePdfPage extends StatefulWidget {
   final String myRequestId;
-
   const GeneratePdfPage({super.key, required this.myRequestId});
 
   @override
   State<GeneratePdfPage> createState() => _GeneratePdfPageState();
 }
 
-class _GeneratePdfPageState extends State<GeneratePdfPage> {
-  Uint8List? _pdfBytes;
+// ───────────────────────────── Models ─────────────────────────────
+class _CourseRow {
+  final String code;
+  final String section;
+  final String name;
+  final int hours;
+  const _CourseRow({
+    required this.code,
+    required this.section,
+    required this.name,
+    required this.hours,
+  });
+}
 
-  // 🎨 App palette
-  static const Color kTeal = Color(0xFF0097B2);
-  static const Color kIndigo = Color(0xFF0E0259);
+class _FormData {
+  final String studentName;
+  final String studentId;
+  final String studentEmail;
+  final String studentMajor;
+  final List<_CourseRow> additions;
+  final List<_CourseRow> deletions;
+  final int beforeHours;
+  final int afterHours;
+
+  const _FormData({
+    required this.studentName,
+    required this.studentId,
+    required this.studentEmail,
+    required this.studentMajor,
+    required this.additions,
+    required this.deletions,
+    required this.beforeHours,
+    required this.afterHours,
+  });
+}
+
+// ───────────────────────────── Main Widget ─────────────────────────────
+class _GeneratePdfPageState extends State<GeneratePdfPage> {
+  bool _loading = false;
+  Uint8List? _pdfBytes;
+  String? _errorMessage;
+  late final TransformationController _zoomController;
+  double _zoomScale = 1.0;
+  bool _isUpdatingZoom = false;
+
+  static const double _minZoom = 0.8;
+  static const double _maxZoom = 2.5;
 
   @override
   void initState() {
     super.initState();
-    _generatePdfBytes();
-  }
-
-  T? _pick<T>(Map<String, dynamic> m, List<String> keys) {
-    for (final k in keys) {
-      if (m.containsKey(k) && m[k] != null && (m[k] is T)) return m[k] as T;
-    }
-    return null;
-  }
-
-  PdfColor _pdfColorFrom(Color color) {
-    int channel(double component) =>
-        (component * 255.0).round().clamp(0, 255);
-
-    return PdfColor(
-      channel(color.r),
-      channel(color.g),
-      channel(color.b),
-      channel(color.a),
-    );
-  }
-
-  Future<void> _generatePdfBytes() async {
-    try {
-      // 1) Fetch swap request
-      final swapSnap = await FirebaseFirestore.instance
-          .collection('swap_requests')
-          .doc(widget.myRequestId)
-          .get();
-      if (!swapSnap.exists) {
-        throw Exception("Swap request not found.");
-      }
-      final swap = swapSnap.data() ?? <String, dynamic>{};
-
-      // 2) Resolve user
-      final resolvedStudentId =
-          _pick<String>(swap, ["studentId", "userId", "uid", "studentUID"]);
-
-      Map<String, dynamic>? userData;
-      if (resolvedStudentId != null && resolvedStudentId.isNotEmpty) {
-        final userSnap = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(resolvedStudentId)
-            .get();
-        if (userSnap.exists) userData = userSnap.data();
-      }
-
-      // 3) Extract fields
-      final firstName = _pick<String>(userData ?? {}, ["FName"]) ??
-          _pick<String>(swap, ["studentFirstName"]);
-      final lastName = _pick<String>(userData ?? {}, ["LName"]) ??
-          _pick<String>(swap, ["studentLastName"]);
-      final studentName =
-          "${firstName ?? ''} ${lastName ?? ''}".trim().isNotEmpty
-              ? "${firstName ?? ''} ${lastName ?? ''}".trim()
-              : (_pick<String>(swap, ["studentName"]) ?? "Student Name");
-
-      final studentEmail = _pick<String>(userData ?? {}, ["email"]) ??
-          _pick<String>(swap, ["email", "studentEmail"]) ??
-          "student@example.com";
-
-      // Try first 9 digits from email as ID
-      final emailIdMatch = RegExp(r'^\d{9}').firstMatch(studentEmail);
-      final studentId = emailIdMatch != null
-          ? emailIdMatch.group(0)!
-          : (resolvedStudentId ?? "000000");
-
-      final studentPhone = _pick<String>(userData ?? {}, ["phone"]) ??
-          _pick<String>(swap, ["phone", "studentPhone"]) ??
-          "0500000000";
-      final studentMajor = _pick<String>(userData ?? {}, ["major"]) ??
-          _pick<String>(swap, ["major", "studentMajor"]) ??
-          "Computer Science";
-
-      // 4) Load base PDF (from assets)
-      final ByteData pdfData = await rootBundle.load('assets/images/form.pdf');
-      final PdfDocument document =
-          PdfDocument(inputBytes: pdfData.buffer.asUint8List());
-      final PdfPage page = document.pages[0];
-      final PdfFont font = PdfStandardFont(PdfFontFamily.helvetica, 12);
-
-      // Teal brush to match app
-      final PdfBrush tealBrush = PdfSolidBrush(_pdfColorFrom(kTeal));
-
-      // 5) Fill the PDF
-      page.graphics.drawString(studentName, font,
-          brush: tealBrush, bounds: const Rect.fromLTWH(330, 180, 200, 20));
-      page.graphics.drawString(studentId, font,
-          brush: tealBrush, bounds: const Rect.fromLTWH(90, 180, 200, 20));
-      page.graphics.drawString(studentEmail, font,
-          brush: tealBrush, bounds: const Rect.fromLTWH(300, 215, 200, 20));
-      page.graphics.drawString(studentPhone, font,
-          brush: tealBrush, bounds: const Rect.fromLTWH(90, 215, 200, 20));
-      page.graphics.drawString(studentMajor, font,
-          brush: tealBrush, bounds: const Rect.fromLTWH(370, 240, 200, 20));
-
-      final today = DateTime.now();
-      final formattedDate =
-          "${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}";
-
-      page.graphics.drawString(studentName, font,
-          brush: tealBrush, bounds: const Rect.fromLTWH(380, 640, 200, 20));
-      page.graphics.drawString(formattedDate, font,
-          brush: tealBrush, bounds: const Rect.fromLTWH(80, 640, 200, 20));
-
-      final PdfFont xFont =
-          PdfStandardFont(PdfFontFamily.helvetica, 16, style: PdfFontStyle.bold);
-      page.graphics.drawString("X", xFont,
-          brush: tealBrush, bounds: const Rect.fromLTWH(525, 595, 20, 20));
-
-      // 6) Save to memory
-      final Uint8List bytes = Uint8List.fromList(await document.save());
-      document.dispose();
-
-      if (!mounted) return;
-      setState(() => _pdfBytes = bytes);
-    } catch (e) {
-      debugPrint("❌ Error generating PDF: $e");
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Error generating PDF: $e"),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
-    }
+    _zoomController = TransformationController();
+    _zoomController.addListener(_handleZoomControllerChange);
+    _resetZoom(notify: false);
+    _generatePdf();
   }
 
   @override
-  Widget build(BuildContext context) {
-    final canShare = _pdfBytes != null;
+  void dispose() {
+    _zoomController.removeListener(_handleZoomControllerChange);
+    _zoomController.dispose();
+    super.dispose();
+  }
 
+  // ─────────────── Firestore Fetch Helpers ───────────────
+  Future<Map<String, dynamic>?> _fetchSwapRequest(String id) async {
+    try {
+      final doc =
+          await FirebaseFirestore.instance.collection('swap_requests').doc(id).get();
+      return doc.data();
+    } catch (e) {
+      debugPrint('🔥 Error fetching swap request $id: $e');
+      return null;
+    }
+  }
+
+  Future<List<_CourseRow>> _fetchGroupCourses(
+      dynamic groupField, {
+        String? major,
+        dynamic level,
+      }) async {
+    if (groupField == null) return [];
+
+    int? groupNumber = groupField is int ? groupField : int.tryParse('$groupField');
+    if (groupNumber == null) return [];
+
+    try {
+      debugPrint('🔎 Fetching group with Number=$groupNumber, Major=$major, Level=$level');
+      final ref = FirebaseFirestore.instance.collection('Groups');
+
+      Query<Map<String, dynamic>> query = ref.where('Number', isEqualTo: groupNumber);
+      if (major != null) query = query.where('Major', isEqualTo: major);
+      if (level != null) query = query.where('Level', isEqualTo: level);
+
+      final snap = await query.limit(1).get();
+      if (snap.docs.isEmpty) return [];
+
+      final data = snap.docs.first.data();
+      final rawSections = (data['sections'] ?? data['Sections']) as List<dynamic>?;
+
+      if (rawSections == null || rawSections.isEmpty) {
+        debugPrint('⚠️ Group $groupNumber has no sections.');
+        return [];
+      }
+
+      return await _fetchSectionCourses(rawSections.map((e) => e.toString()).toList());
+    } catch (e) {
+      debugPrint('🔥 Error fetching group: $e');
+      return [];
+    }
+  }
+
+  Future<List<_CourseRow>> _fetchSectionCourses(List<String> sections) async {
+    final results = <_CourseRow>[];
+    for (final s in sections) {
+      try {
+        final q = await FirebaseFirestore.instance
+            .collection('timetables')
+            .where('section', isEqualTo: s)
+            .limit(1)
+            .get();
+        if (q.docs.isEmpty) continue;
+        final d = q.docs.first.data();
+        results.add(_CourseRow(
+          code: (d['courseCode'] ?? '').toString(),
+          section: (d['section'] ?? '').toString(),
+          name: (d['courseName'] ?? '').toString(),
+          hours: int.tryParse('${d['hour'] ?? 0}') ?? 0,
+        ));
+      } catch (e) {
+        debugPrint('🔥 Error fetching section $s: $e');
+      }
+    }
+    return results;
+  }
+
+  List<String> _normalize(dynamic raw) {
+    if (raw == null) return [];
+    if (raw is List) return raw.map((e) => e.toString()).toList();
+    if (raw is String) return raw.split(',').map((e) => e.trim()).toList();
+    return [];
+  }
+
+  int _sumHours(List<_CourseRow> rows) =>
+      rows.fold<int>(0, (total, row) => total + row.hours);
+
+  // ─────────────── Build Form Data ───────────────
+  Future<_FormData> _buildFormData(
+      Map<String, dynamic> req, Map<String, dynamic>? partner) async {
+    final major = req['major'] ?? req['Major'] ?? 'Software Engineering';
+    final level = req['level'] ?? req['Level'];
+    final fromGroup =
+        await _fetchGroupCourses(req['fromGroup'], major: major, level: level);
+    final toGroup =
+        await _fetchGroupCourses(req['toGroup'], major: major, level: level);
+
+    final have = _normalize(req['have']);
+    final want = _normalize(req['want']);
+    final deleted = _normalize(req['deletedCourses']);
+    final partnerHave = _normalize(partner?['have']);
+
+    final fromGroupSections = fromGroup.map((e) => e.section.toLowerCase()).toSet();
+    final toGroupSections = toGroup.map((e) => e.section.toLowerCase()).toSet();
+
+    final shared = fromGroupSections.intersection(toGroupSections);
+    final intersect =
+        want.map((e) => e.toLowerCase()).toSet().intersection(partnerHave.map((e) => e.toLowerCase()).toSet());
+
+    final wantCourses = await _fetchSectionCourses(want);
+    final partnerHaveCourses = await _fetchSectionCourses(partnerHave);
+    final haveCourses = await _fetchSectionCourses(have);
+
+    // Addition = toGroup + (myWant ∩ partnerHave) – shared – deleted
+    final additions = [
+      ...toGroup,
+      ...wantCourses.where((c) => intersect.contains(c.section.toLowerCase())),
+      ...partnerHaveCourses.where((c) => intersect.contains(c.section.toLowerCase())),
+    ]
+        .where((c) =>
+            !shared.contains(c.section.toLowerCase()) &&
+            !deleted.contains(c.section.toLowerCase()))
+        .toList();
+
+    // Deletion = fromGroup + myHave – shared – deleted
+    final deletions = [
+      ...fromGroup,
+      ...haveCourses,
+    ]
+        .where((c) =>
+            !shared.contains(c.section.toLowerCase()) &&
+            !deleted.contains(c.section.toLowerCase()))
+        .toList();
+
+    final sharedRows =
+        fromGroup.where((c) => shared.contains(c.section.toLowerCase())).toList();
+    final before = _sumHours([...deletions, ...sharedRows]);
+    final after = _sumHours([...additions, ...sharedRows]);
+
+    return _FormData(
+      studentName: req['studentName'] ?? 'Unknown',
+      studentId: _extractStudentId(req['studentEmail'] ?? ''),
+      studentEmail: req['studentEmail'] ?? '',
+      studentMajor: 'Computer and Information Sciences',
+      additions: additions,
+      deletions: deletions,
+      beforeHours: before,
+      afterHours: after,
+    );
+  }
+
+  String _extractStudentId(String email) {
+    final m = RegExp(r'\d{9,}').firstMatch(email);
+    return m?.group(0) ?? '--';
+  }
+
+  void _resetZoom({bool notify = true}) {
+    _isUpdatingZoom = true;
+    _zoomScale = 1.0;
+    _zoomController.value = Matrix4.identity();
+    _isUpdatingZoom = false;
+    if (notify && mounted) setState(() {});
+  }
+
+  void _updateZoom(double delta) {
+    final next = (_zoomScale + delta).clamp(_minZoom, _maxZoom);
+    if ((next - _zoomScale).abs() < 0.001) return;
+    _isUpdatingZoom = true;
+    _zoomScale = next;
+    final Matrix4 matrix = Matrix4.copy(_zoomController.value);
+    matrix.storage[0] = next;
+    matrix.storage[5] = next;
+    _zoomController.value = matrix;
+    _isUpdatingZoom = false;
+    setState(() {});
+  }
+
+  void _zoomIn() => _updateZoom(0.2);
+
+  void _zoomOut() => _updateZoom(-0.2);
+
+  void _handleZoomControllerChange() {
+    if (_isUpdatingZoom) return;
+    final controllerScale = _zoomController.value.getMaxScaleOnAxis();
+    final clamped = controllerScale.clamp(_minZoom, _maxZoom);
+    if ((clamped - _zoomScale).abs() < 0.01) return;
+    _isUpdatingZoom = true;
+    _zoomScale = clamped;
+    if (controllerScale != clamped) {
+      _zoomController.value = Matrix4.identity()..scale(clamped);
+    }
+    _isUpdatingZoom = false;
+    setState(() {});
+  }
+
+  // ─────────────── Generate PDF ───────────────
+  Future<void> _generatePdf() async {
+    setState(() => _loading = true);
+    try {
+      final req = await _fetchSwapRequest(widget.myRequestId);
+      if (req == null) throw Exception('Swap request not found');
+
+      Map<String, dynamic>? partner;
+      final partnerId = req['partnerRequestId'];
+      if (partnerId != null && partnerId.toString().isNotEmpty) {
+        partner = await _fetchSwapRequest(partnerId);
+      }
+
+      final meForm = await _buildFormData(req, partner);
+      final partnerForm = partner != null
+          ? await _buildFormData(partner, req)
+          : const _FormData(
+              studentName: 'Awaiting Partner',
+              studentId: '--',
+              studentEmail: '',
+              studentMajor: '',
+              additions: [],
+              deletions: [],
+              beforeHours: 0,
+              afterHours: 0,
+            );
+
+      final pdf = await _buildPdf(meForm, partnerForm);
+      _resetZoom(notify: false);
+      setState(() {
+        _pdfBytes = pdf;
+      });
+    } catch (e, st) {
+      debugPrint('❌ PDF generation failed: $e\n$st');
+      _errorMessage = e.toString();
+    } finally {
+      setState(() => _loading = false);
+    }
+  }
+
+  // ─────────────── PDF Builder (right-side cropping FIXED) ───────────────
+  Future<Uint8List> _buildPdf(_FormData me, _FormData partner) async {
+    final PdfDocument doc = PdfDocument();
+
+    // Load the form image and compute its intrinsic size so we can scale cleanly.
+    final ByteData formData = await rootBundle.load('assets/images/form.png');
+    final Uint8List formBytes = formData.buffer.asUint8List();
+    final PdfBitmap bg = PdfBitmap(formBytes);
+
+    final ui.Codec codec = await ui.instantiateImageCodec(formBytes);
+    final ui.FrameInfo frame = await codec.getNextFrame();
+    final ui.Image formImage = frame.image;
+    final double imageWidth = formImage.width.toDouble();
+    final double imageHeight = formImage.height.toDouble();
+    formImage.dispose();
+
+    final PdfFont regular = PdfStandardFont(PdfFontFamily.helvetica, 11);
+    final PdfBrush brush = PdfSolidBrush(PdfColor(0, 82, 204));
+
+    codec.dispose();
+
+    void drawForm(_FormData form) {
+      final page = doc.pages.add();
+      final g = page.graphics;
+      final ui.Size pageSize = page.getClientSize();
+
+      const double baseWidth = 595.0; // approximate logical width of template
+      const double baseHeight = 842.0; // approximate logical height (A4)
+
+      final double scale = math.min(
+        pageSize.width / imageWidth,
+        pageSize.height / imageHeight,
+      );
+      final double drawWidth = imageWidth * scale;
+      final double drawHeight = imageHeight * scale;
+      final double offsetX = (pageSize.width - drawWidth) / 2;
+      final double offsetY = (pageSize.height - drawHeight) / 2;
+
+      g.drawImage(
+        bg,
+        ui.Rect.fromLTWH(offsetX, offsetY, drawWidth, drawHeight),
+      );
+
+      double mapX(double baseX) => offsetX + (baseX / baseWidth) * drawWidth;
+      double mapY(double baseY) => offsetY + (baseY / baseHeight) * drawHeight;
+      double mapWidth(double width) => (width / baseWidth) * drawWidth;
+      double mapHeight(double height) => (height / baseHeight) * drawHeight;
+
+      String sanitize(String value, bool allowBlank) {
+        final trimmed = value.trim();
+        if (trimmed.isEmpty) return allowBlank ? '' : '-';
+        return trimmed;
+      }
+
+      void drawField(
+        String text,
+        double baseX,
+        double baseY, {
+        double width = 120,
+        double height = 18,
+        PdfFont? font,
+        bool allowBlank = false,
+        PdfStringFormat? format,
+      }) {
+        g.drawString(
+          sanitize(text, allowBlank),
+          font ?? regular,
+          brush: brush,
+          bounds: ui.Rect.fromLTWH(
+            mapX(baseX),
+            mapY(baseY),
+            mapWidth(width),
+            mapHeight(height),
+          ),
+          format: format,
+        );
+      }
+
+      // Student info fields (positions measured against the template)
+      drawField(form.studentName, 350, 188, width: 210);
+      drawField(form.studentId, 110, 188, width: 130);
+      drawField(form.studentEmail, 290, 215, width: 220);
+      drawField(
+        form.studentMajor,
+        360,
+        236,
+        width: 200,
+        height: 40,
+        format: PdfStringFormat(
+          alignment: PdfTextAlignment.left,
+          lineAlignment: PdfVerticalAlignment.top,
+          wordWrap: PdfWordWrapType.word,
+        ),
+      );
+      drawField('${form.beforeHours}', 240, 240, width: 80);
+      drawField('${form.afterHours}', 90, 240, width: 80);
+
+      const double baseRowHeight = 21;
+      const double addStartY = 338;
+      const double delStartY = 506;
+
+      void drawCourseRows(List<_CourseRow> rows, double startBaseY) {
+        double rowBaseY = startBaseY;
+        if (rows.isEmpty) {
+          drawField('No courses', 150, rowBaseY, width: 260);
+          return;
+        }
+
+        for (final course in rows.take(5)) {
+          final PdfStringFormat centerFormat =
+              PdfStringFormat(alignment: PdfTextAlignment.center);
+
+          drawField('${course.hours}', 140, rowBaseY - 4, width: 50, format: centerFormat);
+          drawField(course.name, 206, rowBaseY - 1, width: 205);
+          drawField(course.section, 430, rowBaseY, width: 45, format: centerFormat);
+          drawField(course.code, 456, rowBaseY, width: 122, format: centerFormat);
+
+          rowBaseY += baseRowHeight;
+        }
+      }
+
+      drawCourseRows(form.additions, addStartY);
+      drawCourseRows(form.deletions, delStartY);
+
+      final now = DateTime.now();
+      final date = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      drawField(date, 90, 640, width: 120);
+      drawField(form.studentName, 360, 640, width: 200);
+    }
+
+    drawForm(me);
+    drawForm(partner);
+
+    final bytes = await doc.save();
+    doc.dispose();
+    return Uint8List.fromList(bytes);
+  }
+
+  // ─────────────── UI ───────────────
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: kIndigo,
-        elevation: 3,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          "Generate PDF",
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        centerTitle: true,
+        backgroundColor: const Color(0xFF0097B2),
+        foregroundColor: Colors.white,
+        title: const Text('Generate PDF'),
         actions: [
-          if (canShare)
+          if (_pdfBytes != null) ...[
             IconButton(
-              tooltip: 'Share PDF',
-              icon: const Icon(Icons.share, color: Colors.white),
+              icon: const Icon(Icons.print),
               onPressed: () async {
-                await Printing.sharePdf(
-                  bytes: _pdfBytes!,
-                  filename: 'Swap_Form.pdf',
-                );
+                await Printing.layoutPdf(onLayout: (_) async => _pdfBytes!);
               },
             ),
+            IconButton(
+              icon: const Icon(Icons.share),
+              onPressed: () async {
+                await Printing.sharePdf(bytes: _pdfBytes!, filename: 'swap_form.pdf');
+              },
+            ),
+          ],
         ],
       ),
       body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: const [kTeal, kIndigo],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+            colors: [Color(0xFF0097B2), Color(0xFF0E0259)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
           ),
         ),
-        child: _pdfBytes == null
-            ? const Center(
-                child: CircularProgressIndicator(color: Colors.white),
-              )
-            : Card(
-                margin: const EdgeInsets.all(16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                elevation: 10,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: PdfPreview(
-                    // Keep PdfPreview API minimal for broad compatibility
-                    build: (format) async => _pdfBytes!,
-                    pdfPreviewPageDecoration:
-                        const BoxDecoration(color: Colors.white),
-                  ),
-                ),
-              ),
+        child: Center(
+          child: _loading
+              ? const CircularProgressIndicator(color: Colors.white)
+              : _pdfBytes == null
+                  ? Text(_errorMessage ?? 'Tap refresh to generate PDF',
+                      style: const TextStyle(color: Colors.white))
+                  : Card(
+                      margin: const EdgeInsets.all(16),
+                      clipBehavior: Clip.hardEdge,
+                      child: Stack(
+                        children: [
+                          Positioned.fill(
+                            child: InteractiveViewer(
+                              transformationController: _zoomController,
+                              minScale: _minZoom,
+                              maxScale: _maxZoom,
+                              boundaryMargin: const EdgeInsets.all(96),
+                              clipBehavior: Clip.none,
+                              child: PdfPreview(
+                                build: (format) async => _pdfBytes!,
+                                canChangeOrientation: false,
+                                canChangePageFormat: false,
+                                allowPrinting: false,
+                                allowSharing: false,
+                                actions: const [],
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            bottom: 12,
+                            right: 12,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: Colors.black54,
+                                borderRadius: BorderRadius.circular(32),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    tooltip: 'Zoom out',
+                                    onPressed:
+                                        _zoomScale <= _minZoom ? null : _zoomOut,
+                                    icon: const Icon(Icons.remove),
+                                    color: Colors.white,
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8),
+                                    child: Text(
+                                      '${(_zoomScale * 100).round()}%',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                  IconButton(
+                                    tooltip: 'Zoom in',
+                                    onPressed:
+                                        _zoomScale >= _maxZoom ? null : _zoomIn,
+                                    icon: const Icon(Icons.add),
+                                    color: Colors.white,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Container(
+                                    width: 1,
+                                    height: 24,
+                                    color: Colors.white24,
+                                  ),
+                                  IconButton(
+                                    tooltip: 'Reset zoom',
+                                    onPressed:
+                                        (_zoomScale - 1.0).abs() < 0.01
+                                            ? null
+                                            : _resetZoom,
+                                    icon: const Icon(Icons.refresh),
+                                    color: Colors.white,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+        ),
       ),
     );
   }
