@@ -153,9 +153,51 @@ class _GeneratePdfPageState extends State<GeneratePdfPage> {
 
   List<String> _normalize(dynamic raw) {
     if (raw == null) return [];
-    if (raw is List) return raw.map((e) => e.toString()).toList();
-    if (raw is String) return raw.split(',').map((e) => e.trim()).toList();
+    if (raw is List) {
+      final values = <String>[];
+      for (final item in raw) {
+        if (item == null) continue;
+        final value = item.toString().trim();
+        if (value.isNotEmpty) values.add(value);
+      }
+      return values;
+    }
+    if (raw is String) {
+      return raw
+          .split(',')
+          .map((e) => e.trim())
+          .where((value) => value.isNotEmpty)
+          .toList();
+    }
     return [];
+  }
+
+  List<String> _extractSections(dynamic raw) {
+    if (raw == null) return [];
+    if (raw is String) {
+      return raw
+          .split(',')
+          .map((e) => e.trim())
+          .where((value) => value.isNotEmpty)
+          .toList();
+    }
+    if (raw is! List) return [];
+
+    final sections = <String>[];
+    for (final item in raw) {
+      if (item is Map) {
+        final section = item['section'] ?? item['Section'];
+        if (section != null) {
+          final value = section.toString().trim();
+          if (value.isNotEmpty) sections.add(value);
+          continue;
+        }
+      }
+      if (item == null) continue;
+      final value = item.toString().trim();
+      if (value.isNotEmpty) sections.add(value);
+    }
+    return sections;
   }
 
   int _sumHours(List<_CourseRow> rows) =>
@@ -171,21 +213,30 @@ class _GeneratePdfPageState extends State<GeneratePdfPage> {
     final toGroup =
         await _fetchGroupCourses(req['toGroup'], major: major, level: level);
 
-    final have = _normalize(req['have']);
-    final want = _normalize(req['want']);
+    // ✅ FIXED: Correctly handle nested "specialRequests" fields
+    final special = (req['specialRequests'] ?? req['SpecialRequests'] ?? {}) as Map;
+    final partnerSpecial =
+        (partner?['specialRequests'] ?? partner?['SpecialRequests'] ?? {}) as Map;
+
+    final haveSections = _extractSections(special['have'] ?? req['have']);
+    final wantSections = _extractSections(special['want'] ?? req['want']);
     final deleted = _normalize(req['deletedCourses']);
-    final partnerHave = _normalize(partner?['have']);
+    final partnerHaveSections =
+        _extractSections(partnerSpecial['have'] ?? partner?['have']);
 
     final fromGroupSections = fromGroup.map((e) => e.section.toLowerCase()).toSet();
     final toGroupSections = toGroup.map((e) => e.section.toLowerCase()).toSet();
 
     final shared = fromGroupSections.intersection(toGroupSections);
-    final intersect =
-        want.map((e) => e.toLowerCase()).toSet().intersection(partnerHave.map((e) => e.toLowerCase()).toSet());
+    final intersect = wantSections
+        .map((e) => e.toLowerCase())
+        .toSet()
+        .intersection(partnerHaveSections.map((e) => e.toLowerCase()).toSet());
 
-    final wantCourses = await _fetchSectionCourses(want);
-    final partnerHaveCourses = await _fetchSectionCourses(partnerHave);
-    final haveCourses = await _fetchSectionCourses(have);
+    final wantCourses = await _fetchSectionCourses(wantSections);
+    final partnerHaveCourses = await _fetchSectionCourses(partnerHaveSections);
+    final haveCourses = await _fetchSectionCourses(haveSections);
+    final deletedSet = deleted.map((e) => e.toLowerCase()).toSet();
 
     // Addition = toGroup + (myWant ∩ partnerHave) – shared – deleted
     final additions = [
@@ -195,7 +246,8 @@ class _GeneratePdfPageState extends State<GeneratePdfPage> {
     ]
         .where((c) =>
             !shared.contains(c.section.toLowerCase()) &&
-            !deleted.contains(c.section.toLowerCase()))
+            !deletedSet.contains(c.section.toLowerCase()) &&
+            !deletedSet.contains(c.code.toLowerCase()))
         .toList();
 
     // Deletion = fromGroup + myHave – shared – deleted
@@ -205,7 +257,8 @@ class _GeneratePdfPageState extends State<GeneratePdfPage> {
     ]
         .where((c) =>
             !shared.contains(c.section.toLowerCase()) &&
-            !deleted.contains(c.section.toLowerCase()))
+            !deletedSet.contains(c.section.toLowerCase()) &&
+            !deletedSet.contains(c.code.toLowerCase()))
         .toList();
 
     final sharedRows =
