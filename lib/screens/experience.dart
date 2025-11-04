@@ -3,12 +3,14 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 // Import the form pages
 import 'projects_page.dart';
 import 'workshops_page.dart';
 import 'clubs_page.dart';
 import 'volunteering_page.dart';
+import 'cv_page.dart';
 
 class ExperiencePage extends StatefulWidget {
   const ExperiencePage({super.key});
@@ -27,11 +29,16 @@ class _ExperiencePageState extends State<ExperiencePage> {
     'clubs': [],
     'volunteering': [],
   };
+  Set<String> expandedItems = {}; // Track expanded items by unique key
 
   @override
   void initState() {
     super.initState();
     _loadExperienceData();
+  }
+
+  String _getItemKey(String category, int index) {
+    return '$category-$index';
   }
 
   Future<String?> _getUserDocId() async {
@@ -151,14 +158,72 @@ class _ExperiencePageState extends State<ExperiencePage> {
     );
   }
 
+  Future<void> _launchUrl(String url) async {
+    try {
+      final Uri uri = Uri.parse(url);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        _showErrorMessage('Could not open link');
+      }
+    } catch (e) {
+      debugPrint('Error launching URL: $e');
+      _showErrorMessage('Invalid link format');
+    }
+  }
+
+  void _showCertificatePreview(String certificateUrl) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Stack(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.network(certificateUrl, fit: BoxFit.contain),
+                    ),
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close, color: Colors.white),
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.black54,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildCategorySection({
     required String title,
     required IconData icon,
     required String category,
     required List<dynamic> items,
   }) {
-    final displayItems = items.length > 2 ? items.sublist(0, 2) : items;
-    final hasMore = items.length > 2;
+    final displayItems = items.length > 1 ? items.sublist(0, 1) : items;
+    final hasMore = items.length > 1;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
@@ -327,11 +392,27 @@ class _ExperiencePageState extends State<ExperiencePage> {
     );
   }
 
+  String _getDateOrHoursText(Map<String, dynamic> item) {
+    // Priority: startDate/endDate > year > hours
+    if (item['startDate'] != null || item['endDate'] != null) {
+      return '${item['startDate'] ?? 'N/A'} - ${item['endDate'] ?? 'Present'}';
+    } else if (item['year'] != null) {
+      return 'Year: ${item['year']}';
+    } else if (item['hours'] != null && item['hours'].toString().isNotEmpty) {
+      return 'Hours: ${item['hours']}';
+    }
+    return '';
+  }
+
   Widget _buildExperienceItem({
     required Map<String, dynamic> item,
     required String category,
     required int index,
   }) {
+    final itemKey = _getItemKey(category, index);
+    final isExpanded = expandedItems.contains(itemKey);
+    final dateOrHoursText = _getDateOrHoursText(item);
+
     return Container(
       margin: const EdgeInsets.only(left: 16.0, right: 16.0, bottom: 12.0),
       padding: const EdgeInsets.all(12.0),
@@ -342,188 +423,198 @@ class _ExperiencePageState extends State<ExperiencePage> {
           color: const Color(0xFF95E1D3).withOpacity(0.2),
         ),
       ),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item['title'] ?? 'Untitled',
-                  style: const TextStyle(
-                    fontSize: 16.0,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF0e0259),
-                  ),
-                ),
-                if (item['organization'] != null && item['organization'].toString().isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4.0),
-                    child: Text(
-                      item['organization'],
-                      style: TextStyle(
-                        fontSize: 14.0,
-                        color: Colors.grey[700],
-                        fontWeight: FontWeight.w500,
+          // Header - Always visible
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: InkWell(
+                  onTap: () {
+                    setState(() {
+                      if (isExpanded) {
+                        expandedItems.remove(itemKey);
+                      } else {
+                        expandedItems.add(itemKey);
+                      }
+                    });
+                  },
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item['title'] ?? 'Untitled',
+                        style: const TextStyle(
+                          fontSize: 16.0,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF0e0259),
+                        ),
                       ),
-                    ),
-                  ),
-                if (item['role'] != null && item['role'].toString().isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4.0),
-                    child: Text(
-                      'Role: ${item['role']}',
-                      style: TextStyle(
-                        fontSize: 13.0,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                  ),
-                if (item['hours'] != null && item['hours'].toString().isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4.0),
-                    child: Text(
-                      'Hours: ${item['hours']}',
-                      style: TextStyle(
-                        fontSize: 13.0,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                  ),
-                if (item['year'] != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4.0),
-                    child: Text(
-                      'Year: ${item['year']}',
-                      style: TextStyle(
-                        fontSize: 13.0,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                  ),
-                if (item['startDate'] != null || item['endDate'] != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4.0),
-                    child: Text(
-                      '${item['startDate'] ?? 'N/A'} - ${item['endDate'] ?? 'Present'}',
-                      style: TextStyle(
-                        fontSize: 13.0,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                  ),
-                if (item['link'] != null && item['link'].toString().isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4.0),
-                    child: Row(
-                      children: [
-                        Icon(Icons.link, size: 14, color: Colors.grey[600]),
-                        const SizedBox(width: 4),
-                        Expanded(
+                      if (dateOrHoursText.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4.0),
                           child: Text(
-                            item['link'],
-                            style: const TextStyle(
+                            dateOrHoursText,
+                            style: TextStyle(
                               fontSize: 13.0,
-                              color: Color(0xFF0097b2),
-                              decoration: TextDecoration.underline,
+                              color: Colors.grey[600],
                             ),
-                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                      ],
-                    ),
+                    ],
                   ),
-                if (item['certificateUrl'] != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8.0),
-                    child: Row(
-                      children: [
-                        Icon(Icons.verified, size: 16, color: Colors.green[600]),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Certificate attached',
-                          style: TextStyle(
-                            fontSize: 13.0,
-                            color: Colors.green[600],
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                if (item['description'] != null && item['description'].toString().isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8.0),
-                    child: Text(
-                      item['description'],
-                      style: TextStyle(
-                        fontSize: 14.0,
-                        color: Colors.grey[700],
-                        height: 1.4,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8.0),
-          PopupMenuButton<String>(
-            icon: Icon(Icons.more_vert, color: Colors.grey[600], size: 20.0),
-            onSelected: (value) async {
-              if (value == 'edit') {
-                Widget formPage;
-                switch (category) {
-                  case 'projects':
-                    formPage = ProjectFormPage(existingItem: item, itemIndex: index);
-                    break;
-                  case 'workshops':
-                    formPage = WorkshopFormPage(existingItem: item, itemIndex: index);
-                    break;
-                  case 'clubs':
-                    formPage = ClubFormPage(existingItem: item, itemIndex: index);
-                    break;
-                  case 'volunteering':
-                    formPage = VolunteeringFormPage(existingItem: item, itemIndex: index);
-                    break;
-                  default:
-                    return;
-                }
-                
-                final result = await Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => formPage),
-                );
-                if (result == true) {
-                  await _loadExperienceData();
-                }
-              } else if (value == 'delete') {
-                await _deleteItem(category, index);
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'edit',
-                child: Row(
-                  children: [
-                    Icon(Icons.edit, color: Color(0xFF0097b2), size: 20),
-                    SizedBox(width: 8),
-                    Text('Edit'),
-                  ],
                 ),
               ),
-              const PopupMenuItem(
-                value: 'delete',
-                child: Row(
-                  children: [
-                    Icon(Icons.delete, color: Colors.red, size: 20),
-                    SizedBox(width: 8),
-                    Text('Delete'),
-                  ],
-                ),
+              const SizedBox(width: 8.0),
+              PopupMenuButton<String>(
+                icon: Icon(Icons.more_vert, color: Colors.grey[600], size: 20.0),
+                onSelected: (value) async {
+                  if (value == 'edit') {
+                    Widget formPage;
+                    switch (category) {
+                      case 'projects':
+                        formPage = ProjectFormPage(existingItem: item, itemIndex: index);
+                        break;
+                      case 'workshops':
+                        formPage = WorkshopFormPage(existingItem: item, itemIndex: index);
+                        break;
+                      case 'clubs':
+                        formPage = ClubFormPage(existingItem: item, itemIndex: index);
+                        break;
+                      case 'volunteering':
+                        formPage = VolunteeringFormPage(existingItem: item, itemIndex: index);
+                        break;
+                      default:
+                        return;
+                    }
+                    
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => formPage),
+                    );
+                    if (result == true) {
+                      await _loadExperienceData();
+                    }
+                  } else if (value == 'delete') {
+                    await _deleteItem(category, index);
+                  }
+                },
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: 'edit',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit, color: Color(0xFF0097b2), size: 20),
+                        SizedBox(width: 8),
+                        Text('Edit'),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete, color: Colors.red, size: 20),
+                        SizedBox(width: 8),
+                        Text('Delete'),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
+          
+          // Expanded details
+          if (isExpanded) ...[
+            const SizedBox(height: 8.0),
+            if (item['organization'] != null && item['organization'].toString().isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4.0),
+                child: Text(
+                  item['organization'],
+                  style: TextStyle(
+                    fontSize: 14.0,
+                    color: Colors.grey[700],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            if (item['role'] != null && item['role'].toString().isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4.0),
+                child: Text(
+                  'Role: ${item['role']}',
+                  style: TextStyle(
+                    fontSize: 13.0,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ),
+            if (item['link'] != null && item['link'].toString().isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4.0),
+                child: InkWell(
+                  onTap: () => _launchUrl(item['link']),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.link, size: 14, color: Colors.grey[600]),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          item['link'],
+                          style: const TextStyle(
+                            fontSize: 13.0,
+                            color: Color(0xFF0097b2),
+                            decoration: TextDecoration.underline,
+                          ),
+                          maxLines: null,
+                          softWrap: true,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            if (item['certificateUrl'] != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8.0),
+                child: InkWell(
+                  onTap: () => _showCertificatePreview(item['certificateUrl']),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.upload_file, size: 16, color: Color(0xFF0097b2)),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Certificate uploaded (tap to view)',
+                        style: const TextStyle(
+                          fontSize: 13.0,
+                          color: Color(0xFF0097b2),
+                          fontWeight: FontWeight.w500,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            if (item['description'] != null && item['description'].toString().isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8.0),
+                child: Text(
+                  item['description'],
+                  style: TextStyle(
+                    fontSize: 14.0,
+                    color: Colors.grey[700],
+                    height: 1.4,
+                  ),
+                ),
+              ),
+          ],
         ],
       ),
     );
@@ -550,27 +641,26 @@ class _ExperiencePageState extends State<ExperiencePage> {
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back, color: Colors.white),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    const Expanded(
-                      child: Text(
-                        'Experience',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                          letterSpacing: 0.5,
-                        ),
-                        textAlign: TextAlign.center,
+                padding: const EdgeInsets.only(
+                  top: 16.0,
+                  left: 16.0,
+                  right: 16.0,
+                  bottom: 8.0, 
+                ),
+                child: SizedBox(
+                  height: 70, 
+                  child: Center(
+                    child: Text(
+                      'My Experience',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                        letterSpacing: 0.5,
                       ),
+                      textAlign: TextAlign.center,
                     ),
-                    const SizedBox(width: 48),
-                  ],
+                  ),
                 ),
               ),
               Expanded(
@@ -628,13 +718,62 @@ class _ExperiencePageState extends State<ExperiencePage> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('CV generation coming soon!'),
-              behavior: SnackBarBehavior.floating,
+        onPressed: () async {
+          // Show loading indicator
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => const Center(
+              child: CircularProgressIndicator(color: Colors.white),
             ),
           );
+
+          try {
+            // Check if user has experiences
+            final docId = await _getUserDocId();
+            if (docId == null) {
+              if (mounted) Navigator.pop(context); // Close loading
+              _showErrorMessage('Unable to identify user');
+              return;
+            }
+
+            final doc = await _firestore.collection('users').doc(docId).get();
+            
+            if (!doc.exists) {
+              if (mounted) Navigator.pop(context);
+              _showErrorMessage('User data not found');
+              return;
+            }
+
+            final data = doc.data();
+            final projects = data?['projects'] ?? [];
+            final workshops = data?['workshops'] ?? [];
+            final clubs = data?['clubs'] ?? [];
+            final volunteering = data?['volunteering'] ?? [];
+
+            // Check if user has at least one experience
+            if (projects.isEmpty && workshops.isEmpty && clubs.isEmpty && volunteering.isEmpty) {
+              if (mounted) Navigator.pop(context); // Close loading
+              _showErrorMessage('Please add at least one project, workshop, club, or volunteering experience before generating CV');
+              return;
+            }
+
+            // Close loading dialog
+            if (mounted) Navigator.pop(context);
+
+            // Navigate to CV page
+            if (mounted) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => CVPage(autoGenerate: true),
+                ),
+              );
+            }
+          } catch (e) {
+            if (mounted) Navigator.pop(context); // Close loading
+            _showErrorMessage('Failed to check experiences: ${e.toString()}');
+          }
         },
         backgroundColor: const Color(0xFF0097b2),
         icon: const Icon(Icons.description, color: Colors.white),
@@ -650,7 +789,7 @@ class _ExperiencePageState extends State<ExperiencePage> {
   }
 }
 
-class CategoryDetailPage extends StatelessWidget {
+class CategoryDetailPage extends StatefulWidget {
   final String title;
   final IconData icon;
   final String category;
@@ -667,6 +806,97 @@ class CategoryDetailPage extends StatelessWidget {
     required this.onUpdate,
     required this.onDelete,
   });
+
+  @override
+  State<CategoryDetailPage> createState() => _CategoryDetailPageState();
+}
+
+class _CategoryDetailPageState extends State<CategoryDetailPage> {
+  Set<String> expandedItems = {};
+
+  String _getItemKey(int index) {
+    return '${widget.category}-$index';
+  }
+
+  String _getDateOrHoursText(Map<String, dynamic> item) {
+    if (item['startDate'] != null || item['endDate'] != null) {
+      return '${item['startDate'] ?? 'N/A'} - ${item['endDate'] ?? 'Present'}';
+    } else if (item['year'] != null) {
+      return 'Year: ${item['year']}';
+    } else if (item['hours'] != null && item['hours'].toString().isNotEmpty) {
+      return 'Hours: ${item['hours']}';
+    }
+    return '';
+  }
+
+  void _launchUrl(BuildContext context, String url) async {
+    try {
+      final Uri uri = Uri.parse(url);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        _showErrorMessage(context, 'Could not open link');
+      }
+    } catch (e) {
+      debugPrint('Error launching URL: $e');
+      _showErrorMessage(context, 'Invalid link format');
+    }
+  }
+
+  void _showCertificatePreview(BuildContext context, String certificateUrl) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Stack(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.network(certificateUrl, fit: BoxFit.contain),
+                    ),
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close, color: Colors.white),
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.black54,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showErrorMessage(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red[400],
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -689,7 +919,12 @@ class CategoryDetailPage extends StatelessWidget {
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.only(
+                  top: 16.0,
+                  left: 16.0,
+                  right: 16.0,
+                  bottom: 8.0,
+                ),
                 child: Row(
                   children: [
                     IconButton(
@@ -703,12 +938,12 @@ class CategoryDetailPage extends StatelessWidget {
                         color: Colors.white.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(10.0),
                       ),
-                      child: Icon(icon, color: Colors.white, size: 20.0),
+                      child: Icon(widget.icon, color: Colors.white, size: 20.0),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        title,
+                        widget.title,
                         style: const TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w700,
@@ -731,9 +966,9 @@ class CategoryDetailPage extends StatelessWidget {
                   ),
                   child: ListView.builder(
                     padding: const EdgeInsets.all(16.0),
-                    itemCount: items.length,
+                    itemCount: widget.items.length,
                     itemBuilder: (context, index) {
-                      final item = items[index];
+                      final item = widget.items[index];
                       return _buildDetailItem(context, item, index);
                     },
                   ),
@@ -747,209 +982,218 @@ class CategoryDetailPage extends StatelessWidget {
   }
 
   Widget _buildDetailItem(BuildContext context, Map<String, dynamic> item, int index) {
+    final itemKey = _getItemKey(index);
+    final isExpanded = expandedItems.contains(itemKey);
+    final dateOrHoursText = _getDateOrHoursText(item);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12.0),
       padding: const EdgeInsets.all(12.0),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFF95E1D3).withOpacity(0.05),
         borderRadius: BorderRadius.circular(12.0),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        border: Border.all(
+          color: const Color(0xFF95E1D3).withOpacity(0.2),
+        ),
       ),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item['title'] ?? 'Untitled',
-                  style: const TextStyle(
-                    fontSize: 16.0,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF0e0259),
-                  ),
-                ),
-                if (item['organization'] != null && item['organization'].toString().isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4.0),
-                    child: Text(
-                      item['organization'],
-                      style: TextStyle(
-                        fontSize: 14.0,
-                        color: Colors.grey[700],
-                        fontWeight: FontWeight.w500,
+          // Header - Always visible
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: InkWell(
+                  onTap: () {
+                    setState(() {
+                      if (isExpanded) {
+                        expandedItems.remove(itemKey);
+                      } else {
+                        expandedItems.add(itemKey);
+                      }
+                    });
+                  },
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item['title'] ?? 'Untitled',
+                        style: const TextStyle(
+                          fontSize: 16.0,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF0e0259),
+                        ),
                       ),
-                    ),
-                  ),
-                if (item['role'] != null && item['role'].toString().isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4.0),
-                    child: Text(
-                      'Role: ${item['role']}',
-                      style: TextStyle(
-                        fontSize: 13.0,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                  ),
-                if (item['hours'] != null && item['hours'].toString().isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4.0),
-                    child: Text(
-                      'Hours: ${item['hours']}',
-                      style: TextStyle(
-                        fontSize: 13.0,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                  ),
-                if (item['year'] != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4.0),
-                    child: Text(
-                      'Year: ${item['year']}',
-                      style: TextStyle(
-                        fontSize: 13.0,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                  ),
-                if (item['startDate'] != null || item['endDate'] != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4.0),
-                    child: Text(
-                      '${item['startDate'] ?? 'N/A'} - ${item['endDate'] ?? 'Present'}',
-                      style: TextStyle(
-                        fontSize: 13.0,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                  ),
-                if (item['link'] != null && item['link'].toString().isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4.0),
-                    child: Row(
-                      children: [
-                        Icon(Icons.link, size: 14, color: Colors.grey[600]),
-                        const SizedBox(width: 4),
-                        Expanded(
+                      if (dateOrHoursText.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4.0),
                           child: Text(
-                            item['link'],
-                            style: const TextStyle(
+                            dateOrHoursText,
+                            style: TextStyle(
                               fontSize: 13.0,
-                              color: Color(0xFF0097b2),
-                              decoration: TextDecoration.underline,
+                              color: Colors.grey[600],
                             ),
-                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                      ],
-                    ),
+                    ],
                   ),
-                if (item['certificateUrl'] != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8.0),
-                    child: Row(
-                      children: [
-                        Icon(Icons.verified, size: 16, color: Colors.green[600]),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Certificate attached',
-                          style: TextStyle(
-                            fontSize: 13.0,
-                            color: Colors.green[600],
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                if (item['description'] != null && item['description'].toString().isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8.0),
-                    child: Text(
-                      item['description'],
-                      style: TextStyle(
-                        fontSize: 14.0,
-                        color: Colors.grey[700],
-                        height: 1.4,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8.0),
-          PopupMenuButton<String>(
-            icon: Icon(Icons.more_vert, color: Colors.grey[600], size: 20.0),
-            onSelected: (value) async {
-              if (value == 'edit') {
-                Widget formPage;
-                switch (category) {
-                  case 'projects':
-                    formPage = ProjectFormPage(existingItem: item, itemIndex: index);
-                    break;
-                  case 'workshops':
-                    formPage = WorkshopFormPage(existingItem: item, itemIndex: index);
-                    break;
-                  case 'clubs':
-                    formPage = ClubFormPage(existingItem: item, itemIndex: index);
-                    break;
-                  case 'volunteering':
-                    formPage = VolunteeringFormPage(existingItem: item, itemIndex: index);
-                    break;
-                  default:
-                    return;
-                }
-                
-                final result = await Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => formPage),
-                );
-                if (result == true) {
-                  await onUpdate();
-                  if (context.mounted) {
-                    Navigator.pop(context);
-                  }
-                }
-              } else if (value == 'delete') {
-                await onDelete(category, index);
-                if (context.mounted) {
-                  Navigator.pop(context);
-                }
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'edit',
-                child: Row(
-                  children: [
-                    Icon(Icons.edit, color: Color(0xFF0097b2), size: 20),
-                    SizedBox(width: 8),
-                    Text('Edit'),
-                  ],
                 ),
               ),
-              const PopupMenuItem(
-                value: 'delete',
-                child: Row(
-                  children: [
-                    Icon(Icons.delete, color: Colors.red, size: 20),
-                    SizedBox(width: 8),
-                    Text('Delete'),
-                  ],
-                ),
+              const SizedBox(width: 8.0),
+              PopupMenuButton<String>(
+                icon: Icon(Icons.more_vert, color: Colors.grey[600], size: 20.0),
+                onSelected: (value) async {
+                  if (value == 'edit') {
+                    Widget formPage;
+                    switch (widget.category) {
+                      case 'projects':
+                        formPage = ProjectFormPage(existingItem: item, itemIndex: index);
+                        break;
+                      case 'workshops':
+                        formPage = WorkshopFormPage(existingItem: item, itemIndex: index);
+                        break;
+                      case 'clubs':
+                        formPage = ClubFormPage(existingItem: item, itemIndex: index);
+                        break;
+                      case 'volunteering':
+                        formPage = VolunteeringFormPage(existingItem: item, itemIndex: index);
+                        break;
+                      default:
+                        return;
+                    }
+                    
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => formPage),
+                    );
+                    if (result == true) {
+                      await widget.onUpdate();
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                      }
+                    }
+                  } else if (value == 'delete') {
+                    await widget.onDelete(widget.category, index);
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                    }
+                  }
+                },
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: 'edit',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit, color: Color(0xFF0097b2), size: 20),
+                        SizedBox(width: 8),
+                        Text('Edit'),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete, color: Colors.red, size: 20),
+                        SizedBox(width: 8),
+                        Text('Delete'),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
+          
+          // Expanded details
+          if (isExpanded) ...[
+            const SizedBox(height: 8.0),
+            if (item['organization'] != null && item['organization'].toString().isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4.0),
+                child: Text(
+                  item['organization'],
+                  style: TextStyle(
+                    fontSize: 14.0,
+                    color: Colors.grey[700],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            if (item['role'] != null && item['role'].toString().isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4.0),
+                child: Text(
+                  'Role: ${item['role']}',
+                  style: TextStyle(
+                    fontSize: 13.0,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ),
+            if (item['link'] != null && item['link'].toString().isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4.0),
+                child: InkWell(
+                  onTap: () => _launchUrl(context, item['link']),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.link, size: 14, color: Colors.grey[600]),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          item['link'],
+                          style: const TextStyle(
+                            fontSize: 13.0,
+                            color: Color(0xFF0097b2),
+                            decoration: TextDecoration.underline,
+                          ),
+                          maxLines: null,
+                          softWrap: true,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            if (item['certificateUrl'] != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8.0),
+                child: InkWell(
+                  onTap: () => _showCertificatePreview(context, item['certificateUrl']),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.upload_file, size: 16, color: Color(0xFF0097b2)),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Certificate uploaded (tap to view)',
+                        style: const TextStyle(
+                          fontSize: 13.0,
+                          color: Color(0xFF0097b2),
+                          fontWeight: FontWeight.w500,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            if (item['description'] != null && item['description'].toString().isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8.0),
+                child: Text(
+                  item['description'],
+                  style: TextStyle(
+                    fontSize: 14.0,
+                    color: Colors.grey[700],
+                    height: 1.4,
+                  ),
+                ),
+              ),
+          ],
         ],
       ),
     );

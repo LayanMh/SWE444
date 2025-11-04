@@ -156,8 +156,8 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
   
   final trimmedValue = value.trim();
 
-  if (trimmedValue.length < 200) {
-    return 'Description must be at least 200 characters';
+  if (trimmedValue.length > 200) {
+    return 'Description must be at most 200 characters';
   }
   
   if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
@@ -454,6 +454,7 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
                                   ),
                                 ),
                               ),
+                              const SizedBox(height: 16.0),
                           _buildTextFieldWithWordCounter(
   controller: _descriptionController,
   label: 'Description',  // ← Removed asterisk

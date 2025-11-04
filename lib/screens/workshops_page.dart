@@ -32,6 +32,7 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
   File? _certificateFile;
   String? _existingCertificateUrl;
   bool _isSaving = false;
+  String? _certificateError;
 
   @override
   void initState() {
@@ -143,8 +144,8 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
     final trimmedValue = value.trim();
 
     // Only validate if user has entered something
-    if (trimmedValue.length < 200) {
-      return 'Description must be at least 200 characters';
+    if (trimmedValue.length > 200) {
+      return 'Description must be at most 200 characters';
     }
 
     if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
@@ -162,11 +163,12 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
         maxHeight: 1920,
         imageQuality: 85,
       );
-      if (image != null) {
-        setState(() {
-          _certificateFile = File(image.path);
-        });
-      }
+     if (image != null) {
+  setState(() {
+    _certificateFile = File(image.path);
+    _certificateError = null; // ← ADD THIS LINE
+  });
+}
     } catch (e) {
       debugPrint('Error picking image: $e');
       _showErrorMessage('Failed to pick image');
@@ -215,12 +217,18 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
     if (!_formKey.currentState!.validate()) return;
 
     // Check if certificate is provided
-    if (_certificateFile == null && _existingCertificateUrl == null) {
-      _showErrorMessage('Please upload a certificate');
-      return;
-    }
+    // Check if certificate is provided
+if (_certificateFile == null && _existingCertificateUrl == null) {
+  setState(() {
+    _certificateError = 'Please upload a certificate';
+  });
+  return;
+}
 
-    setState(() => _isSaving = true);
+setState(() {
+  _isSaving = true;
+  _certificateError = null; // Clear any previous error
+});
 
     try {
       final docId = await _getUserDocId();
@@ -412,165 +420,145 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
       ),
     );
   }
-
-  Widget _buildCertificatePicker() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Certificate *',
-          style: TextStyle(
-            fontSize: 14.0,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF0e0259),
-          ),
+Widget _buildCertificatePicker() {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text(
+        'Certificate *',
+        style: TextStyle(
+          fontSize: 14.0,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF0e0259),
         ),
-        const SizedBox(height: 8.0),
-        if (_certificateFile != null || _existingCertificateUrl != null) ...[
-          // Show certificate preview with actions
-          Column(
+      ),
+      const SizedBox(height: 8.0),
+      InkWell(
+        onTap: () {
+          if (_certificateFile != null || _existingCertificateUrl != null) {
+            _showCertificatePreview();
+          } else {
+            _pickCertificate();
+          }
+        },
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: _certificateError != null 
+                  ? Colors.red 
+                  : Colors.grey[300]!,
+            ),
+          ),
+          child: Row(
             children: [
-              InkWell(
-                onTap: () => _showCertificatePreview(),
-                child: Container(
-                  height: 200,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey[300]!),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: _certificateFile != null
-                        ? Image.file(_certificateFile!, fit: BoxFit.cover, width: double.infinity)
-                        : Image.network(_existingCertificateUrl!, fit: BoxFit.cover, width: double.infinity),
+              const Icon(Icons.upload_file, color: Color(0xFF0097b2)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  _certificateFile != null
+                      ? 'Certificate selected (tap to view)'
+                      : _existingCertificateUrl != null
+                          ? 'Certificate uploaded (tap to view)'
+                          : 'Tap to upload certificate',
+                  style: TextStyle(
+                    color: _certificateFile != null || _existingCertificateUrl != null
+                        ? const Color(0xFF0097b2)
+                        : Colors.grey[600],
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _pickCertificate,
-                      icon: const Icon(Icons.edit, size: 18),
-                      label: const Text('Replace'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF0097b2),
-                        side: const BorderSide(color: Color(0xFF0097b2)),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
+              if (_certificateFile != null || _existingCertificateUrl != null) ...[
+                const SizedBox(width: 8),
+                InkWell(
+                  onTap: () {
+                    setState(() {
+                      _certificateFile = null;
+                      _existingCertificateUrl = null;
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.close,
+                      color: Colors.white,
+                      size: 16,
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        setState(() {
-                          _certificateFile = null;
-                          _existingCertificateUrl = null;
-                        });
-                      },
-                      icon: const Icon(Icons.delete, size: 18),
-                      label: const Text('Remove'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.red,
-                        side: const BorderSide(color: Colors.red),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ],
           ),
-        ] else ...[
-          // Show upload button
-          InkWell(
-            onTap: _pickCertificate,
-            child: Container(
-              padding: const EdgeInsets.all(16),
+        ),
+      ),
+      // ← ADD ERROR MESSAGE DISPLAY
+      if (_certificateError != null)
+        Padding(
+          padding: const EdgeInsets.only(top: 8.0, left: 12.0),
+          child: Text(
+            _certificateError!,
+            style: const TextStyle(
+               color: Colors.red,
+              fontSize: 12.0,
+            ),
+          ),
+        ),
+    ],
+  );
+}
+void _showCertificatePreview() {
+  showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return Dialog(
+        backgroundColor: Colors.transparent,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.8,
+              ),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey[300]!, style: BorderStyle.solid, width: 2),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.grey.withOpacity(0.1),
-                    spreadRadius: 1,
-                    blurRadius: 4,
-                  ),
-                ],
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              child: Stack(
                 children: [
-                  Icon(Icons.cloud_upload_outlined, color: const Color(0xFF0097b2), size: 32),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Tap to upload certificate',
-                    style: TextStyle(
-                      color: const Color(0xFF0097b2),
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: _certificateFile != null
+                        ? Image.file(_certificateFile!, fit: BoxFit.contain)
+                        : _existingCertificateUrl != null
+                            ? Image.network(_existingCertificateUrl!, fit: BoxFit.contain)
+                            : const SizedBox.shrink(),
+                  ),
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close, color: Colors.white),
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.black54,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  void _showCertificatePreview() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.8,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Stack(
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: _certificateFile != null
-                          ? Image.file(_certificateFile!, fit: BoxFit.contain)
-                          : _existingCertificateUrl != null
-                              ? Image.network(_existingCertificateUrl!, fit: BoxFit.contain)
-                              : const SizedBox.shrink(),
-                    ),
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: IconButton(
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.close, color: Colors.white),
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.black54,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
+          ],
+        ),
+      );
+    },
+  );
+}
 
   Widget _buildTextFieldWithCounter({
     required TextEditingController controller,
