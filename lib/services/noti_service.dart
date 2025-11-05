@@ -1,5 +1,5 @@
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class NotiService {
   NotiService._();
@@ -12,6 +12,21 @@ class NotiService {
   static const String _channelDesc = 'Alerts when absence exceeds thresholds';
 
   static bool _inited = false;
+
+  /// Normalize a display name for swap notifications.
+  ///
+  /// - Trims whitespace.
+  /// - Falls back to "A student" when empty.
+  /// - Uses the first token when multiple names are present so the alert reads naturally.
+  static String formatDisplayName(
+    String? rawName, {
+    String fallback = 'A student',
+  }) {
+    final trimmed = rawName?.trim();
+    if (trimmed == null || trimmed.isEmpty) return fallback;
+    final parts = trimmed.split(RegExp(r'\s+'));
+    return parts.isNotEmpty && parts.first.isNotEmpty ? parts.first : (trimmed.isNotEmpty ? trimmed : fallback);
+  }
 
   /// Initialize the local notifications plugin and request permissions.
   static Future<void> initialize() async {
@@ -72,8 +87,6 @@ class NotiService {
       }
     }
 
-    if (kIsWeb) return; // no-op on web
-
     final percentText = pct.toStringAsFixed(1);
     final rounded = double.tryParse(percentText) ?? pct;
     String title;
@@ -89,16 +102,52 @@ class NotiService {
       body = 'Absences in $courseId are $percentText% getting close to 25%!! Keeping up this week will keep you safe 👍';
     }
 
-    // Try with custom image (requires res/drawable/absherk_notif.png).
+    await _showStyledNotification(
+      title: title,
+      body: body,
+      ticker: 'Attendance alert',
+      payload: 'course:$courseId;pct:$percentText',
+    );
+  }
+
+  /// Show a local notification related to swap activity.
+  static Future<void> showSwapAlert({
+    required String title,
+    required String body,
+  }) async {
+    if (!_inited) {
+      try {
+        await initialize();
+      } catch (_) {
+        // ignore initialization failures for swap alerts
+      }
+    }
+
+    await _showStyledNotification(
+      title: title,
+      body: body,
+      ticker: 'Swap notification',
+      payload: 'swap',
+    );
+  }
+
+  static Future<void> _showStyledNotification({
+    required String title,
+    required String body,
+    required String ticker,
+    required String payload,
+  }) async {
+    if (kIsWeb) return;
+
     final bigBitmap = const DrawableResourceAndroidBitmap('absherk_notif');
-    final withImage = NotificationDetails(
+    final richDetails = NotificationDetails(
       android: AndroidNotificationDetails(
         _channelId,
         _channelName,
         channelDescription: _channelDesc,
         importance: Importance.high,
         priority: Priority.high,
-        ticker: 'Attendance alert',
+        ticker: ticker,
         icon: 'abesherk',
         styleInformation: BigPictureStyleInformation(
           bigBitmap,
@@ -111,7 +160,6 @@ class NotiService {
       iOS: const DarwinNotificationDetails(),
     );
 
-    // Fallback details without image (in case resource not found or style fails)
     final fallback = NotificationDetails(
       android: AndroidNotificationDetails(
         _channelId,
@@ -119,21 +167,24 @@ class NotiService {
         channelDescription: _channelDesc,
         importance: Importance.high,
         priority: Priority.high,
-        ticker: 'Attendance alert',
+        ticker: ticker,
         icon: 'abesherk',
       ),
       iOS: const DarwinNotificationDetails(),
     );
 
-    // Use a time-based id so each alert shows as a new notification
     final id = (DateTime.now().millisecondsSinceEpoch % 0x7fffffff).toInt();
     try {
-      await _plugin.show(id, title, body, withImage,
-          payload: 'course:$courseId;pct:$percentText');
-    } catch (_) {
-      // Try again without the image style
-      await _plugin.show(id, title, body, fallback,
-          payload: 'course:$courseId;pct:$percentText');
+      await _plugin.show(id, title, body, richDetails, payload: payload);
+    } catch (error) {
+      try {
+        await _plugin.show(id, title, body, fallback, payload: payload);
+      } catch (fallbackError) {
+        debugPrint(
+          "❌ Failed to display local notification ($ticker): $fallbackError (primary error: $error)",
+        );
+      }
     }
   }
+
 }
