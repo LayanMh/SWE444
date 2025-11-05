@@ -41,7 +41,9 @@ class _SwappingEntryPageState extends State<SwappingEntryPage> {
 
       if (snapshot.docs.isNotEmpty) {
         _existingRequestId = snapshot.docs.first.id;
+        ensureSwapNotificationRelay(_existingRequestId!);
       } else {
+        stopSwapNotificationRelay();
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _showInfoPopup();
         });
