@@ -7,6 +7,13 @@ import 'generate_pdf_page.dart' as pdf;
 import 'dart:async';
 import '../services/noti_service.dart';
 
+const String _kTitleNewSwapRequest = 'New Swap Request';
+const String _kTitleSwapConfirmed = 'Swap Confirmed';
+const String _kTitleSwapDeclined = 'Swap Declined';
+const String _kTitleSwapTimeout = 'Swap Request Timed Out';
+const String _kBodySwapTimeout =
+    'No confirmation was received in time; the swap request is open again.';
+
 class MySwapRequestPage extends StatefulWidget {
   final String requestId;
 
@@ -35,12 +42,15 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
   }
 
   void _subscribeToRequest() {
+    ensureSwapNotificationRelay(widget.requestId);
+
     _subscription = FirebaseFirestore.instance
         .collection("swap_requests")
         .doc(widget.requestId)
         .snapshots()
-        .listen((doc) {
+        .listen((doc) async {
       if (!doc.exists) {
+        stopSwapNotificationRelay(widget.requestId);
         // ✅ NEW: Navigate to home if request is deleted
         if (mounted) {
           Navigator.pushReplacement(
@@ -50,8 +60,11 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
         }
         return;
       }
-      setState(() => _data = doc.data());
-      _checkIncomingConfirmation();
+      final data = doc.data();
+      if (mounted) {
+        setState(() => _data = data);
+        _checkIncomingConfirmation();
+      }
     });
 
     Future.delayed(const Duration(milliseconds: 600), () {
@@ -89,19 +102,26 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
         "confirmationBy": FieldValue.delete(),
         "confirmationExpiresAt": FieldValue.delete(),
       });
-      
       if (partnerId != null) {
-        final partnerRef = FirebaseFirestore.instance.collection("swap_requests").doc(partnerId);
-        batch.update(partnerRef, {
-          "status": "open",
-          "partnerRequestId": FieldValue.delete(),
-          "confirmationBy": FieldValue.delete(),
-          "confirmationExpiresAt": FieldValue.delete(),
-        });
+        final partnerRef =
+            FirebaseFirestore.instance.collection("swap_requests").doc(partnerId);
+        final partnerSnapshot = await partnerRef.get();
+        if (partnerSnapshot.exists) {
+          batch.update(partnerRef, {
+            "status": "open",
+            "partnerRequestId": FieldValue.delete(),
+            "confirmationBy": FieldValue.delete(),
+            "confirmationExpiresAt": FieldValue.delete(),
+          });
+        } else {
+          debugPrint(
+            "⚠️ Partner request $partnerId missing while handling expiry for ${widget.requestId}.",
+          );
+        }
       }
-      
+
       await batch.commit();
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text("⏰ Confirmation expired - request is now open again"),
@@ -186,6 +206,11 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
       final batch = FirebaseFirestore.instance.batch();
       final myRef = FirebaseFirestore.instance.collection("swap_requests").doc(widget.requestId);
       final partnerRef = FirebaseFirestore.instance.collection("swap_requests").doc(partnerId);
+      final partnerSnapshot = await partnerRef.get();
+      if (!partnerSnapshot.exists) {
+        _showSnack("Swap partner request no longer exists.", isError: true);
+        return;
+      }
 
       batch.update(myRef, {
         "status": "confirmed",
@@ -201,11 +226,6 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
       });
 
       await batch.commit();
-      await _notifySwapPartner(
-        partnerId,
-        "Swap Confirmed",
-        "Your swap request has been confirmed!",
-      );
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -222,6 +242,11 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
       final batch = FirebaseFirestore.instance.batch();
       final myRef = FirebaseFirestore.instance.collection("swap_requests").doc(widget.requestId);
       final partnerRef = FirebaseFirestore.instance.collection("swap_requests").doc(partnerId);
+      final partnerSnapshot = await partnerRef.get();
+      if (!partnerSnapshot.exists) {
+        _showSnack("Swap partner request no longer exists.", isError: true);
+        return;
+      }
 
       batch.update(myRef, {
         "status": "open",
@@ -237,11 +262,6 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
       });
 
       await batch.commit();
-      await _notifySwapPartner(
-        partnerId,
-        "Swap Declined",
-        "Your swap request was declined.",
-      );
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -251,6 +271,16 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
     } catch (e) {
       debugPrint("Error declining swap: $e");
     }
+  }
+
+  void _showSnack(String message, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.redAccent : Colors.teal,
+      ),
+    );
   }
 
   // ✅ NEW: Handle bottom navigation
@@ -744,19 +774,6 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
     );
   }
 
-  Future<void> _notifySwapPartner(String partnerId, String title, String body) async {
-    try {
-      await NotiService.sendNotificationToUser(
-        partnerId,
-        title: title,
-        body: body,
-      );
-      debugPrint("📩 Notification sent to $partnerId");
-    } catch (e) {
-      debugPrint("❌ Failed to send notification: $e");
-    }
-  }
-
   Future<void> _deleteRequest() async {
     // ✅ NEW: Added confirmation dialog
     final confirm = await showDialog<bool>(
@@ -831,14 +848,187 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
     }
   }
 
-  void _showDeleteResult({required bool success, String? message}) {
-    final text = message ??
-        (success
-            ? "Request deleted successfully."
-            : "Failed to delete request. Please try again.");
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(text),
-      backgroundColor: success ? Colors.redAccent : Colors.red,
-    ));
+void _showDeleteResult({required bool success, String? message}) {
+  final text = message ??
+      (success
+          ? "Request deleted successfully."
+          : "Failed to delete request. Please try again.");
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+    content: Text(text),
+    backgroundColor: success ? Colors.redAccent : Colors.red,
+  ));
+}
+}
+
+Future<void> _processSwapStatusChange({
+  required Map<String, dynamic>? previousData,
+  required Map<String, dynamic>? currentData,
+  required String myUserId,
+}) async {
+  if (currentData == null) return;
+
+  final currentStatus = currentData["status"]?.toString();
+  final previousStatus = previousData?["status"]?.toString();
+  final currentPartnerId = currentData["partnerRequestId"]?.toString();
+  final previousPartnerId = previousData?["partnerRequestId"]?.toString();
+
+  if (currentStatus == "pending_confirmation" &&
+      previousStatus != "pending_confirmation") {
+    final confirmationBy = currentData["confirmationBy"]?.toString();
+    if (confirmationBy != null && confirmationBy != myUserId) {
+      final partnerNameRaw = await _fetchPartnerName(currentPartnerId);
+      final displayName =
+          NotiService.formatDisplayName(partnerNameRaw, fallback: "A student");
+      await _showSwapNotification(
+        title: _kTitleNewSwapRequest,
+        body: "$displayName wants to swap courses with you.",
+      );
+    }
+  }
+
+  if (currentStatus == "confirmed" && previousStatus != "confirmed") {
+    final confirmedBy = currentData["confirmedBy"]?.toString();
+    if (confirmedBy != null && confirmedBy != myUserId) {
+      final partnerNameRaw = await _fetchPartnerName(
+        currentPartnerId ?? previousPartnerId,
+      );
+      final displayName =
+          NotiService.formatDisplayName(partnerNameRaw, fallback: "Your partner");
+      await _showSwapNotification(
+        title: _kTitleSwapConfirmed,
+        body: "$displayName accepted your swap request.",
+      );
+    }
+  }
+
+  if (previousStatus == "pending_confirmation" && currentStatus == "open") {
+    final prevConfirmationBy = previousData?["confirmationBy"]?.toString();
+    final prevExpiresAt = previousData?["confirmationExpiresAt"];
+    bool timedOut = false;
+    if (prevExpiresAt is Timestamp) {
+      final expiry = prevExpiresAt.toDate();
+      timedOut = DateTime.now().isAfter(expiry);
+    }
+
+    if (prevConfirmationBy != null && prevConfirmationBy == myUserId) {
+      if (timedOut) {
+        await _showSwapNotification(
+          title: _kTitleSwapTimeout,
+          body: _kBodySwapTimeout,
+        );
+      } else {
+        final partnerNameRaw = await _fetchPartnerName(previousPartnerId);
+        final displayName = NotiService.formatDisplayName(
+          partnerNameRaw,
+          fallback: "Your partner",
+        );
+        await _showSwapNotification(
+          title: _kTitleSwapDeclined,
+          body: "$displayName declined your swap request.",
+        );
+      }
+    } else if (timedOut) {
+      await _showSwapNotification(
+        title: _kTitleSwapTimeout,
+        body: _kBodySwapTimeout,
+      );
+    }
+  }
+}
+
+Future<void> _showSwapNotification({
+  required String title,
+  required String body,
+}) async {
+  try {
+    await NotiService.showSwapAlert(title: title, body: body);
+  } catch (e) {
+    debugPrint("⚠️ Failed to display swap notification locally: $e");
+  }
+}
+
+Future<String?> _fetchPartnerName(String? partnerRequestId) async {
+  if (partnerRequestId == null || partnerRequestId.isEmpty) return null;
+  try {
+    final partnerDoc = await FirebaseFirestore.instance
+        .collection("swap_requests")
+        .doc(partnerRequestId)
+        .get();
+    return partnerDoc.data()?["studentName"]?.toString();
+  } catch (e) {
+    debugPrint("⚠️ Unable to fetch partner name for $partnerRequestId: $e");
+    return null;
+  }
+}
+
+class _SwapNotificationRelay {
+  _SwapNotificationRelay._();
+
+  static final _SwapNotificationRelay instance = _SwapNotificationRelay._();
+
+  StreamSubscription<DocumentSnapshot>? _subscription;
+  Map<String, dynamic>? _previousData;
+  String? _trackedRequestId;
+
+  void ensureStarted(String requestId) {
+    if (_trackedRequestId == requestId && _subscription != null) return;
+
+    _subscription?.cancel();
+    _trackedRequestId = requestId;
+    _previousData = null;
+
+    _subscription = FirebaseFirestore.instance
+        .collection("swap_requests")
+        .doc(requestId)
+        .snapshots()
+        .listen(
+      (snapshot) async {
+        final currentData = snapshot.data() as Map<String, dynamic>?;
+        if (currentData == null) {
+          _previousData = null;
+          return;
+        }
+
+        final myUserId = currentData["userId"]?.toString();
+        if (myUserId == null || myUserId.isEmpty) {
+          _previousData = Map<String, dynamic>.from(currentData);
+          return;
+        }
+
+        await _processSwapStatusChange(
+          previousData: _previousData,
+          currentData: currentData,
+          myUserId: myUserId,
+        );
+
+        _previousData = Map<String, dynamic>.from(currentData);
+      },
+      onError: (error) {
+        debugPrint("⚠️ Swap notification watcher error: $error");
+      },
+    );
+  }
+
+  void stop() {
+    _subscription?.cancel();
+    _subscription = null;
+    _previousData = null;
+    _trackedRequestId = null;
+  }
+
+  void stopIfMatches(String requestId) {
+    if (_trackedRequestId != requestId) return;
+    stop();
+  }
+}
+
+void ensureSwapNotificationRelay(String requestId) =>
+    _SwapNotificationRelay.instance.ensureStarted(requestId);
+
+void stopSwapNotificationRelay([String? requestId]) {
+  if (requestId == null) {
+    _SwapNotificationRelay.instance.stop();
+  } else {
+    _SwapNotificationRelay.instance.stopIfMatches(requestId);
   }
 }
