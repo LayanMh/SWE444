@@ -4,6 +4,28 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
 
+class NoEmojiInputFormatter extends TextInputFormatter {
+  final RegExp _emojiRegex = RegExp(
+    r'[\u{1F600}-\u{1F64F}' // Emoticons
+    r'\u{1F300}-\u{1F5FF}' // Symbols & pictographs
+    r'\u{1F680}-\u{1F6FF}' // Transport & map symbols
+    r'\u{1F1E0}-\u{1F1FF}' // Flags
+    r'\u{2600}-\u{26FF}'   // Misc symbols
+    r'\u{2700}-\u{27BF}]', // Dingbats
+    unicode: true,
+  );
+
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue, TextEditingValue newValue) {
+    if (_emojiRegex.hasMatch(newValue.text)) {
+      return oldValue; // 🚫 Block emojis
+    }
+    return newValue;
+  }
+}
+
+
 class ProjectFormPage extends StatefulWidget {
   final Map<String, dynamic>? existingItem;
   final int? itemIndex;
@@ -557,6 +579,7 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
           autovalidateMode: AutovalidateMode.onUserInteraction,
           inputFormatters: [
             LengthLimitingTextInputFormatter(maxLength),
+            NoEmojiInputFormatter(),
           ],
           decoration: _inputDecoration(hint),
         ),
@@ -601,6 +624,9 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
         ),
         const SizedBox(height: 8.0),
         TextFormField(
+          inputFormatters: [
+  NoEmojiInputFormatter(),
+],
           controller: controller,
           maxLines: maxLines,
           validator: validator,
@@ -645,6 +671,9 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
         ),
         const SizedBox(height: 8.0),
         TextFormField(
+          inputFormatters: [
+  NoEmojiInputFormatter(),
+],
           controller: controller,
           maxLines: maxLines,
           validator: validator,
