@@ -8,6 +8,27 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
+class NoEmojiInputFormatter extends TextInputFormatter {
+  final RegExp _emojiRegex = RegExp(
+    r'[\u{1F600}-\u{1F64F}' // Emoticons
+    r'\u{1F300}-\u{1F5FF}' // Symbols & pictographs
+    r'\u{1F680}-\u{1F6FF}' // Transport & map symbols
+    r'\u{1F1E0}-\u{1F1FF}' // Flags
+    r'\u{2600}-\u{26FF}'   // Misc symbols
+    r'\u{2700}-\u{27BF}]', // Dingbats
+    unicode: true,
+  );
+
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue, TextEditingValue newValue) {
+    if (_emojiRegex.hasMatch(newValue.text)) {
+      return oldValue; // ❌ block emojis
+    }
+    return newValue;
+  }
+}
+
 class VolunteeringFormPage extends StatefulWidget {
   final Map<String, dynamic>? existingItem;
   final int? itemIndex;
@@ -607,6 +628,7 @@ void _showCertificatePreview() {
           autovalidateMode: AutovalidateMode.onUserInteraction,
           inputFormatters: [
             LengthLimitingTextInputFormatter(maxLength),
+            NoEmojiInputFormatter(),
           ],
           decoration: _inputDecoration(hint),
         ),
@@ -651,6 +673,9 @@ void _showCertificatePreview() {
         ),
         const SizedBox(height: 8.0),
         TextFormField(
+          inputFormatters: [
+  NoEmojiInputFormatter(),
+],
           controller: controller,
           maxLines: maxLines,
           validator: validator,
@@ -696,6 +721,9 @@ void _showCertificatePreview() {
         ),
         const SizedBox(height: 8.0),
         TextFormField(
+          inputFormatters: [
+  NoEmojiInputFormatter(),
+],
           controller: controller,
           maxLines: maxLines,
           validator: validator,
