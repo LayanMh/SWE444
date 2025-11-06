@@ -684,7 +684,7 @@ class _CVPageState extends State<CVPage> {
 
       if (mounted) {
         setState(() => _isDownloading = false);
-        _showSuccessMessage('PDF downloaded successfully! Please check your Files.');
+        _showSuccessMessage('PDF downloaded successfully! check your Files.');
       }
 
       debugPrint('✅ PDF saved to: $filePath');
