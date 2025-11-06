@@ -26,13 +26,17 @@ class _CVPageState extends State<CVPage> {
   pw.Document? _pdfDocument;
   String? _errorMessage;
   
-  // Zoom functionality - made nullable to avoid late initialization error
+  // Zoom functionality with specific levels
   TransformationController? _zoomController;
   double _zoomScale = 1.0;
   bool _isUpdatingZoom = false;
   
-  static const double _minZoom = 0.8;
-  static const double _maxZoom = 2.5;
+  // Specific zoom levels: 70%, 80%, 90%, 100%, 110%, 120%
+  static const List<double> _zoomLevels = [0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.4, 1.6, 1.7];
+  int _currentZoomIndex = 3; // Start at 100% (index 3)
+  
+  static const double _minZoom = 0.7;
+  static const double _maxZoom = 1.7;
 
   @override
   void initState() {
@@ -57,46 +61,77 @@ class _CVPageState extends State<CVPage> {
     super.dispose();
   }
   
-  // Zoom methods
+  // Zoom methods with specific levels
   void _resetZoom({bool notify = true}) {
     if (_zoomController == null) return;
     _isUpdatingZoom = true;
-    _zoomScale = 1.0;
+    _currentZoomIndex = 3; // Reset to 100%
+    _zoomScale = _zoomLevels[_currentZoomIndex];
     _zoomController!.value = Matrix4.identity();
     _isUpdatingZoom = false;
     if (notify && mounted) setState(() {});
   }
 
-  void _updateZoom(double delta) {
-    if (_zoomController == null) return;
-    final next = (_zoomScale + delta).clamp(_minZoom, _maxZoom);
-    if ((next - _zoomScale).abs() < 0.001) return;
+  void _zoomIn() {
+    if (_currentZoomIndex >= _zoomLevels.length - 1) return;
     _isUpdatingZoom = true;
-    _zoomScale = next;
+    _currentZoomIndex++;
+    _zoomScale = _zoomLevels[_currentZoomIndex];
     final Matrix4 matrix = Matrix4.copy(_zoomController!.value);
-    matrix.storage[0] = next;
-    matrix.storage[5] = next;
+    matrix.storage[0] = _zoomScale;
+    matrix.storage[5] = _zoomScale;
     _zoomController!.value = matrix;
     _isUpdatingZoom = false;
     setState(() {});
   }
 
-  void _zoomIn() => _updateZoom(0.2);
-
-  void _zoomOut() => _updateZoom(-0.2);
+  void _zoomOut() {
+    if (_currentZoomIndex <= 0) return;
+    _isUpdatingZoom = true;
+    _currentZoomIndex--;
+    _zoomScale = _zoomLevels[_currentZoomIndex];
+    final Matrix4 matrix = Matrix4.copy(_zoomController!.value);
+    matrix.storage[0] = _zoomScale;
+    matrix.storage[5] = _zoomScale;
+    _zoomController!.value = matrix;
+    _isUpdatingZoom = false;
+    setState(() {});
+  }
 
   void _handleZoomControllerChange() {
     if (_isUpdatingZoom || _zoomController == null) return;
     final controllerScale = _zoomController!.value.getMaxScaleOnAxis();
-    final clamped = controllerScale.clamp(_minZoom, _maxZoom);
-    if ((clamped - _zoomScale).abs() < 0.01) return;
-    _isUpdatingZoom = true;
-    _zoomScale = clamped;
-    if (controllerScale != clamped) {
-      _zoomController!.value = Matrix4.identity()..scale(clamped);
+    
+    // Find closest zoom level
+    int closestIndex = 0;
+    double minDiff = (controllerScale - _zoomLevels[0]).abs();
+    for (int i = 1; i < _zoomLevels.length; i++) {
+      double diff = (controllerScale - _zoomLevels[i]).abs();
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestIndex = i;
+      }
     }
-    _isUpdatingZoom = false;
-    setState(() {});
+    
+    if (closestIndex != _currentZoomIndex) {
+      _isUpdatingZoom = true;
+      _currentZoomIndex = closestIndex;
+      _zoomScale = _zoomLevels[_currentZoomIndex];
+      _zoomController!.value = Matrix4.identity()..scale(_zoomScale);
+      _isUpdatingZoom = false;
+      setState(() {});
+    }
+  }
+
+  /// Detect if text contains Arabic characters
+  bool _containsArabic(String text) {
+    final arabicRegex = RegExp(r'[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]');
+    return arabicRegex.hasMatch(text);
+  }
+
+  /// Get text direction based on content
+  pw.TextDirection _getTextDirection(String text) {
+    return _containsArabic(text) ? pw.TextDirection.rtl : pw.TextDirection.ltr;
   }
 
   /// Load previously saved CV
@@ -179,20 +214,48 @@ class _CVPageState extends State<CVPage> {
     }
   }
 
-  /// Generate professional PDF document
+  /// Generate professional PDF document with Arabic support using Amiri font
   Future<void> _generatePDFDocument() async {
     if (_generatedCV == null) return;
 
     try {
       final pdf = pw.Document();
       final lines = _generatedCV!.split('\n');
+      
+      // Debug: Print first 10 lines to see the structure
+      debugPrint('📄 CV Content (first 10 lines):');
+      for (int i = 0; i < (lines.length > 10 ? 10 : lines.length); i++) {
+        debugPrint('Line $i: "${lines[i]}"');
+      }
+      
       final parsedContent = _parseMarkdownContent(lines);
 
+      // Load Arabic-compatible fonts - Amiri has excellent Arabic support
+      final arabicFont = await PdfGoogleFonts.amiriRegular();
+      final arabicFontBold = await PdfGoogleFonts.amiriBold();
+
+      // Alternative fonts if Amiri doesn't work:
+      // final arabicFont = await PdfGoogleFonts.notoSansArabicRegular();
+      // final arabicFontBold = await PdfGoogleFonts.notoSansArabicBold();
+      
+      // OR
+      // final arabicFont = await PdfGoogleFonts.scheherazadeNewRegular();
+      // final arabicFontBold = await PdfGoogleFonts.scheherazadeNewBold();
+
+      // Use MultiPage with Arabic font support
       pdf.addPage(
         pw.MultiPage(
           pageFormat: PdfPageFormat.a4,
           margin: const pw.EdgeInsets.all(40),
-          build: (pw.Context context) => _buildProfessionalPDF(parsedContent),
+          theme: pw.ThemeData.withFont(
+            base: arabicFont,
+            bold: arabicFontBold,
+          ),
+          build: (pw.Context context) => _buildProfessionalPDF(
+            parsedContent,
+            arabicFont,
+            arabicFontBold,
+          ),
         ),
       );
 
@@ -207,7 +270,7 @@ class _CVPageState extends State<CVPage> {
     }
   }
 
-  /// Parse content into structured data
+  /// Parse content into structured data with improved name extraction
   Map<String, dynamic> _parseMarkdownContent(List<String> lines) {
     Map<String, dynamic> content = {
       'name': '',
@@ -220,68 +283,73 @@ class _CVPageState extends State<CVPage> {
     bool nameFound = false;
     bool emailFound = false;
 
-    for (var line in lines) {
+    for (int i = 0; i < lines.length; i++) {
+      final line = lines[i];
       final trimmedLine = line.trim();
       
       // Skip completely empty lines
-      if (trimmedLine.isEmpty) {
-        continue;
-      }
+      if (trimmedLine.isEmpty) continue;
       
       // Skip separator lines
-      if (trimmedLine == '---' || trimmedLine.startsWith('---')) {
-        continue;
-      }
+      if (trimmedLine == '---' || trimmedLine.startsWith('---')) continue;
       
-      // Extract name (should be first line or marked with # or Name:)
-      if (!nameFound) {
-        if (line.startsWith('# ')) {
-          content['name'] = line.substring(2).trim();
-          nameFound = true;
-          continue;
-        } else if (trimmedLine.toLowerCase().contains('name:')) {
-          final nameMatch = RegExp(r'(?:name:?\s*)(.+)', caseSensitive: false).firstMatch(trimmedLine);
-          if (nameMatch != null) {
-            content['name'] = nameMatch.group(1)?.trim() ?? '';
+      // Extract name from first few non-empty lines
+      if (!nameFound && i < 5) {
+        // Remove markdown formatting
+        String cleanedLine = trimmedLine
+            .replaceAll(RegExp(r'^#+\s*'), '') // Remove # headers
+            .replaceAll(RegExp(r'\*+'), '')    // Remove asterisks
+            .replaceAll(RegExp(r'^Name:\s*', caseSensitive: false), '') // Remove "Name:" prefix
+            .trim();
+        
+        // Check if this looks like a name (not email, not section header, reasonable length)
+        bool looksLikeName = cleanedLine.isNotEmpty &&
+                            !cleanedLine.contains('@') &&
+                            !cleanedLine.contains(':') &&
+                            cleanedLine.length >= 3 &&
+                            cleanedLine.length <= 100 &&
+                            !cleanedLine.toUpperCase().contains('EMAIL') &&
+                            !cleanedLine.toUpperCase().contains('PROFESSIONAL') &&
+                            !cleanedLine.toUpperCase().contains('EDUCATION');
+        
+        // Check word count (1-6 words for name)
+        if (looksLikeName) {
+          final words = cleanedLine.split(RegExp(r'\s+'));
+          if (words.length >= 1 && words.length <= 6) {
+            content['name'] = cleanedLine;
             nameFound = true;
+            debugPrint('📝 Name extracted at line $i: "$cleanedLine" (${words.length} words)');
             continue;
           }
-        } else if (!trimmedLine.contains(':') && !trimmedLine.toUpperCase().contains('EMAIL') && 
-                   trimmedLine.split(' ').length >= 2 && trimmedLine.split(' ').length <= 5) {
-          // Likely the name if it's 2-5 words at the start
-          content['name'] = trimmedLine;
-          nameFound = true;
-          continue;
         }
       }
       
       // Extract email
-      if (!emailFound && trimmedLine.toLowerCase().contains('email')) {
+      if (!emailFound) {
         final emailMatch = RegExp(r'\b[\w\.-]+@[\w\.-]+\.\w+\b').firstMatch(trimmedLine);
         if (emailMatch != null) {
-          content['email'] = emailMatch.group(0) ?? '';
+          content['email'] = emailMatch.group(0)!;
           emailFound = true;
-          continue;
-        }
-      } else if (!emailFound) {
-        // Try to find email without "Email:" prefix
-        final emailMatch = RegExp(r'\b[\w\.-]+@[\w\.-]+\.\w+\b').firstMatch(trimmedLine);
-        if (emailMatch != null && emailMatch.group(0) == trimmedLine) {
-          content['email'] = trimmedLine;
-          emailFound = true;
+          debugPrint('📧 Email extracted: "${content['email']}"');
           continue;
         }
       }
       
-      // Check if line is section header (ALL CAPS or starts with ##)
-      bool isAllCapsHeader = trimmedLine.isNotEmpty && 
-                           trimmedLine == trimmedLine.toUpperCase() &&
-                           !trimmedLine.contains('-') &&
-                           !trimmedLine.contains('@') &&
-                           trimmedLine.split(' ').length <= 5 &&
-                           trimmedLine.length > 3;
+      // Check if line is section header
+      String cleanHeader = trimmedLine
+          .replaceAll(RegExp(r'^#+\s*'), '')
+          .replaceAll(RegExp(r'\*+'), '')
+          .trim();
       
-      if (line.startsWith('## ') || isAllCapsHeader) {
+      bool isAllCapsHeader = cleanHeader.isNotEmpty && 
+                           cleanHeader == cleanHeader.toUpperCase() &&
+                           !cleanHeader.contains('-') &&
+                           !cleanHeader.contains('@') &&
+                           !_containsArabic(cleanHeader) &&
+                           cleanHeader.split(' ').length <= 5 &&
+                           cleanHeader.length > 3;
+      
+      if (line.startsWith('##') || isAllCapsHeader) {
         // Save previous section
         if (currentSection != null && currentContent.isNotEmpty) {
           content['sections'].add({
@@ -291,9 +359,8 @@ class _CVPageState extends State<CVPage> {
           currentContent.clear();
         }
         // Start new section
-        currentSection = line.startsWith('## ') 
-            ? line.substring(3).trim() 
-            : trimmedLine;
+        currentSection = cleanHeader;
+        debugPrint('🔖 Section found: "$currentSection"');
       } else if (currentSection != null) {
         // Add content to current section
         currentContent.add(trimmedLine);
@@ -308,25 +375,38 @@ class _CVPageState extends State<CVPage> {
       });
     }
 
+    // Debug output
+    debugPrint('✅ Final Parsed Name: "${content['name']}"');
+    debugPrint('✅ Final Parsed Email: "${content['email']}"');
+    debugPrint('✅ Total Sections: ${content['sections'].length}');
+
     return content;
   }
 
-  /// Build professional PDF with BLACK text
-  List<pw.Widget> _buildProfessionalPDF(Map<String, dynamic> content) {
+  /// Build professional PDF with Arabic support and intelligent pagination
+  List<pw.Widget> _buildProfessionalPDF(
+    Map<String, dynamic> content,
+    pw.Font arabicFont,
+    pw.Font arabicFontBold,
+  ) {
     List<pw.Widget> widgets = [];
 
-    // Header with name
+    // Header with name (with Arabic support)
     if (content['name'] != null && content['name'].toString().isNotEmpty) {
+      final name = content['name'].toString();
       widgets.add(
         pw.Container(
           margin: const pw.EdgeInsets.only(bottom: 8),
           child: pw.Text(
-            content['name'],
+            name,
             style: pw.TextStyle(
               fontSize: 28,
               fontWeight: pw.FontWeight.bold,
               color: PdfColors.black,
+              font: arabicFontBold,
             ),
+            textDirection: _getTextDirection(name),
+            textAlign: _containsArabic(name) ? pw.TextAlign.right : pw.TextAlign.center,
           ),
         ),
       );
@@ -342,7 +422,9 @@ class _CVPageState extends State<CVPage> {
             style: pw.TextStyle(
               fontSize: 11,
               color: PdfColors.black,
+              font: arabicFont,
             ),
+            textAlign: pw.TextAlign.center,
           ),
         ),
       );
@@ -350,119 +432,208 @@ class _CVPageState extends State<CVPage> {
       widgets.add(pw.SizedBox(height: 15));
     }
 
-    // Sections
+    // Sections with smart pagination
     final sections = content['sections'] as List<Map<String, dynamic>>;
     for (var i = 0; i < sections.length; i++) {
       final section = sections[i];
       
+      // Add spacing before section (except first one)
+      if (i > 0) {
+        widgets.add(pw.SizedBox(height: 20));
+      }
+      
+      // Build section content entries first
+      final sectionContent = section['content'] as List<String>;
+      final entries = _buildSectionEntries(sectionContent, arabicFont, arabicFontBold);
+      
+      if (entries.isEmpty) continue; // Skip empty sections
+      
       // Section title
+      final sectionTitle = section['title'].toString();
+      
+      // Wrap section header WITH first entry to keep them together
       widgets.add(
-        pw.Container(
-          margin: pw.EdgeInsets.only(bottom: 8, top: i > 0 ? 15 : 0),
-          child: pw.Text(
-            section['title'],
-            style: pw.TextStyle(
-              fontSize: 16,
-              fontWeight: pw.FontWeight.bold,
-              color: PdfColors.black,
+        pw.Wrap(
+          children: [
+            pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                // Section header
+                pw.Container(
+                  margin: const pw.EdgeInsets.only(bottom: 8),
+                  child: pw.Text(
+                    sectionTitle,
+                    style: pw.TextStyle(
+                      fontSize: 16,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.black,
+                      font: arabicFontBold,
+                    ),
+                    textDirection: _getTextDirection(sectionTitle),
+                  ),
+                ),
+                pw.Divider(thickness: 1, color: PdfColors.grey400),
+                pw.SizedBox(height: 8),
+                
+                // First entry (always stays with header)
+                entries[0],
+              ],
             ),
-          ),
+          ],
         ),
       );
-
-      widgets.add(pw.Divider(thickness: 1, color: PdfColors.grey400));
-      widgets.add(pw.SizedBox(height: 8));
-
-      // Section content
-      final sectionContent = section['content'] as List<String>;
-      for (var line in sectionContent) {
-        // Clean up any markdown symbols that might slip through
-        var cleanLine = line
-            .replaceAll('**', '')  // Remove bold markers
-            .replaceAll('***', '') // Remove bold+italic markers
-            .replaceAll('###', '') // Remove heading markers
-            .replaceAll('__', '')  // Remove underline markers
-            .trim();
-        
-        if (cleanLine.isEmpty) continue;
-        
-        if (line.startsWith('- **') || line.startsWith('### ') || line.contains('**')) {
-          // This is likely a title/heading (strip all formatting)
-          cleanLine = line
-              .replaceAll('### ', '')
-              .replaceAll('- **', '')
-              .replaceAll('**', '')
-              .replaceAll('- ', '')
-              .trim();
-          
-          widgets.add(
-            pw.Container(
-              margin: const pw.EdgeInsets.only(top: 8, bottom: 4),
-              child: pw.Text(
-                cleanLine,
-                style: pw.TextStyle(
-                  fontSize: 12,
-                  fontWeight: pw.FontWeight.bold,
-                  color: PdfColors.black,
-                ),
-              ),
-            ),
-          );
-        } else if (line.trim().startsWith('- ')) {
-          // Bullet point
-          cleanLine = line.trim().substring(2).replaceAll('**', '').trim();
-          widgets.add(
-            pw.Container(
-              margin: const pw.EdgeInsets.only(left: 15, bottom: 3),
-              child: pw.Row(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Container(
-                    width: 4,
-                    height: 4,
-                    margin: const pw.EdgeInsets.only(top: 4, right: 8),
-                    decoration: const pw.BoxDecoration(
-                      color: PdfColors.black,
-                      shape: pw.BoxShape.circle,
-                    ),
-                  ),
-                  pw.Expanded(
-                    child: pw.Text(
-                      cleanLine,
-                      style: const pw.TextStyle(
-                        fontSize: 10,
-                        height: 1.4,
-                        color: PdfColors.black,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        } else {
-          // Regular text (strip any remaining formatting)
-          widgets.add(
-            pw.Container(
-              margin: const pw.EdgeInsets.only(bottom: 4),
-              child: pw.Text(
-                cleanLine,
-                style: pw.TextStyle(
-                  fontSize: 11,
-                  height: 1.4,
-                  color: PdfColors.black,
-                  fontWeight: line.toUpperCase() == line && line.length < 50 
-                      ? pw.FontWeight.bold 
-                      : pw.FontWeight.normal,
-                ),
-              ),
-            ),
-          );
-        }
+      
+      // Add remaining entries (can flow across pages independently)
+      for (var j = 1; j < entries.length; j++) {
+        widgets.add(entries[j]);
       }
     }
 
     return widgets;
+  }
+
+  /// Build entries with Arabic support
+  List<pw.Widget> _buildSectionEntries(
+    List<String> sectionContent,
+    pw.Font arabicFont,
+    pw.Font arabicFontBold,
+  ) {
+    List<pw.Widget> entries = [];
+    List<pw.Widget> currentEntry = [];
+    bool isInEntry = false;
+    
+    for (var line in sectionContent) {
+      var cleanLine = line
+          .replaceAll('**', '')
+          .replaceAll('***', '')
+          .replaceAll('###', '')
+          .replaceAll('__', '')
+          .trim();
+      
+      if (cleanLine.isEmpty) continue;
+      
+      // Detect entry start (bold title or ### heading)
+      bool isEntryStart = line.startsWith('- **') || 
+                         line.startsWith('### ') || 
+                         (line.contains('**') && !line.trim().startsWith('- '));
+      
+      if (isEntryStart) {
+        // Save previous entry
+        if (currentEntry.isNotEmpty) {
+          entries.add(
+            pw.Wrap(
+              children: [
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: List.from(currentEntry),
+                ),
+              ],
+            ),
+          );
+          currentEntry.clear();
+        }
+        isInEntry = true;
+      }
+      
+      // Add content to current entry with Arabic support
+      if (line.startsWith('- **') || line.startsWith('### ') || line.contains('**')) {
+        // Entry title
+        cleanLine = line
+            .replaceAll('### ', '')
+            .replaceAll('- **', '')
+            .replaceAll('**', '')
+            .replaceAll('- ', '')
+            .trim();
+        
+        currentEntry.add(
+          pw.Container(
+            margin: const pw.EdgeInsets.only(top: 8, bottom: 4),
+            child: pw.Text(
+              cleanLine,
+              style: pw.TextStyle(
+                fontSize: 12,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.black,
+                font: arabicFontBold,
+              ),
+              textDirection: _getTextDirection(cleanLine),
+            ),
+          ),
+        );
+      } else if (line.trim().startsWith('- ')) {
+        // Bullet point
+        cleanLine = line.trim().substring(2).replaceAll('**', '').trim();
+        currentEntry.add(
+          pw.Container(
+            margin: const pw.EdgeInsets.only(left: 15, bottom: 3),
+            child: pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Container(
+                  width: 4,
+                  height: 4,
+                  margin: const pw.EdgeInsets.only(top: 4, right: 8),
+                  decoration: const pw.BoxDecoration(
+                    color: PdfColors.black,
+                    shape: pw.BoxShape.circle,
+                  ),
+                ),
+                pw.Expanded(
+                  child: pw.Text(
+                    cleanLine,
+                    style: pw.TextStyle(
+                      fontSize: 10,
+                      height: 1.4,
+                      color: PdfColors.black,
+                      font: arabicFont,
+                    ),
+                    textDirection: _getTextDirection(cleanLine),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      } else {
+        // Regular text
+        currentEntry.add(
+          pw.Container(
+            margin: const pw.EdgeInsets.only(bottom: 4),
+            child: pw.Text(
+              cleanLine,
+              style: pw.TextStyle(
+                fontSize: 11,
+                height: 1.4,
+                color: PdfColors.black,
+                fontWeight: line.toUpperCase() == line && line.length < 50 
+                    ? pw.FontWeight.bold 
+                    : pw.FontWeight.normal,
+                font: line.toUpperCase() == line && line.length < 50 
+                    ? arabicFontBold 
+                    : arabicFont,
+              ),
+              textDirection: _getTextDirection(cleanLine),
+            ),
+          ),
+        );
+      }
+    }
+    
+    // Add the last entry
+    if (currentEntry.isNotEmpty) {
+      entries.add(
+        pw.Wrap(
+          children: [
+            pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: List.from(currentEntry),
+            ),
+          ],
+        ),
+      );
+    }
+    
+    return entries;
   }
 
   /// Download PDF directly to Downloads folder
@@ -513,7 +684,7 @@ class _CVPageState extends State<CVPage> {
 
       if (mounted) {
         setState(() => _isDownloading = false);
-        _showSuccessMessage('PDF downloaded successfully!\nSaved to: ${downloadsDir.path}');
+        _showSuccessMessage('PDF downloaded successfully! Please check your Files.');
       }
 
       debugPrint('✅ PDF saved to: $filePath');
@@ -780,7 +951,6 @@ class _CVPageState extends State<CVPage> {
               color: Color(0xFF0097b2),
             ),
             const SizedBox(height: 16),
-            
           ],
         ),
       ),
@@ -894,7 +1064,7 @@ class _CVPageState extends State<CVPage> {
                           ),
                         ),
                       ),
-                      // Zoom controls at bottom right
+                      // Zoom controls at bottom right with specific percentages
                       Positioned(
                         bottom: 12,
                         right: 12,
@@ -908,7 +1078,7 @@ class _CVPageState extends State<CVPage> {
                             children: [
                               IconButton(
                                 tooltip: 'Zoom out',
-                                onPressed: _zoomScale <= _minZoom ? null : _zoomOut,
+                                onPressed: _currentZoomIndex <= 0 ? null : _zoomOut,
                                 icon: const Icon(Icons.remove),
                                 color: Colors.white,
                               ),
@@ -919,12 +1089,13 @@ class _CVPageState extends State<CVPage> {
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.w600,
+                                    fontSize: 14,
                                   ),
                                 ),
                               ),
                               IconButton(
                                 tooltip: 'Zoom in',
-                                onPressed: _zoomScale >= _maxZoom ? null : _zoomIn,
+                                onPressed: _currentZoomIndex >= _zoomLevels.length - 1 ? null : _zoomIn,
                                 icon: const Icon(Icons.add),
                                 color: Colors.white,
                               ),
@@ -936,7 +1107,7 @@ class _CVPageState extends State<CVPage> {
                               ),
                               IconButton(
                                 tooltip: 'Reset zoom',
-                                onPressed: (_zoomScale - 1.0).abs() < 0.01 ? null : _resetZoom,
+                                onPressed: _currentZoomIndex != 3 ? _resetZoom : null,
                                 icon: const Icon(Icons.refresh),
                                 color: Colors.white,
                               ),

@@ -134,11 +134,11 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
       return null;
     }
     
-    final trimmedValue = value.trim();
+   final trimmedValue = value.trim().toLowerCase();
     
     if (!trimmedValue.startsWith('http://github.com/') &&
         !trimmedValue.startsWith('https://github.com/')) {
-      return 'Link must be a GitHub URL';
+      return 'Link must be a GitHub URL https://github.com/';
     }
     
     if (trimmedValue.length > 500) {

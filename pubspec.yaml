@@ -31,6 +31,8 @@ dependencies:
   open_file: ^3.3.2
   share_plus: ^7.2.1
   url_launcher: ^6.3.0
+  google_fonts: ^6.1.0
+  
 
   # PDF Generation packages
   syncfusion_flutter_pdf: ^27.2.5

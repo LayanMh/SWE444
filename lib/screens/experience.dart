@@ -11,6 +11,7 @@ import 'workshops_page.dart';
 import 'clubs_page.dart';
 import 'volunteering_page.dart';
 import 'cv_page.dart';
+import 'category_detail_page.dart'; // NEW: Import the separate detail page
 
 class ExperiencePage extends StatefulWidget {
   const ExperiencePage({super.key});
@@ -55,11 +56,12 @@ class _ExperiencePageState extends State<ExperiencePage> {
 
   Future<void> _loadExperienceData() async {
     try {
-      setState(() => isLoading = true);
-      
       final docId = await _getUserDocId();
       if (docId == null) {
-        _showErrorMessage('Unable to identify user');
+        if (isLoading && mounted) {
+          setState(() => isLoading = false);
+          _showErrorMessage('Unable to identify user');
+        }
         return;
       }
 
@@ -67,20 +69,26 @@ class _ExperiencePageState extends State<ExperiencePage> {
       
       if (doc.exists) {
         final data = doc.data();
-        setState(() {
-          experienceData = {
-            'projects': data?['projects'] ?? [],
-            'workshops': data?['workshops'] ?? [],
-            'clubs': data?['clubs'] ?? [],
-            'volunteering': data?['volunteering'] ?? [],
-          };
-          isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            experienceData = {
+              'projects': data?['projects'] ?? [],
+              'workshops': data?['workshops'] ?? [],
+              'clubs': data?['clubs'] ?? [],
+              'volunteering': data?['volunteering'] ?? [],
+            };
+            isLoading = false;
+          });
+        }
+      } else {
+        if (mounted) setState(() => isLoading = false);
       }
     } catch (e) {
       debugPrint('Error loading experience: $e');
-      _showErrorMessage('Failed to load experience data');
-      setState(() => isLoading = false);
+      if (isLoading && mounted) {
+        _showErrorMessage('Failed to load experience data');
+        setState(() => isLoading = false);
+      }
     }
   }
 
@@ -112,47 +120,63 @@ class _ExperiencePageState extends State<ExperiencePage> {
 
       List<dynamic> items = List.from(experienceData[category]);
       
-      // Delete associated files from Storage if they exist
+      // Store the item for potential certificate deletion
       final item = items[index];
-      if (item['certificateUrl'] != null) {
-        try {
-          await FirebaseStorage.instance.refFromURL(item['certificateUrl']).delete();
-        } catch (e) {
-          debugPrint('Error deleting certificate: $e');
-        }
-      }
       
+      // Optimistically update UI immediately
       items.removeAt(index);
+      if (mounted) {
+        setState(() {
+          experienceData[category] = items;
+        });
+      }
 
+      // Delete from Firestore
       await _firestore.collection('users').doc(docId).update({
         category: items,
         'updatedAt': FieldValue.serverTimestamp(),
       });
-
-      _showSuccessMessage('Deleted successfully');
-      await _loadExperienceData();
+// Delete certificate in background (non-blocking)
+final certificateUrl = item['certificateUrl'];
+if (certificateUrl != null && 
+    certificateUrl.toString().trim().isNotEmpty && 
+    certificateUrl.toString().contains('firebasestorage.googleapis.com')) {
+  try {
+    await FirebaseStorage.instance.refFromURL(certificateUrl).delete();
+    debugPrint('Certificate deleted successfully');
+  } catch (e) {
+    debugPrint('Error deleting certificate: $e');
+  }
+}
     } catch (e) {
-      _showErrorMessage('Failed to delete item');
+      debugPrint('Error deleting item: $e');
+      // Revert UI on error
+      await _loadExperienceData();
+      if (mounted) _showErrorMessage('Failed to delete item');
     }
   }
 
   void _showSuccessMessage(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
         backgroundColor: const Color(0xFF4ECDC4),
         behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     );
   }
 
   void _showErrorMessage(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
         backgroundColor: Colors.red[400],
         behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     );
@@ -289,7 +313,7 @@ class _ExperiencePageState extends State<ExperiencePage> {
                       context,
                       MaterialPageRoute(builder: (context) => formPage),
                     );
-                    if (result == true) {
+                    if (result == true && mounted) {
                       await _loadExperienceData();
                     }
                   },
@@ -340,20 +364,22 @@ class _ExperiencePageState extends State<ExperiencePage> {
               Padding(
                 padding: const EdgeInsets.only(left: 16.0, right: 16.0, bottom: 12.0),
                 child: InkWell(
-                  onTap: () {
-                    Navigator.push(
+                  onTap: () async {
+                    // Navigate to the separate detail page
+                    final result = await Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (context) => CategoryDetailPage(
                           title: title,
                           icon: icon,
                           category: category,
-                          items: items,
-                          onUpdate: _loadExperienceData,
-                          onDelete: _deleteItem,
                         ),
                       ),
                     );
+                    // Reload data when returning if changes were made
+                    if (result == true && mounted) {
+                      await _loadExperienceData();
+                    }
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 12.0),
@@ -415,7 +441,6 @@ class _ExperiencePageState extends State<ExperiencePage> {
 
     return Container(
       margin: const EdgeInsets.only(left: 16.0, right: 16.0, bottom: 12.0),
-      padding: const EdgeInsets.all(12.0),
       decoration: BoxDecoration(
         color: const Color(0xFF95E1D3).withOpacity(0.05),
         borderRadius: BorderRadius.circular(12.0),
@@ -423,199 +448,219 @@ class _ExperiencePageState extends State<ExperiencePage> {
           color: const Color(0xFF95E1D3).withOpacity(0.2),
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header - Always visible
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: InkWell(
-                  onTap: () {
-                    setState(() {
-                      if (isExpanded) {
-                        expandedItems.remove(itemKey);
-                      } else {
-                        expandedItems.add(itemKey);
-                      }
-                    });
-                  },
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item['title'] ?? 'Untitled',
-                        style: const TextStyle(
-                          fontSize: 16.0,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF0e0259),
-                        ),
-                      ),
-                      if (dateOrHoursText.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4.0),
-                          child: Text(
-                            dateOrHoursText,
-                            style: TextStyle(
-                              fontSize: 13.0,
-                              color: Colors.grey[600],
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            setState(() {
+              if (isExpanded) {
+                expandedItems.remove(itemKey);
+              } else {
+                expandedItems.add(itemKey);
+              }
+            });
+          },
+          borderRadius: BorderRadius.circular(12.0),
+          child: Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header - Always visible
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item['title'] ?? 'Untitled',
+                            style: const TextStyle(
+                              fontSize: 16.0,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF0e0259),
                             ),
                           ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8.0),
-              PopupMenuButton<String>(
-                icon: Icon(Icons.more_vert, color: Colors.grey[600], size: 20.0),
-                onSelected: (value) async {
-                  if (value == 'edit') {
-                    Widget formPage;
-                    switch (category) {
-                      case 'projects':
-                        formPage = ProjectFormPage(existingItem: item, itemIndex: index);
-                        break;
-                      case 'workshops':
-                        formPage = WorkshopFormPage(existingItem: item, itemIndex: index);
-                        break;
-                      case 'clubs':
-                        formPage = ClubFormPage(existingItem: item, itemIndex: index);
-                        break;
-                      case 'volunteering':
-                        formPage = VolunteeringFormPage(existingItem: item, itemIndex: index);
-                        break;
-                      default:
-                        return;
-                    }
-                    
-                    final result = await Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => formPage),
-                    );
-                    if (result == true) {
-                      await _loadExperienceData();
-                    }
-                  } else if (value == 'delete') {
-                    await _deleteItem(category, index);
-                  }
-                },
-                itemBuilder: (context) => [
-                  PopupMenuItem(
-                    value: 'edit',
-                    child: Row(
-                      children: [
-                        Icon(Icons.edit, color: Color(0xFF0097b2), size: 20),
-                        SizedBox(width: 8),
-                        Text('Edit'),
-                      ],
+                          if (dateOrHoursText.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4.0),
+                              child: Text(
+                                dateOrHoursText,
+                                style: TextStyle(
+                                  fontSize: 13.0,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ),
+                          // "Tap to expand" hint when collapsed
+                          if (!isExpanded)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6.0),
+                              child: Text(
+                                'Tap to view details',
+                                style: TextStyle(
+                                  fontSize: 12.0,
+                                  color: const Color(0xFF0097b2).withOpacity(0.7),
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
-                  PopupMenuItem(
-                    value: 'delete',
-                    child: Row(
-                      children: [
-                        Icon(Icons.delete, color: Colors.red, size: 20),
-                        SizedBox(width: 8),
-                        Text('Delete'),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          
-          // Expanded details
-          if (isExpanded) ...[
-            const SizedBox(height: 8.0),
-            if (item['organization'] != null && item['organization'].toString().isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 4.0),
-                child: Text(
-                  item['organization'],
-                  style: TextStyle(
-                    fontSize: 14.0,
-                    color: Colors.grey[700],
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            if (item['role'] != null && item['role'].toString().isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 4.0),
-                child: Text(
-                  'Role: ${item['role']}',
-                  style: TextStyle(
-                    fontSize: 13.0,
-                    color: Colors.grey[600],
-                  ),
-                ),
-              ),
-            if (item['link'] != null && item['link'].toString().isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 4.0),
-                child: InkWell(
-                  onTap: () => _launchUrl(item['link']),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(Icons.link, size: 14, color: Colors.grey[600]),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          item['link'],
-                          style: const TextStyle(
-                            fontSize: 13.0,
-                            color: Color(0xFF0097b2),
-                            decoration: TextDecoration.underline,
+                    const SizedBox(width: 8.0),
+                    PopupMenuButton<String>(
+                      icon: Icon(Icons.more_vert, color: Colors.grey[600], size: 20.0),
+                      onSelected: (value) async {
+                        if (value == 'edit') {
+                          Widget formPage;
+                          switch (category) {
+                            case 'projects':
+                              formPage = ProjectFormPage(existingItem: item, itemIndex: index);
+                              break;
+                            case 'workshops':
+                              formPage = WorkshopFormPage(existingItem: item, itemIndex: index);
+                              break;
+                            case 'clubs':
+                              formPage = ClubFormPage(existingItem: item, itemIndex: index);
+                              break;
+                            case 'volunteering':
+                              formPage = VolunteeringFormPage(existingItem: item, itemIndex: index);
+                              break;
+                            default:
+                              return;
+                          }
+                          
+                          final result = await Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => formPage),
+                          );
+                          if (result == true && mounted) {
+                            await _loadExperienceData();
+                          }
+                        } else if (value == 'delete') {
+                          await _deleteItem(category, index);
+                        }
+                      },
+                      itemBuilder: (context) => const [
+                        PopupMenuItem(
+                          value: 'edit',
+                          child: Row(
+                            children: [
+                              Icon(Icons.edit, color: Color(0xFF0097b2), size: 20),
+                              SizedBox(width: 8),
+                              Text('Edit'),
+                            ],
                           ),
-                          maxLines: null,
-                          softWrap: true,
                         ),
-                      ),
-                    ],
-                  ),
+                        PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete, color: Colors.red, size: 20),
+                              SizedBox(width: 8),
+                              Text('Delete'),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-              ),
-            if (item['certificateUrl'] != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8.0),
-                child: InkWell(
-                  onTap: () => _showCertificatePreview(item['certificateUrl']),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.upload_file, size: 16, color: Color(0xFF0097b2)),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Certificate uploaded (tap to view)',
-                        style: const TextStyle(
-                          fontSize: 13.0,
-                          color: Color(0xFF0097b2),
+                
+                // Expanded details
+                if (isExpanded) ...[
+                  const SizedBox(height: 8.0),
+                  if (item['organization'] != null && item['organization'].toString().isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4.0),
+                      child: Text(
+                        item['organization'],
+                        style: TextStyle(
+                          fontSize: 14.0,
+                          color: Colors.grey[700],
                           fontWeight: FontWeight.w500,
-                          decoration: TextDecoration.underline,
                         ),
                       ),
-                    ],
-                  ),
-                ),
-              ),
-            if (item['description'] != null && item['description'].toString().isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 8.0),
-                child: Text(
-                  item['description'],
-                  style: TextStyle(
-                    fontSize: 14.0,
-                    color: Colors.grey[700],
-                    height: 1.4,
-                  ),
-                ),
-              ),
-          ],
-        ],
+                    ),
+                  if (item['role'] != null && item['role'].toString().isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4.0),
+                      child: Text(
+                        'Role: ${item['role']}',
+                        style: TextStyle(
+                          fontSize: 13.0,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ),
+                  if (item['link'] != null && item['link'].toString().isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4.0),
+                      child: InkWell(
+                        onTap: () => _launchUrl(item['link']),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.link, size: 14, color: Colors.grey[600]),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                item['link'],
+                                style: const TextStyle(
+                                  fontSize: 13.0,
+                                  color: Color(0xFF0097b2),
+                                  decoration: TextDecoration.underline,
+                                ),
+                                maxLines: null,
+                                softWrap: true,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  if (item['certificateUrl'] != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: InkWell(
+                        onTap: () => _showCertificatePreview(item['certificateUrl']),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.upload_file, size: 16, color: Color(0xFF0097b2)),
+                            SizedBox(width: 6),
+                            Text(
+                              'Certificate uploaded (tap to view)',
+                              style: TextStyle(
+                                fontSize: 13.0,
+                                color: Color(0xFF0097b2),
+                                fontWeight: FontWeight.w500,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  if (item['description'] != null && item['description'].toString().isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Text(
+                        item['description'],
+                        style: TextStyle(
+                          fontSize: 14.0,
+                          color: Colors.grey[700],
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                ],
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -640,8 +685,8 @@ class _ExperiencePageState extends State<ExperiencePage> {
         child: SafeArea(
           child: Column(
             children: [
-              Padding(
-                padding: const EdgeInsets.only(
+              const Padding(
+                padding: EdgeInsets.only(
                   top: 16.0,
                   left: 16.0,
                   right: 16.0,
@@ -652,7 +697,7 @@ class _ExperiencePageState extends State<ExperiencePage> {
                   child: Center(
                     child: Text(
                       'My Experience',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w700,
                         color: Colors.white,
@@ -766,7 +811,7 @@ class _ExperiencePageState extends State<ExperiencePage> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => CVPage(autoGenerate: true),
+                  builder: (context) => const CVPage(autoGenerate: true),
                 ),
               );
             }
@@ -784,417 +829,6 @@ class _ExperiencePageState extends State<ExperiencePage> {
             fontWeight: FontWeight.w600,
           ),
         ),
-      ),
-    );
-  }
-}
-
-class CategoryDetailPage extends StatefulWidget {
-  final String title;
-  final IconData icon;
-  final String category;
-  final List<dynamic> items;
-  final Function onUpdate;
-  final Function(String, int) onDelete;
-
-  const CategoryDetailPage({
-    super.key,
-    required this.title,
-    required this.icon,
-    required this.category,
-    required this.items,
-    required this.onUpdate,
-    required this.onDelete,
-  });
-
-  @override
-  State<CategoryDetailPage> createState() => _CategoryDetailPageState();
-}
-
-class _CategoryDetailPageState extends State<CategoryDetailPage> {
-  Set<String> expandedItems = {};
-
-  String _getItemKey(int index) {
-    return '${widget.category}-$index';
-  }
-
-  String _getDateOrHoursText(Map<String, dynamic> item) {
-    if (item['startDate'] != null || item['endDate'] != null) {
-      return '${item['startDate'] ?? 'N/A'} - ${item['endDate'] ?? 'Present'}';
-    } else if (item['year'] != null) {
-      return 'Year: ${item['year']}';
-    } else if (item['hours'] != null && item['hours'].toString().isNotEmpty) {
-      return 'Hours: ${item['hours']}';
-    }
-    return '';
-  }
-
-  void _launchUrl(BuildContext context, String url) async {
-    try {
-      final Uri uri = Uri.parse(url);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        _showErrorMessage(context, 'Could not open link');
-      }
-    } catch (e) {
-      debugPrint('Error launching URL: $e');
-      _showErrorMessage(context, 'Invalid link format');
-    }
-  }
-
-  void _showCertificatePreview(BuildContext context, String certificateUrl) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.8,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Stack(
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.network(certificateUrl, fit: BoxFit.contain),
-                    ),
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: IconButton(
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.close, color: Colors.white),
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.black54,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  void _showErrorMessage(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red[400],
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey[50],
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF006B7A),
-              Color(0xFF0097b2),
-              Color(0xFF0e0259),
-            ],
-            stops: [0.0, 0.6, 1.0],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(
-                  top: 16.0,
-                  left: 16.0,
-                  right: 16.0,
-                  bottom: 8.0,
-                ),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back, color: Colors.white),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.all(8.0),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(10.0),
-                      ),
-                      child: Icon(widget.icon, color: Colors.white, size: 20.0),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        widget.title,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.grey[50],
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(24),
-                      topRight: Radius.circular(24),
-                    ),
-                  ),
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16.0),
-                    itemCount: widget.items.length,
-                    itemBuilder: (context, index) {
-                      final item = widget.items[index];
-                      return _buildDetailItem(context, item, index);
-                    },
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDetailItem(BuildContext context, Map<String, dynamic> item, int index) {
-    final itemKey = _getItemKey(index);
-    final isExpanded = expandedItems.contains(itemKey);
-    final dateOrHoursText = _getDateOrHoursText(item);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12.0),
-      padding: const EdgeInsets.all(12.0),
-      decoration: BoxDecoration(
-        color: const Color(0xFF95E1D3).withOpacity(0.05),
-        borderRadius: BorderRadius.circular(12.0),
-        border: Border.all(
-          color: const Color(0xFF95E1D3).withOpacity(0.2),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header - Always visible
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: InkWell(
-                  onTap: () {
-                    setState(() {
-                      if (isExpanded) {
-                        expandedItems.remove(itemKey);
-                      } else {
-                        expandedItems.add(itemKey);
-                      }
-                    });
-                  },
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item['title'] ?? 'Untitled',
-                        style: const TextStyle(
-                          fontSize: 16.0,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF0e0259),
-                        ),
-                      ),
-                      if (dateOrHoursText.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4.0),
-                          child: Text(
-                            dateOrHoursText,
-                            style: TextStyle(
-                              fontSize: 13.0,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8.0),
-              PopupMenuButton<String>(
-                icon: Icon(Icons.more_vert, color: Colors.grey[600], size: 20.0),
-                onSelected: (value) async {
-                  if (value == 'edit') {
-                    Widget formPage;
-                    switch (widget.category) {
-                      case 'projects':
-                        formPage = ProjectFormPage(existingItem: item, itemIndex: index);
-                        break;
-                      case 'workshops':
-                        formPage = WorkshopFormPage(existingItem: item, itemIndex: index);
-                        break;
-                      case 'clubs':
-                        formPage = ClubFormPage(existingItem: item, itemIndex: index);
-                        break;
-                      case 'volunteering':
-                        formPage = VolunteeringFormPage(existingItem: item, itemIndex: index);
-                        break;
-                      default:
-                        return;
-                    }
-                    
-                    final result = await Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => formPage),
-                    );
-                    if (result == true) {
-                      await widget.onUpdate();
-                      if (context.mounted) {
-                        Navigator.pop(context);
-                      }
-                    }
-                  } else if (value == 'delete') {
-                    await widget.onDelete(widget.category, index);
-                    if (context.mounted) {
-                      Navigator.pop(context);
-                    }
-                  }
-                },
-                itemBuilder: (context) => [
-                  PopupMenuItem(
-                    value: 'edit',
-                    child: Row(
-                      children: [
-                        Icon(Icons.edit, color: Color(0xFF0097b2), size: 20),
-                        SizedBox(width: 8),
-                        Text('Edit'),
-                      ],
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 'delete',
-                    child: Row(
-                      children: [
-                        Icon(Icons.delete, color: Colors.red, size: 20),
-                        SizedBox(width: 8),
-                        Text('Delete'),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          
-          // Expanded details
-          if (isExpanded) ...[
-            const SizedBox(height: 8.0),
-            if (item['organization'] != null && item['organization'].toString().isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 4.0),
-                child: Text(
-                  item['organization'],
-                  style: TextStyle(
-                    fontSize: 14.0,
-                    color: Colors.grey[700],
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            if (item['role'] != null && item['role'].toString().isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 4.0),
-                child: Text(
-                  'Role: ${item['role']}',
-                  style: TextStyle(
-                    fontSize: 13.0,
-                    color: Colors.grey[600],
-                  ),
-                ),
-              ),
-            if (item['link'] != null && item['link'].toString().isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 4.0),
-                child: InkWell(
-                  onTap: () => _launchUrl(context, item['link']),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(Icons.link, size: 14, color: Colors.grey[600]),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          item['link'],
-                          style: const TextStyle(
-                            fontSize: 13.0,
-                            color: Color(0xFF0097b2),
-                            decoration: TextDecoration.underline,
-                          ),
-                          maxLines: null,
-                          softWrap: true,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            if (item['certificateUrl'] != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8.0),
-                child: InkWell(
-                  onTap: () => _showCertificatePreview(context, item['certificateUrl']),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.upload_file, size: 16, color: Color(0xFF0097b2)),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Certificate uploaded (tap to view)',
-                        style: const TextStyle(
-                          fontSize: 13.0,
-                          color: Color(0xFF0097b2),
-                          fontWeight: FontWeight.w500,
-                          decoration: TextDecoration.underline,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            if (item['description'] != null && item['description'].toString().isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 8.0),
-                child: Text(
-                  item['description'],
-                  style: TextStyle(
-                    fontSize: 14.0,
-                    color: Colors.grey[700],
-                    height: 1.4,
-                  ),
-                ),
-              ),
-          ],
-        ],
       ),
     );
   }
