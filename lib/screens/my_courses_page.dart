@@ -89,6 +89,8 @@ class _MyCoursesPageState extends State<MyCoursesPage> {
             children: grouped.entries.map((entry) {
               final section = entry.key;
               final sessions = entry.value;
+              final isDeletingSection =
+                  sessions.any((session) => _deletingIds.contains(session.id));
               final first = sessions.first;
               sessions.sort((a, b) => a.dayOfWeek.compareTo(b.dayOfWeek));
               final hasConflict = sessions.any((s) => conflictMap.containsKey(s.id));
@@ -145,29 +147,12 @@ class _MyCoursesPageState extends State<MyCoursesPage> {
                       const SizedBox(height: 12),
                       Align(
                         alignment: Alignment.centerRight,
-                        child: Builder(
-                          builder: (context) {
-                            final isDeletingSection = sessions.any((s) => _deletingIds.contains(s.id));
-                            return IconButton(
-                              icon: isDeletingSection
-                                  ? const SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.redAccent,
-                                      ),
-                                    )
-                                  : const Icon(
-                                      Icons.delete_outline_rounded,
-                                      color: Colors.redAccent,
-                                    ),
-                              onPressed: isDeletingSection
-                                  ? null
-                                  : () => _confirmDeleteGroup(section, sessions),
-                              tooltip: isDeletingSection ? 'Deleting…' : 'Remove section',
-                            );
-                          },
+                        child: IconButton(
+                          icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                          onPressed: isDeletingSection || _bulkDeleting
+                              ? null
+                              : () => _confirmDeleteGroup(section, sessions),
+                          tooltip: (isDeletingSection || _bulkDeleting) ? 'Deleting...' : null,
                         ),
                       ),
                     ],
@@ -266,12 +251,25 @@ class _MyCoursesPageState extends State<MyCoursesPage> {
       }
     });
 
+    final messenger = ScaffoldMessenger.of(context);
+    var allSucceeded = true;
+
     for (final s in sessions) {
-      await _deleteEntry(s);
+      final success = await _deleteEntry(s, showSuccessMessage: false);
+      if (!success) {
+        allSucceeded = false;
+      }
     }
+
+    if (!mounted || !allSucceeded) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('${sessions.first.courseCode} - Section $section removed from your schedule.'),
+      ),
+    );
   }
 
-  Future<void> _deleteEntry(ScheduleEntry entry) async {
+  Future<bool> _deleteEntry(ScheduleEntry entry, {bool showSuccessMessage = true}) async {
     final messenger = ScaffoldMessenger.of(context);
 
     // Optimistic removal
@@ -281,11 +279,15 @@ class _MyCoursesPageState extends State<MyCoursesPage> {
 
     try {
       await ScheduleService.deleteEntry(entry);
-      messenger.showSnackBar(
-        SnackBar(content: Text('${entry.courseCode} removed from your schedule.')),
-      );
+      if (showSuccessMessage) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('${entry.courseCode} removed from your schedule.')),
+        );
+      }
+      return true;
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text('Error deleting: $e')));
+      return false;
     } finally {
       setState(() {
         _deletingIds.remove(entry.id);
