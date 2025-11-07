@@ -435,6 +435,7 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
                               label: 'Link/Attachment',
                               hint: 'e.g., https://github.com/yourproject',
                               validator: _validateLink,
+                              maxLength: 150,
                             ),
                             const SizedBox(height: 16.0),
                             _buildDatePicker(
@@ -617,6 +618,7 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
       ],
     );
   }
+  
 Widget _buildTextFieldWithWordCounter({
   required TextEditingController controller,
   required String label,
@@ -667,39 +669,40 @@ Widget _buildTextFieldWithWordCounter({
     ],
   );
 }
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    String? hint,
-    int maxLines = 1,
-    String? Function(String?)? validator,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 14.0,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF0e0259),
-          ),
+ Widget _buildTextField({
+  required TextEditingController controller,
+  required String label,
+  String? hint,
+  int maxLines = 1,
+  String? Function(String?)? validator,
+  int? maxLength,  // ← ADD THIS PARAMETER
+}) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        style: const TextStyle(
+          fontSize: 14.0,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF0e0259),
         ),
-        const SizedBox(height: 8.0),
-        TextFormField(
-          inputFormatters: [
-  NoEmojiInputFormatter(),
-],
-          controller: controller,
-          maxLines: maxLines,
-          validator: validator,
-          autovalidateMode: AutovalidateMode.onUserInteraction,
-          decoration: _inputDecoration(hint),
-        ),
-      ],
-    );
-  }
-
+      ),
+      const SizedBox(height: 8.0),
+      TextFormField(
+        inputFormatters: [
+          if (maxLength != null) LengthLimitingTextInputFormatter(maxLength),  // ← ADD THIS LINE!
+          NoEmojiInputFormatter(),
+        ],
+        controller: controller,
+        maxLines: maxLines,
+        validator: validator,
+        autovalidateMode: AutovalidateMode.onUserInteraction,
+        decoration: _inputDecoration(hint),
+      ),
+    ],
+  );
+}
   InputDecoration _inputDecoration(String? hint) {
     return InputDecoration(
       hintText: hint,
