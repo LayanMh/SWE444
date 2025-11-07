@@ -6,6 +6,12 @@ import 'swap_matches_page.dart' as matches;
 import 'generate_pdf_page.dart' as pdf;
 import 'dart:async';
 import '../services/noti_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../services/microsoft_auth_service.dart';
+import '../services/microsoft_calendar_service.dart';
+import '../models/lecture.dart';
+import '../services/firebase_lecture_service.dart';
 
 const String _kTitleNewSwapRequest = 'New Swap Request';
 const String _kTitleSwapConfirmed = 'Swap Confirmed';
@@ -31,14 +37,14 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
   bool _loading = true;
   bool _popupShown = false;
   StreamSubscription<DocumentSnapshot>? _subscription;
-  Timer? _expiryCheckTimer; // ✅ NEW: For auto-expiry check
-  int _selectedIndex = 2; // ✅ NEW: For bottom navigation
+  Timer? _expiryCheckTimer;
+  int _selectedIndex = 2;
 
   @override
   void initState() {
     super.initState();
     _subscribeToRequest();
-    _startExpiryCheck(); // ✅ NEW
+    _startExpiryCheck();
   }
 
   void _subscribeToRequest() {
@@ -51,7 +57,6 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
         .listen((doc) async {
       if (!doc.exists) {
         stopSwapNotificationRelay(widget.requestId);
-        // ✅ NEW: Navigate to home if request is deleted
         if (mounted) {
           Navigator.pushReplacement(
             context,
@@ -72,7 +77,6 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
     });
   }
 
-  // ✅ NEW: Periodically check if pending_confirmation has expired
   void _startExpiryCheck() {
     _expiryCheckTimer = Timer.periodic(const Duration(minutes: 1), (_) async {
       if (_data == null) return;
@@ -89,7 +93,6 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
     });
   }
 
-  // ✅ NEW: Handle expiry of confirmation
   Future<void> _handleExpiry() async {
     try {
       final partnerId = _data?["partnerRequestId"];
@@ -139,12 +142,11 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
     final status = _data?["status"];
     final confirmationBy = _data?["confirmationBy"];
     final partnerId = _data?["partnerRequestId"];
-    final myUserId = _data?["userId"]; // ✅ NEW
+    final myUserId = _data?["userId"];
 
-    // ✅ IMPROVED: Only show dialog if someone ELSE requested confirmation from me
     if (status == "pending_confirmation" &&
         confirmationBy != null &&
-        confirmationBy != myUserId && // ✅ NEW: Check it's not my own request
+        confirmationBy != myUserId &&
         partnerId != null) {
       _popupShown = true;
 
@@ -180,7 +182,7 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
               onPressed: () async {
                 Navigator.pop(context);
                 await _declineSwap(partnerId);
-                _popupShown = false; // ✅ NEW: Reset flag
+                _popupShown = false;
               },
               child: const Text("Decline", style: TextStyle(color: Colors.redAccent)),
             ),
@@ -216,20 +218,20 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
         "status": "confirmed",
         "confirmedBy": _data?["userId"],
         "confirmationExpiresAt": FieldValue.delete(),
-        "confirmedAt": FieldValue.serverTimestamp(), // ✅ NEW
+        "confirmedAt": FieldValue.serverTimestamp(),
       });
       batch.update(partnerRef, {
         "status": "confirmed",
         "confirmedBy": _data?["userId"],
         "confirmationExpiresAt": FieldValue.delete(),
-        "confirmedAt": FieldValue.serverTimestamp(), // ✅ NEW
+        "confirmedAt": FieldValue.serverTimestamp(),
       });
 
       await batch.commit();
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text(" Swap confirmed successfully!"),
+        content: Text("✅ Swap confirmed successfully!"),
         backgroundColor: Colors.green,
       ));
     } catch (e) {
@@ -283,9 +285,8 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
     );
   }
 
-  // ✅ NEW: Handle bottom navigation
   void _onNavTap(int index) {
-    if (index == 2) return; // Already on home/swapping
+    if (index == 2) return;
     setState(() => _selectedIndex = index);
     
     switch (index) {
@@ -307,7 +308,7 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
   @override
   void dispose() {
     _subscription?.cancel();
-    _expiryCheckTimer?.cancel(); // ✅ NEW
+    _expiryCheckTimer?.cancel();
     super.dispose();
   }
 
@@ -337,7 +338,7 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
           ),
         ),
         child: SafeArea(
-          bottom: false, // ✅ NEW: Don't apply safe area to bottom for nav bar
+          bottom: false,
           child: _loading
               ? const Center(child: CircularProgressIndicator(color: Colors.white))
               : _data == null
@@ -345,7 +346,6 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
                   : _buildContent(),
         ),
       ),
-      // ✅ NEW: Bottom Navigation Bar
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         currentIndex: _selectedIndex,
@@ -369,21 +369,20 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
     final gender = _data!["gender"] ?? "-";
     final userId = _data!["userId"] ?? "";
     final status = _data!["status"] ?? "open";
-    final expiresAt = _data?["confirmationExpiresAt"] as Timestamp?; // ✅ NEW
-    final confirmationBy = _data?["confirmationBy"]; // ✅ NEW
-    final myUserId = _data!["userId"]; // ✅ NEW
+    final expiresAt = _data?["confirmationExpiresAt"] as Timestamp?;
+    final confirmationBy = _data?["confirmationBy"];
+    final myUserId = _data!["userId"];
     final isPending = status == "pending_confirmation";
     final isConfirmed = status == "confirmed";
     final canEdit = !isPending && !isConfirmed;
 
     Color statusColor;
     String statusText;
-    Widget? statusSubtitle; // ✅ NEW
+    Widget? statusSubtitle;
     
     switch (status) {
       case "pending_confirmation":
-        statusColor = const Color(0xFFFF9800); // ✅ Material Orange - Clear & Visible
-        // ✅ NEW: Show different text based on who's waiting
+        statusColor = const Color(0xFFFF9800);
         if (confirmationBy == myUserId) {
           statusText = "Waiting for confirmation";
           if (expiresAt != null) {
@@ -398,22 +397,20 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
         }
         break;
       case "confirmed":
-        statusColor = const Color(0xFF4CAF50); // ✅ Material Green - Clear & Visible
+        statusColor = const Color.fromARGB(255, 16, 80, 32);
         statusText = "Confirmed";
         statusSubtitle = const Text(
           "Your swap is confirmed!",
-          style: TextStyle(color: Color(0xFF4CAF50), fontSize: 12),
+          style: TextStyle(color: Color.fromARGB(255, 16, 80, 32), fontSize: 12),
         );
         break;
       default:
-        statusColor = const Color.fromARGB(255, 236, 237, 239); // ✅ Material Blue - Clear & Visible (instead of grey)
+        statusColor = const Color.fromARGB(255, 236, 237, 239);
         statusText = "Open";
-        
-        ;
     }
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(24, 10, 24, 100), // ✅ CHANGED: Extra bottom padding for nav bar
+      padding: const EdgeInsets.fromLTRB(24, 10, 24, 100),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -429,17 +426,16 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
             ),
           ),
           const SizedBox(height: 25),
-          _statusCard(statusText, statusColor, statusSubtitle), // ✅ CHANGED: Added subtitle
+          _statusCard(statusText, statusColor, statusSubtitle),
           const SizedBox(height: 30),
           _detailsCard(fromGroup, toGroup, major, level, gender, canEdit),
           const SizedBox(height: 25),
-          _actionButtons(userId, status, confirmationBy == myUserId), // ✅ CHANGED: Added isWaiting parameter
+          _actionButtons(userId, status, confirmationBy == myUserId),
         ],
       ),
     );
   }
 
-  // ✅ NEW: Live countdown timer
   Widget _buildCountdown(Timestamp expiresAt) {
     return StreamBuilder(
       stream: Stream.periodic(const Duration(seconds: 1)),
@@ -455,20 +451,19 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
         
         return Text(
           "Time left: ${hours}h ${minutes}m ${seconds}s",
-          style: const TextStyle(color: Color(0xFFFF9800), fontSize: 12, fontWeight: FontWeight.w600), // ✅ Updated color
+          style: const TextStyle(color: Color(0xFFFF9800), fontSize: 12, fontWeight: FontWeight.w600),
         );
       },
     );
   }
 
-  // ✅ CHANGED: Added subtitle parameter
   Widget _statusCard(String text, Color color, Widget? subtitle) => Center(
         child: Container(
-          padding: const EdgeInsets.all(16), // ✅ CHANGED: padding for subtitle
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.15),
+            color: Colors.white.withOpacity(0.95),
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: color, width: 1.5),
+            border: Border.all(color: color, width: 2),
             boxShadow: [
               BoxShadow(
                 color: color.withOpacity(0.4),
@@ -488,7 +483,6 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
                   letterSpacing: 1.1,
                 ),
               ),
-              // ✅ NEW: Show subtitle if provided
               if (subtitle != null) ...[
                 const SizedBox(height: 8),
                 subtitle,
@@ -500,11 +494,11 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
 
   Widget _detailsCard(
       String from, String to, String major, String level, String gender, bool canEdit) {
-    // ✅ NEW: Extract courses to display
     final specialRequests = _data!["specialRequests"] ?? {};
     final haveCourses = (specialRequests["have"] as List?)?.map((item) => Map<String, dynamic>.from(item as Map)).toList() ?? [];
     final wantCourses = (specialRequests["want"] as List?)?.map((item) => Map<String, dynamic>.from(item as Map)).toList() ?? [];
     final deletedCourses = (_data!["deletedCourses"] as List?)?.cast<String>() ?? [];
+    final isConfirmed = _data!["status"] == "confirmed";
     
     return Card(
       color: Colors.white,
@@ -515,29 +509,65 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (canEdit)
-              Align(
-                alignment: Alignment.topRight,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: kIndigo.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: IconButton(
-                    icon: const Icon(Icons.edit, color: kIndigo, size: 22),
-                    tooltip: "Edit Request",
-                    onPressed: _openEditRequest,
-                  ),
+            // ✅ NEW: Request Details and Check Icon on SAME LINE
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Left side: Request Details title
+                Text(
+                  "Request Details",
+                    style: TextStyle(
+                      color: kIndigo,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      decoration: TextDecoration.underline,
+                      decorationThickness: 1.5,
+                    ),
                 ),
+              
+              // Right side: Icons
+              Row(
+                children: [
+                  // Edit icon (only show if can edit)
+                  if (canEdit)
+                    Container(
+                      decoration: BoxDecoration(
+                        color: kIndigo.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.edit, color: kIndigo, size: 22),
+                        tooltip: "Edit Request",
+                        onPressed: _openEditRequest,
+                      ),
+                    ),
+                  
+                  // Check icon (only show when confirmed)
+                  if (isConfirmed) ...[
+                    if (canEdit) const SizedBox(width: 8), // spacing if both icons exist
+                    Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF4CAF50).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.check_circle, color: Color(0xFF4CAF50), size: 24),
+                        tooltip: "Update Schedule",
+                        onPressed: _updateScheduleAutomatically,
+                      ),
+                    ),
+                  ],
+                ],
               ),
-            _sectionTitle("Request Details", kIndigo),
+            ],
+          ),
+            const SizedBox(height: 15), // ✅ Space after header
             _detailRow(Icons.group, "From Group", "Group $from"),
             _detailRow(Icons.swap_horiz, "To Group", "Group $to"),
             _detailRow(Icons.computer, "Major", major),
             _detailRow(Icons.school, "Level", "Level $level"),
             _detailRow(Icons.person, "Gender", gender),
             
-            // ✅ NEW: Show Additional Courses
             if (haveCourses.isNotEmpty) ...[
               const SizedBox(height: 20),
               _sectionTitle("Additional Courses I Have", const Color(0xFF0097B2)),
@@ -554,7 +584,6 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
               )),
             ],
             
-            // ✅ NEW: Show Courses I Want
             if (wantCourses.isNotEmpty) ...[
               const SizedBox(height: 20),
               _sectionTitle("Additional Courses I Want", const Color(0xFF0E0259)),
@@ -586,7 +615,6 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
               }),
             ],
             
-            // ✅ NEW: Show Completed Courses
             if (deletedCourses.isNotEmpty) ...[
               const SizedBox(height: 20),
               _sectionTitle("Completed Main Courses", Colors.green),
@@ -607,7 +635,6 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
     );
   }
 
-  // ✅ CHANGED: Added isWaiting parameter
   Widget _actionButtons(String userId, String status, bool isWaiting) {
     final isPending = status == "pending_confirmation";
     final isConfirmed = status == "confirmed";
@@ -628,18 +655,17 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
               );
             },
           ),
-        // ✅ NEW: Show waiting message when user is waiting for confirmation
         if (isPending && isWaiting)
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFFFFF3E0), // ✅ Light orange background
+              color: const Color(0xFFFFF3E0),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFFF9800)), // ✅ Orange border
+              border: Border.all(color: const Color(0xFFFF9800)),
             ),
             child: const Row(
               children: [
-                Icon(Icons.hourglass_bottom, color: Color(0xFFFF9800)), // ✅ Orange icon
+                Icon(Icons.hourglass_bottom, color: Color(0xFFFF9800)),
                 SizedBox(width: 12),
                 Expanded(
                   child: Text(
@@ -775,7 +801,6 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
   }
 
   Future<void> _deleteRequest() async {
-    // ✅ NEW: Added confirmation dialog
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -848,18 +873,483 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
     }
   }
 
-void _showDeleteResult({required bool success, String? message}) {
-  final text = message ??
-      (success
-          ? "Request deleted successfully."
-          : "Failed to delete request. Please try again.");
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-    content: Text(text),
-    backgroundColor: success ? Colors.redAccent : Colors.red,
-  ));
-}
+  void _showDeleteResult({required bool success, String? message}) {
+    final text = message ??
+        (success
+            ? "Request deleted successfully."
+            : "Failed to delete request. Please try again.");
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(text),
+      backgroundColor: success ? Colors.redAccent : Colors.red,
+    ));
+  }
+
+  // ✅ NEW: Main method - called when check icon is clicked
+  Future<void> _updateScheduleAutomatically() async {
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(color: Colors.white),
+        ),
+      );
+
+      final partnerId = _data?["partnerRequestId"];
+      if (partnerId == null) {
+        Navigator.pop(context);
+        _showSnack("Partner information not found", isError: true);
+        return;
+      }
+
+      final partnerDoc = await FirebaseFirestore.instance
+          .collection("swap_requests")
+          .doc(partnerId)
+          .get();
+
+      if (!partnerDoc.exists) {
+        Navigator.pop(context);
+        _showSnack("Partner swap data not found", isError: true);
+        return;
+      }
+
+      final partnerData = partnerDoc.data()!;
+      
+      final toGroup = _data!["toGroup"];
+      final major = _data!["major"];
+      final gender = _data!["gender"];
+      final level = _data!["level"];
+
+      final groupLectures = await _fetchGroupCourses(toGroup, major, gender, level);
+      final additionalLectures = await _calculateMatchedCourses(partnerData);
+
+      Navigator.pop(context);
+
+      final confirmed = await _showScheduleUpdateConfirmation(groupLectures, additionalLectures);
+      
+      if (confirmed == true) {
+        await _addCoursesToSchedule(groupLectures, additionalLectures);
+      }
+
+    } catch (e) {
+      Navigator.pop(context);
+      _showSnack("Error updating schedule: $e", isError: true);
+    }
+  }
+
+  // ✅ Fetch courses from a group - uses FirebaseLectureService
+  Future<List<Lecture>> _fetchGroupCourses(
+    dynamic groupNumber, 
+    String major, 
+    String gender, 
+    dynamic level
+  ) async {
+    try {
+      final groupSnapshot = await FirebaseFirestore.instance
+          .collection("Groups")
+          .where("Major", isEqualTo: major)
+          .where("Gender", isEqualTo: gender)
+          .where("Level", isEqualTo: level)
+          .where("Number", isEqualTo: groupNumber)
+          .limit(1)
+          .get();
+
+      if (groupSnapshot.docs.isEmpty) {
+        debugPrint("⚠️ No group found for Number=$groupNumber, Major=$major, Gender=$gender, Level=$level");
+        return [];
+      }
+
+      final groupData = groupSnapshot.docs.first.data();
+      final sectionsArray = groupData["sections"] as List?;
+      
+      if (sectionsArray == null || sectionsArray.isEmpty) {
+        debugPrint("⚠️ Group has no sections");
+        return [];
+      }
+
+      List<Lecture> allLectures = [];
+      for (final sectionNumber in sectionsArray) {
+        final section = sectionNumber.toString();
+        
+        final lectures = await FirebaseLectureService.getLecturesBySectionMulti(section);
+        
+        final convertedLectures = lectures.map((lecture) => Lecture(
+          id: '${lecture.section}_${lecture.dayOfWeek}',
+          courseCode: lecture.courseCode,
+          courseName: lecture.courseName,
+          section: lecture.section,
+          classroom: lecture.classroom,
+          dayOfWeek: lecture.dayOfWeek,
+          startTime: lecture.startTime,
+          endTime: lecture.endTime,
+          hour: lecture.hour,
+        )).toList();
+        
+        allLectures.addAll(convertedLectures);
+      }
+
+      debugPrint("✅ Fetched ${allLectures.length} lectures from group $groupNumber");
+      return allLectures;
+    } catch (e) {
+      debugPrint("❌ Error fetching group courses: $e");
+      return [];
+    }
+  }
+
+  // ✅ Calculate matched courses - uses FirebaseLectureService
+  Future<List<Lecture>> _calculateMatchedCourses(
+    Map<String, dynamic> partnerData
+  ) async {
+    final mySpecialRequests = _data!["specialRequests"] ?? {};
+    final myWantCourses = (mySpecialRequests["want"] as List?)
+        ?.map((item) => Map<String, dynamic>.from(item as Map))
+        .toList() ?? [];
+
+    final partnerSpecialRequests = partnerData["specialRequests"] ?? {};
+    final partnerHaveCourses = (partnerSpecialRequests["have"] as List?)
+        ?.map((item) => Map<String, dynamic>.from(item as Map))
+        .toList() ?? [];
+
+    final partnerCompletedCourses = (partnerData["deletedCourses"] as List?)
+        ?.cast<String>() ?? [];
+
+    final myCompletedCourses = (_data!["deletedCourses"] as List?)
+        ?.cast<String>() ?? [];
+
+    List<Lecture> matchedLectures = [];
+
+    for (final wantCourse in myWantCourses) {
+      final wantCourseCode = wantCourse["course"];
+
+      final partnerHas = partnerHaveCourses.any((haveCourse) => 
+        haveCourse["course"] == wantCourseCode
+      );
+
+      final isCompleted = partnerCompletedCourses.contains(wantCourseCode) || 
+                          myCompletedCourses.contains(wantCourseCode);
+
+      if (partnerHas && !isCompleted) {
+        final matchingHave = partnerHaveCourses.firstWhere(
+          (haveCourse) => haveCourse["course"] == wantCourseCode
+        );
+
+        final section = matchingHave["section"].toString();
+        
+        try {
+          final lectures = await FirebaseLectureService.getLecturesBySectionMulti(section);
+          
+          final convertedLectures = lectures.map((lecture) => Lecture(
+            id: '${lecture.section}_${lecture.dayOfWeek}',
+            courseCode: lecture.courseCode,
+            courseName: lecture.courseName,
+            section: lecture.section,
+            classroom: lecture.classroom,
+            dayOfWeek: lecture.dayOfWeek,
+            startTime: lecture.startTime,
+            endTime: lecture.endTime,
+            hour: lecture.hour,
+          )).toList();
+          
+          matchedLectures.addAll(convertedLectures);
+          debugPrint("✅ Matched course: $wantCourseCode - Section $section (${convertedLectures.length} lectures)");
+        } catch (e) {
+          debugPrint("❌ Error fetching matched course $section: $e");
+        }
+      }
+    }
+
+    debugPrint("✅ Total matched lectures: ${matchedLectures.length}");
+    return matchedLectures;
+  }
+
+  // ✅ Show confirmation dialog
+  Future<bool?> _showScheduleUpdateConfirmation(
+    List<Lecture> groupLectures,
+    List<Lecture> additionalLectures,
+  ) async {
+    final totalCourses = groupLectures.length + additionalLectures.length;
+
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF4CAF50),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.check_circle, color: Colors.white, size: 24),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(child: Text("Update Schedule?")),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Ready to add $totalCourses class(es) to your schedule:",
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+              ),
+              const SizedBox(height: 12),
+
+              if (groupLectures.isNotEmpty) ...[
+                const Text(
+                  "From Your New Group:",
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Colors.blue),
+                ),
+                const SizedBox(height: 8),
+                ...groupLectures.take(5).map((lecture) => _buildLecturePreview(lecture, Colors.blue)),
+                if (groupLectures.length > 5)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      "... and ${groupLectures.length - 5} more classes",
+                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontStyle: FontStyle.italic),
+                    ),
+                  ),
+                const SizedBox(height: 12),
+              ],
+
+              if (additionalLectures.isNotEmpty) ...[
+                const Text(
+                  "Additional Matched Classes:",
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Colors.green),
+                ),
+                const SizedBox(height: 8),
+                ...additionalLectures.map((lecture) => _buildLecturePreview(lecture, Colors.green)),
+              ],
+
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green.shade200),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.green, size: 20),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        "These classes will be added to your calendar automatically",
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.pop(ctx, true),
+            icon: const Icon(Icons.add_circle_outline, size: 18),
+            label: const Text("Add to Schedule"),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF4CAF50),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ✅ Helper to build lecture preview cards
+  Widget _buildLecturePreview(Lecture lecture, Color color) {
+    final days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    final dayName = lecture.dayOfWeek >= 0 && lecture.dayOfWeek < days.length 
+        ? days[lecture.dayOfWeek] 
+        : 'Day ${lecture.dayOfWeek}';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.school, color: color, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "${lecture.courseCode} - Section ${lecture.section}",
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+                Text(
+                  "$dayName • ${lecture.courseName}",
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ✅ Save to schedule - follows add_lecture_screen.dart pattern
+  Future<void> _addCoursesToSchedule(
+    List<Lecture> groupLectures,
+    List<Lecture> additionalLectures,
+  ) async {
+    try {
+      final messenger = ScaffoldMessenger.of(context);
+      
+      final firebaseUser = FirebaseAuth.instance.currentUser;
+      String? userDocId;
+
+      if (firebaseUser != null) {
+        userDocId = firebaseUser.uid;
+      } else {
+        final prefs = await SharedPreferences.getInstance();
+        userDocId = prefs.getString('microsoft_user_doc_id');
+      }
+
+      if (userDocId == null || userDocId.isEmpty) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('You must be signed in to save sections.')),
+        );
+        return;
+      }
+
+      final allLectures = [...groupLectures, ...additionalLectures];
+      final addedLectures = <Lecture>[];
+
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              Text('Adding ${allLectures.length} class(es)...'),
+            ],
+          ),
+        ),
+      );
+
+      for (final newLecture in allLectures) {
+        final userScheduleRef = FirebaseFirestore.instance
+            .collection('users')
+            .doc(userDocId)
+            .collection('schedule')
+            .doc(newLecture.id);
+
+        try {
+          await userScheduleRef.set({
+            'courseCode': newLecture.courseCode,
+            'courseName': newLecture.courseName,
+            'section': newLecture.section,
+            'classroom': newLecture.classroom,
+            'dayOfWeek': newLecture.dayOfWeek,
+            'startTime': newLecture.startTime,
+            'endTime': newLecture.endTime,
+            'addedAt': FieldValue.serverTimestamp(),
+            'status': 'active',
+          }, SetOptions(merge: true));
+
+          addedLectures.add(newLecture);
+          debugPrint("✅ Added: ${newLecture.courseCode} - ${newLecture.section}_${newLecture.dayOfWeek}");
+        } catch (error) {
+          debugPrint("❌ Failed to save: $error");
+          messenger.showSnackBar(
+            SnackBar(content: Text('Failed to save section: $error')),
+          );
+          continue;
+        }
+      }
+
+      if (addedLectures.isEmpty) {
+        Navigator.pop(context);
+        messenger.showSnackBar(
+          const SnackBar(content: Text('No lectures were added to your schedule.')),
+        );
+        return;
+      }
+
+      Navigator.pop(context);
+
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            addedLectures.length == 1
+                ? 'Lecture added to your schedule.'
+                : '${addedLectures.length} lectures added to your schedule.',
+          ),
+        ),
+      );
+
+      final account = await MicrosoftAuthService.ensureSignedIn();
+      if (!mounted) return;
+
+      if (account != null) {
+        for (final lecture in addedLectures) {
+          try {
+            final createdEvent = await MicrosoftCalendarService.addWeeklyRecurringLecture(
+              account: account,
+              lecture: lecture.toRecurringLecture(),
+            );
+
+            final userScheduleRef = FirebaseFirestore.instance
+                .collection('users')
+                .doc(userDocId)
+                .collection('schedule')
+                .doc(lecture.id);
+
+            await userScheduleRef.set({
+              'calendarEventId': createdEvent.id,
+              if (createdEvent.seriesMasterId != null &&
+                  createdEvent.seriesMasterId!.isNotEmpty)
+                'calendarSeriesMasterId': createdEvent.seriesMasterId,
+            }, SetOptions(merge: true));
+          } catch (error) {
+            messenger.showSnackBar(
+              SnackBar(content: Text('Microsoft Calendar error: $error')),
+            );
+          }
+        }
+      }
+
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, '/calendar');
+      
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        _showSnack("Error: $e", isError: true);
+      }
+    }
+  }
 }
 
+// Existing notification relay code (unchanged)
 Future<void> _processSwapStatusChange({
   required Map<String, dynamic>? previousData,
   required Map<String, dynamic>? currentData,
