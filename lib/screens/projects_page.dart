@@ -166,24 +166,53 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
   }
 
   // Validation: Link/URL
-  String? _validateLink(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return null;
-    }
-    
-   final trimmedValue = value.trim().toLowerCase();
-    
-    if (!trimmedValue.startsWith('http://github.com/') &&
-        !trimmedValue.startsWith('https://github.com/')) {
-      return 'Link must be a GitHub URL https://github.com/';
-    }
-    
+ String? _validateLink(String? value) {
+  if (value == null || value.trim().isEmpty) {
+    return null; // optional field
+  }
+
+  final trimmedValue = value.trim().toLowerCase();
+
+  // ✅ 1. Allow user to type any partial GitHub prefix without showing error
+  final allowedPrefixes = [
+    'h',
+    'ht',
+    'htt',
+    'http',
+    'https',
+    'http:',
+    'https:',
+    'http:/',
+    'https:/',
+    'http://',
+    'https://',
+    'https://g',
+    'https://gi',
+    'https://git',
+    'https://gith',
+    'https://githu',
+    'https://github',
+    'https://github.',
+    'https://github.c',
+    'https://github.co',
+    'https://github.com',
+  ];
+  if (allowedPrefixes.any((prefix) => trimmedValue == prefix)) {
+    return null;
+  }
+
+  // ✅ 2. Valid GitHub URLs
+  if (trimmedValue.startsWith('http://github.com/') ||
+      trimmedValue.startsWith('https://github.com/')) {
     if (trimmedValue.length > 150) {
       return 'URL must be 150 characters or less';
     }
-    
-    return null;
+    return null; // valid
   }
+
+  // ✅ 3. Everything else = invalid
+  return 'Link must be a valid GitHub URL (https://github.com/...)';
+}
 
   // Validation: Description
  String? _validateDescription(String? value) {

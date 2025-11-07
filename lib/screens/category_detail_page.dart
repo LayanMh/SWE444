@@ -138,7 +138,80 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
       if (mounted) _showErrorMessage('Failed to delete item');
     }
   }
+Future<void> _deleteAll() async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Delete All Items'),
+      content: Text('Are you sure you want to delete all ${items.length} items? This action cannot be undone.'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, true),
+          style: TextButton.styleFrom(foregroundColor: Colors.red),
+          child: const Text('Delete All'),
+        ),
+      ],
+    ),
+  );
 
+  if (confirmed != true) return;
+
+  try {
+    final docId = await _getUserDocId();
+    if (docId == null) return;
+
+    // Show loading indicator
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    // Delete all certificates in background
+    for (var item in items) {
+      if (item['certificateUrl'] != null && 
+          item['certificateUrl'].toString().isNotEmpty &&
+          item['certificateUrl'].toString().startsWith('https://')) {
+        try {
+          await FirebaseStorage.instance.refFromURL(item['certificateUrl']).delete();
+        } catch (e) {
+          debugPrint('Certificate deletion skipped: $e');
+        }
+      }
+    }
+
+    // Clear the array in Firestore
+    await _firestore.collection('users').doc(docId).update({
+      widget.category: [],
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+
+    // Close loading dialog
+    if (mounted) Navigator.pop(context);
+
+    // Pop back since list is empty
+    if (mounted) {
+      Navigator.pop(context, true);
+    }
+  } catch (e) {
+    // Close loading dialog if open
+    if (mounted) Navigator.pop(context);
+    
+    debugPrint('Error deleting all items: $e');
+    if (mounted) _showErrorMessage('Failed to delete all items');
+    
+    // Reload on error
+    await _loadData();
+  }
+}
   String _getItemKey(int index) {
     return '${widget.category}-$index';
   }
@@ -285,6 +358,13 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
                           ),
                         ),
                       ),
+                      // Delete All button - only shows when items exist
+                      if (items.isNotEmpty)
+                        IconButton(
+                          icon: const Icon(Icons.delete_sweep, color: Colors.white),
+                          onPressed: _deleteAll,
+                          tooltip: 'Delete All',
+                        ),
                     ],
                   ),
                 ),
