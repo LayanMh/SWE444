@@ -170,7 +170,7 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
             children: [
               Icon(Icons.notification_important, color: Colors.teal),
               SizedBox(width: 10),
-              Text("Swap Confirmation Request"),
+              Text("Swap Confirmation"),
             ],
           ),
           content: Text(
@@ -405,7 +405,7 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
         );
         break;
       default:
-        statusColor = const Color.fromARGB(255, 236, 237, 239);
+        statusColor = const Color.fromARGB(255, 14, 2, 89);
         statusText = "Open";
     }
 
@@ -509,59 +509,54 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ✅ NEW: Request Details and Check Icon on SAME LINE
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Left side: Request Details title
                 Text(
                   "Request Details",
-                    style: TextStyle(
-                      color: kIndigo,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      decoration: TextDecoration.underline,
-                      decorationThickness: 1.5,
-                    ),
+                  style: TextStyle(
+                    color: kIndigo,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    decoration: TextDecoration.underline,
+                    decorationThickness: 1.5,
+                  ),
                 ),
               
-              // Right side: Icons
-              Row(
-                children: [
-                  // Edit icon (only show if can edit)
-                  if (canEdit)
-                    Container(
-                      decoration: BoxDecoration(
-                        color: kIndigo.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(12),
+                Row(
+                  children: [
+                    if (canEdit)
+                      Container(
+                        decoration: BoxDecoration(
+                          color: kIndigo.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: IconButton(
+                          icon: const Icon(Icons.edit, color: kIndigo, size: 22),
+                          tooltip: "Edit Request",
+                          onPressed: _openEditRequest,
+                        ),
                       ),
-                      child: IconButton(
-                        icon: const Icon(Icons.edit, color: kIndigo, size: 22),
-                        tooltip: "Edit Request",
-                        onPressed: _openEditRequest,
+                    
+                    if (isConfirmed) ...[
+                      if (canEdit) const SizedBox(width: 8),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF4CAF50).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: IconButton(
+                          icon: const Icon(Icons.check_circle, color: Color(0xFF4CAF50), size: 24),
+                          tooltip: "Update Schedule",
+                          onPressed: _updateScheduleAutomatically,
+                        ),
                       ),
-                    ),
-                  
-                  // Check icon (only show when confirmed)
-                  if (isConfirmed) ...[
-                    if (canEdit) const SizedBox(width: 8), // spacing if both icons exist
-                    Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF4CAF50).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: IconButton(
-                        icon: const Icon(Icons.check_circle, color: Color(0xFF4CAF50), size: 24),
-                        tooltip: "Update Schedule",
-                        onPressed: _updateScheduleAutomatically,
-                      ),
-                    ),
+                    ],
                   ],
-                ],
-              ),
-            ],
-          ),
-            const SizedBox(height: 15), // ✅ Space after header
+                ),
+              ],
+            ),
+            const SizedBox(height: 15),
             _detailRow(Icons.group, "From Group", "Group $from"),
             _detailRow(Icons.swap_horiz, "To Group", "Group $to"),
             _detailRow(Icons.computer, "Major", major),
@@ -884,7 +879,6 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
     ));
   }
 
-  // ✅ NEW: Main method - called when check icon is clicked
   Future<void> _updateScheduleAutomatically() async {
     try {
       showDialog(
@@ -937,7 +931,6 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
     }
   }
 
-  // ✅ Fetch courses from a group - uses FirebaseLectureService
   Future<List<Lecture>> _fetchGroupCourses(
     dynamic groupNumber, 
     String major, 
@@ -996,7 +989,6 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
     }
   }
 
-  // ✅ Calculate matched courses - uses FirebaseLectureService
   Future<List<Lecture>> _calculateMatchedCourses(
     Map<String, dynamic> partnerData
   ) async {
@@ -1062,7 +1054,6 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
     return matchedLectures;
   }
 
-  // ✅ Show confirmation dialog
   Future<bool?> _showScheduleUpdateConfirmation(
     List<Lecture> groupLectures,
     List<Lecture> additionalLectures,
@@ -1093,7 +1084,7 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                "Ready to add $totalCourses class(es) to your schedule:",
+                "Ready to replace your schedule with $totalCourses class(es):",
                 style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
               ),
               const SizedBox(height: 12),
@@ -1129,18 +1120,18 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.green.shade50,
+                  color: Colors.orange.shade50,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.green.shade200),
+                  border: Border.all(color: Colors.orange.shade200),
                 ),
                 child: const Row(
                   children: [
-                    Icon(Icons.info_outline, color: Colors.green, size: 20),
+                    Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        "These classes will be added to your calendar automatically",
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                        "Your old schedule will be DELETED and replaced",
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.orange),
                       ),
                     ),
                   ],
@@ -1156,8 +1147,8 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
           ),
           ElevatedButton.icon(
             onPressed: () => Navigator.pop(ctx, true),
-            icon: const Icon(Icons.add_circle_outline, size: 18),
-            label: const Text("Add to Schedule"),
+            icon: const Icon(Icons.swap_horiz, size: 18),
+            label: const Text("Replace Schedule"),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF4CAF50),
               foregroundColor: Colors.white,
@@ -1171,7 +1162,6 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
     );
   }
 
-  // ✅ Helper to build lecture preview cards
   Widget _buildLecturePreview(Lecture lecture, Color color) {
     final days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     final dayName = lecture.dayOfWeek >= 0 && lecture.dayOfWeek < days.length 
@@ -1212,141 +1202,222 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
     );
   }
 
-  // ✅ Save to schedule - follows add_lecture_screen.dart pattern
+  // ✅ SIMPLIFIED: Clean version with one loading spinner and one success message
   Future<void> _addCoursesToSchedule(
-    List<Lecture> groupLectures,
-    List<Lecture> additionalLectures,
-  ) async {
-    try {
-      final messenger = ScaffoldMessenger.of(context);
-      
-      final firebaseUser = FirebaseAuth.instance.currentUser;
-      String? userDocId;
+  List<Lecture> groupLectures,
+  List<Lecture> additionalLectures,
+) async {
+  try {
+    final messenger = ScaffoldMessenger.of(context);
+    
+    final firebaseUser = FirebaseAuth.instance.currentUser;
+    String? userDocId;
 
-      if (firebaseUser != null) {
-        userDocId = firebaseUser.uid;
-      } else {
-        final prefs = await SharedPreferences.getInstance();
-        userDocId = prefs.getString('microsoft_user_doc_id');
-      }
+    if (firebaseUser != null) {
+      userDocId = firebaseUser.uid;
+    } else {
+      final prefs = await SharedPreferences.getInstance();
+      userDocId = prefs.getString('microsoft_user_doc_id');
+    }
 
-      if (userDocId == null || userDocId.isEmpty) {
-        messenger.showSnackBar(
-          const SnackBar(content: Text('You must be signed in to save sections.')),
-        );
-        return;
-      }
-
-      final allLectures = [...groupLectures, ...additionalLectures];
-      final addedLectures = <Lecture>[];
-
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const CircularProgressIndicator(),
-              const SizedBox(height: 16),
-              Text('Adding ${allLectures.length} class(es)...'),
-            ],
-          ),
-        ),
-      );
-
-      for (final newLecture in allLectures) {
-        final userScheduleRef = FirebaseFirestore.instance
-            .collection('users')
-            .doc(userDocId)
-            .collection('schedule')
-            .doc(newLecture.id);
-
-        try {
-          await userScheduleRef.set({
-            'courseCode': newLecture.courseCode,
-            'courseName': newLecture.courseName,
-            'section': newLecture.section,
-            'classroom': newLecture.classroom,
-            'dayOfWeek': newLecture.dayOfWeek,
-            'startTime': newLecture.startTime,
-            'endTime': newLecture.endTime,
-            'addedAt': FieldValue.serverTimestamp(),
-            'status': 'active',
-          }, SetOptions(merge: true));
-
-          addedLectures.add(newLecture);
-          debugPrint("✅ Added: ${newLecture.courseCode} - ${newLecture.section}_${newLecture.dayOfWeek}");
-        } catch (error) {
-          debugPrint("❌ Failed to save: $error");
-          messenger.showSnackBar(
-            SnackBar(content: Text('Failed to save section: $error')),
-          );
-          continue;
-        }
-      }
-
-      if (addedLectures.isEmpty) {
-        Navigator.pop(context);
-        messenger.showSnackBar(
-          const SnackBar(content: Text('No lectures were added to your schedule.')),
-        );
-        return;
-      }
-
-      Navigator.pop(context);
-
+    if (userDocId == null || userDocId.isEmpty) {
       messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            addedLectures.length == 1
-                ? 'Lecture added to your schedule.'
-                : '${addedLectures.length} lectures added to your schedule.',
-          ),
-        ),
+        const SnackBar(content: Text('You must be signed in to save sections.')),
       );
+      return;
+    }
 
+    final allLectures = [...groupLectures, ...additionalLectures];
+
+    // Simple loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: Colors.white),
+      ),
+    );
+
+    // ===== DELETION PHASE =====
+    debugPrint("🗑️ STARTING DELETION PHASE");
+    
+    // Get existing schedule
+    debugPrint("📋 Fetching existing schedule from Firestore...");
+    final existingSchedule = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(userDocId)
+        .collection('schedule')
+        .get();
+
+    debugPrint("📋 Found ${existingSchedule.docs.length} existing courses");
+
+    // Delete calendar events FIRST
+    if (existingSchedule.docs.isNotEmpty) {
+      debugPrint("🗑️ Deleting ${existingSchedule.docs.length} calendar events...");
+      
+      try {
+        final account = await MicrosoftAuthService.ensureSignedIn();
+        
+        if (account != null) {
+          int deletedCount = 0;
+          for (final doc in existingSchedule.docs) {
+            final data = doc.data();
+            final eventId = data['calendarEventId'] as String?;
+            final seriesMasterId = data['calendarSeriesMasterId'] as String?;
+            
+            if (eventId != null && eventId.isNotEmpty) {
+              try {
+                await MicrosoftCalendarService.deleteLecture(
+                  account: account,
+                  eventId: eventId,
+                  seriesMasterId: seriesMasterId,
+                );
+                deletedCount++;
+                debugPrint("✅ Deleted calendar event $deletedCount/${existingSchedule.docs.length}");
+                
+                // Add small delay to avoid rate limiting
+                await Future.delayed(const Duration(milliseconds: 100));
+              } catch (e) {
+                debugPrint("⚠️ Failed to delete calendar event $eventId: $e");
+              }
+            }
+          }
+          debugPrint("✅ Successfully deleted $deletedCount calendar events");
+        } else {
+          debugPrint("⚠️ No Microsoft account available for calendar deletion");
+        }
+      } catch (e) {
+        debugPrint("❌ Error during calendar deletion: $e");
+      }
+
+      // Delete Firestore entries
+      debugPrint("🗑️ Deleting ${existingSchedule.docs.length} Firestore entries...");
+      try {
+        final batch = FirebaseFirestore.instance.batch();
+        for (final doc in existingSchedule.docs) {
+          batch.delete(doc.reference);
+        }
+        await batch.commit();
+        debugPrint("✅ Successfully deleted ${existingSchedule.docs.length} Firestore entries");
+      } catch (e) {
+        debugPrint("❌ Error deleting Firestore entries: $e");
+      }
+    } else {
+      debugPrint("ℹ️ No existing schedule to delete");
+    }
+
+    debugPrint("✅ DELETION PHASE COMPLETE");
+
+    // ===== ADDITION PHASE =====
+    debugPrint("➕ STARTING ADDITION PHASE");
+    debugPrint("📝 Adding ${allLectures.length} new courses to Firestore...");
+
+    final addedLectures = <Lecture>[];
+
+    for (final newLecture in allLectures) {
+      final userScheduleRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(userDocId)
+          .collection('schedule')
+          .doc(newLecture.id);
+
+      try {
+        await userScheduleRef.set({
+          'courseCode': newLecture.courseCode,
+          'courseName': newLecture.courseName,
+          'section': newLecture.section,
+          'classroom': newLecture.classroom,
+          'dayOfWeek': newLecture.dayOfWeek,
+          'startTime': newLecture.startTime,
+          'endTime': newLecture.endTime,
+          'addedAt': FieldValue.serverTimestamp(),
+          'status': 'active',
+        }, SetOptions(merge: true));
+
+        addedLectures.add(newLecture);
+        debugPrint("✅ Added ${addedLectures.length}/${allLectures.length}: ${newLecture.courseCode}");
+      } catch (error) {
+        debugPrint("❌ Failed to save ${newLecture.courseCode}: $error");
+        continue;
+      }
+    }
+
+    debugPrint("✅ Successfully added ${addedLectures.length} courses to Firestore");
+
+    // ===== CALENDAR SYNC PHASE =====
+    debugPrint("📅 STARTING CALENDAR SYNC PHASE");
+    
+    try {
       final account = await MicrosoftAuthService.ensureSignedIn();
-      if (!mounted) return;
-
-      if (account != null) {
+      
+      if (account != null && mounted) {
+        int syncedCount = 0;
         for (final lecture in addedLectures) {
           try {
+            debugPrint("📅 Syncing ${syncedCount + 1}/${addedLectures.length}: ${lecture.courseCode}...");
+            
             final createdEvent = await MicrosoftCalendarService.addWeeklyRecurringLecture(
               account: account,
               lecture: lecture.toRecurringLecture(),
             );
 
-            final userScheduleRef = FirebaseFirestore.instance
+            await FirebaseFirestore.instance
                 .collection('users')
                 .doc(userDocId)
                 .collection('schedule')
-                .doc(lecture.id);
-
-            await userScheduleRef.set({
+                .doc(lecture.id)
+                .set({
               'calendarEventId': createdEvent.id,
               if (createdEvent.seriesMasterId != null &&
                   createdEvent.seriesMasterId!.isNotEmpty)
                 'calendarSeriesMasterId': createdEvent.seriesMasterId,
             }, SetOptions(merge: true));
+
+            syncedCount++;
+            debugPrint("✅ Synced ${lecture.courseCode} to calendar");
+            
+            // Add delay to avoid rate limiting (429 error)
+            await Future.delayed(const Duration(milliseconds: 500));
+            
           } catch (error) {
-            messenger.showSnackBar(
-              SnackBar(content: Text('Microsoft Calendar error: $error')),
-            );
+            debugPrint("⚠️ Calendar sync error for ${lecture.courseCode}: $error");
+            // Continue with other lectures even if one fails
           }
         }
+        debugPrint("✅ Successfully synced $syncedCount/${addedLectures.length} events to calendar");
+      } else {
+        debugPrint("⚠️ Skipping calendar sync - no Microsoft account");
       }
-
-      if (!mounted) return;
-      Navigator.pushReplacementNamed(context, '/calendar');
-      
     } catch (e) {
-      if (mounted) {
-        Navigator.pop(context);
-        _showSnack("Error: $e", isError: true);
-      }
+      debugPrint("❌ Error during calendar sync: $e");
+    }
+
+    debugPrint("✅ SCHEDULE REPLACEMENT COMPLETE");
+    debugPrint("📊 Summary: Deleted ${existingSchedule.docs.length}, Added ${addedLectures.length}");
+
+    if (!mounted) return;
+    Navigator.pop(context); // Close loading dialog
+
+    // Simple success message
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('✅ Schedule updated successfully!'),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 2),
+      ),
+    );
+
+    // Navigate to calendar
+    Navigator.pushReplacementNamed(context, '/calendar');
+    
+  } catch (e) {
+    debugPrint("❌ FATAL ERROR in _addCoursesToSchedule: $e");
+    if (mounted) {
+      Navigator.pop(context);
+      _showSnack("Error: $e", isError: true);
     }
   }
+}
 }
 
 // Existing notification relay code (unchanged)
