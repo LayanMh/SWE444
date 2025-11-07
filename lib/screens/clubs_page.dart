@@ -66,6 +66,11 @@ class _ClubFormPageState extends State<ClubFormPage> {
     _hoursController = TextEditingController(text: widget.existingItem?['hours']?.toString() ?? '');
     _descriptionController = TextEditingController(text: widget.existingItem?['description'] ?? '');
     _existingCertificateUrl = widget.existingItem?['certificateUrl'];
+
+    _titleController.addListener(() => setState(() {}));
+    _organizationController.addListener(() => setState(() {}));
+    _roleController.addListener(() => setState(() {}));
+    _descriptionController.addListener(() => setState(() {}));
   }
 
   @override
