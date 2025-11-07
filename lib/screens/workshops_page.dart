@@ -676,12 +676,13 @@ Widget _buildTextFieldWithCharCounter({
       const SizedBox(height: 8.0),
       TextFormField(
         inputFormatters: [
+          LengthLimitingTextInputFormatter(minChars),  // ← ADD THIS LINE!
           NoEmojiInputFormatter(),
         ],
         controller: controller,
         maxLines: maxLines,
         validator: validator,
-        autovalidateMode: AutovalidateMode.onUserInteraction,  // ← THIS IS THE KEY CHANGE!
+        autovalidateMode: AutovalidateMode.onUserInteraction,
         decoration: _inputDecoration(hint),
       ),
       Padding(
@@ -701,7 +702,6 @@ Widget _buildTextFieldWithCharCounter({
     ],
   );
 }
-
   Widget _buildTextField({
     required TextEditingController controller,
     required String label,

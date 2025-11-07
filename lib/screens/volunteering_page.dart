@@ -667,57 +667,56 @@ void _showCertificatePreview() {
       ],
     );
   }
+Widget _buildTextFieldWithCharCounter({
+  required TextEditingController controller,
+  required String label,
+  String? hint,
+  int maxLines = 1,
+  required int minChars,
+  String? Function(String?)? validator,
+}) {
+  final currentLength = controller.text.length;
 
-  Widget _buildTextFieldWithCharCounter({
-    required TextEditingController controller,
-    required String label,
-    String? hint,
-    int maxLines = 1,
-    required int minChars,
-    String? Function(String?)? validator,
-  }) {
-    final currentLength = controller.text.length;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 14.0,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF0e0259),
-          ),
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        style: const TextStyle(
+          fontSize: 14.0,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF0e0259),
         ),
-        const SizedBox(height: 8.0),
-        TextFormField(
-          inputFormatters: [
-  NoEmojiInputFormatter(),
-],
-          controller: controller,
-          maxLines: maxLines,
-          validator: validator,
-         autovalidateMode: AutovalidateMode.onUserInteraction,  // ← Change from disabled
-          decoration: _inputDecoration(hint),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(top: 4.0, right: 4.0),
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: Text(
-              '$currentLength/$minChars characters',
-              style: TextStyle(
-                fontSize: 12.0,
-                color: Colors.grey[600],
-                fontWeight: FontWeight.w500,
-              ),
+      ),
+      const SizedBox(height: 8.0),
+      TextFormField(
+        inputFormatters: [
+          LengthLimitingTextInputFormatter(minChars),  // ← ADD THIS LINE!
+          NoEmojiInputFormatter(),
+        ],
+        controller: controller,
+        maxLines: maxLines,
+        validator: validator,
+        autovalidateMode: AutovalidateMode.onUserInteraction,
+        decoration: _inputDecoration(hint),
+      ),
+      Padding(
+        padding: const EdgeInsets.only(top: 4.0, right: 4.0),
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: Text(
+            '$currentLength/$minChars characters',
+            style: TextStyle(
+              fontSize: 12.0,
+              color: Colors.grey[600],
+              fontWeight: FontWeight.w500,
             ),
           ),
         ),
-      ],
-    );
-  }
-
+      ),
+    ],
+  );
+}
   Widget _buildTextField({
     required TextEditingController controller,
     required String label,
