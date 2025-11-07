@@ -16,6 +16,7 @@ class NoEmojiInputFormatter extends TextInputFormatter {
     r'\u{1F1E0}-\u{1F1FF}' // Flags
     r'\u{2600}-\u{26FF}'   // Misc symbols
     r'\u{2700}-\u{27BF}]', // Dingbats
+    
     unicode: true,
   );
 
@@ -94,29 +95,46 @@ class _ClubFormPageState extends State<ClubFormPage> {
     return null;
   }
 
+  // Add this method to validate special characters
+String? _validateSpecialCharacters(String? value, String fieldName) {
+  if (value == null || value.trim().isEmpty) return null;
+  final trimmedValue = value.trim();
+  
+  // Check for special characters (allowing only letters, numbers, spaces, and basic punctuation)
+  final specialCharRegex = RegExp(r'[!@#$%^&*()_+=\[\]{};:"\\|,.<>?/~`]');
+  if (specialCharRegex.hasMatch(trimmedValue)) {
+    return '$fieldName cannot contain special characters';
+  }
+  return null;
+}
+
   String? _validateTitle(String? value) {
     if (value == null || value.trim().isEmpty) {
       return 'Please enter a student club name';
     }
     final trimmedValue = value.trim();
-    if (trimmedValue.length > 30) {
-      return 'Student club name must be 30 characters or less';
+    if (trimmedValue.length > 40) {
+      return 'Student club name must be 40 characters or less';
     }
     if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
       return 'Student club name cannot contain only numbers';
     }
+    final specialCharError = _validateSpecialCharacters(value, 'Student club name');
+  if (specialCharError != null) return specialCharError;
     return null;
   }
 
   String? _validateOrganization(String? value) {
     if (value == null || value.trim().isEmpty) return null;
     final trimmedValue = value.trim();
-    if (trimmedValue.length > 30) {
-      return 'Organization name must be 30 characters or less';
+    if (trimmedValue.length > 40) {
+      return 'Organization name must be 40 characters or less';
     }
     if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
       return 'Organization name cannot contain only numbers';
     }
+    final specialCharError = _validateSpecialCharacters(value, 'Organization name');
+  if (specialCharError != null) return specialCharError;
     return null;
   }
 
@@ -125,12 +143,14 @@ class _ClubFormPageState extends State<ClubFormPage> {
       return 'Please enter your role';
     }
     final trimmedValue = value.trim();
-    if (trimmedValue.length > 30) {
-      return 'Role must be 30 characters or less';
+    if (trimmedValue.length > 40) {
+      return 'Role must be 40 characters or less';
     }
     if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
       return 'Role cannot contain only numbers';
     }
+    final specialCharError = _validateSpecialCharacters(value, 'Role');
+  if (specialCharError != null) return specialCharError;
     return null;
   }
 
@@ -140,7 +160,7 @@ class _ClubFormPageState extends State<ClubFormPage> {
     final hours = int.tryParse(trimmedValue);
     if (hours == null) return 'Please enter a valid number';
     if (hours < 0) return 'Hours cannot be negative';
-    if (hours > 10000) return 'Hours must be less than 10,000';
+    if (hours > 500) return 'Hours must be less than 500';
     return null;
   }
 
@@ -153,6 +173,9 @@ class _ClubFormPageState extends State<ClubFormPage> {
     if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
       return 'Description cannot contain only numbers';
     }
+   if (RegExp(r'^[^a-zA-Z]+$').hasMatch(trimmedValue)) {
+    return 'Description must contain at least some letters';
+  }
     return null;
   }
 
@@ -429,7 +452,7 @@ setState(() {
                               controller: _titleController,
                               label: 'Student Club Name *',
                               hint: 'e.g., Robotics Club',
-                              maxLength: 30,
+                              maxLength: 40,
                               validator: _validateTitle,
                             ),
                             const SizedBox(height: 16.0),
@@ -437,7 +460,7 @@ setState(() {
                               controller: _organizationController,
                               label: 'Organization',
                               hint: 'e.g., University Engineering Department',
-                              maxLength: 30,
+                              maxLength: 40,
                               validator: _validateOrganization,
                             ),
                             const SizedBox(height: 16.0),
@@ -445,7 +468,7 @@ setState(() {
                               controller: _roleController,
                               label: 'Role *',
                               hint: 'e.g., President, Member, Volunteer',
-                              maxLength: 30,
+                              maxLength: 40,
                               validator: _validateRole,
                             ),
                             const SizedBox(height: 16.0),
@@ -674,57 +697,56 @@ void _showCertificatePreview() {
       ],
     );
   }
+Widget _buildTextFieldWithCharCounter({
+  required TextEditingController controller,
+  required String label,
+  String? hint,
+  int maxLines = 1,
+  required int minChars,
+  String? Function(String?)? validator,
+}) {
+  final currentLength = controller.text.length;
 
-  Widget _buildTextFieldWithCharCounter({
-    required TextEditingController controller,
-    required String label,
-    String? hint,
-    int maxLines = 1,
-    required int minChars,
-    String? Function(String?)? validator,
-  }) {
-    final currentLength = controller.text.length;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 14.0,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF0e0259),
-          ),
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        style: const TextStyle(
+          fontSize: 14.0,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF0e0259),
         ),
-        const SizedBox(height: 8.0),
-        TextFormField(
-          inputFormatters: [
-  NoEmojiInputFormatter(),
-],
-          controller: controller,
-          maxLines: maxLines,
-          validator: validator,
-          autovalidateMode: AutovalidateMode.disabled,
-          decoration: _inputDecoration(hint),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(top: 4.0, right: 4.0),
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: Text(
-              '$currentLength/$minChars characters',
-              style: TextStyle(
-                fontSize: 12.0,
-                color: Colors.grey[600],
-                fontWeight: FontWeight.w500,
-              ),
+      ),
+      const SizedBox(height: 8.0),
+      TextFormField(
+        inputFormatters: [
+          LengthLimitingTextInputFormatter(minChars),  // ← ADD THIS LINE!
+          NoEmojiInputFormatter(),
+        ],
+        controller: controller,
+        maxLines: maxLines,
+        validator: validator,
+        autovalidateMode: AutovalidateMode.onUserInteraction,
+        decoration: _inputDecoration(hint),
+      ),
+      Padding(
+        padding: const EdgeInsets.only(top: 4.0, right: 4.0),
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: Text(
+            '$currentLength/$minChars characters',
+            style: TextStyle(
+              fontSize: 12.0,
+              color: Colors.grey[600],
+              fontWeight: FontWeight.w500,
             ),
           ),
         ),
-      ],
-    );
-  }
-
+      ),
+    ],
+  );
+}
   Widget _buildTextField({
     required TextEditingController controller,
     required String label,

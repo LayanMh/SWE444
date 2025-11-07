@@ -4,6 +4,17 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
 
+String? _validateSpecialCharacters(String? value, String fieldName) {
+  if (value == null || value.trim().isEmpty) return null;
+  final trimmedValue = value.trim();
+  
+  final specialCharRegex = RegExp(r'[!@#$%^&*()_+=\[\]{};:"\\|,.<>?/~`]');
+  if (specialCharRegex.hasMatch(trimmedValue)) {
+    return '$fieldName cannot contain special characters';
+  }
+  return null;
+}
+
 class NoEmojiInputFormatter extends TextInputFormatter {
   final RegExp _emojiRegex = RegExp(
     r'[\u{1F600}-\u{1F64F}' // Emoticons
@@ -120,13 +131,15 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
     
     final trimmedValue = value.trim();
     
-    if (trimmedValue.length > 30) {
-      return 'Title must be 30 characters or less';
+    if (trimmedValue.length >40) {
+      return 'Title must be 40 characters or less';
     }
     
     if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
       return 'Title cannot contain only numbers';
     }
+    final specialCharError = _validateSpecialCharacters(value, 'Title');
+  if (specialCharError != null) return specialCharError;
     
     return null;
   }
@@ -139,13 +152,15 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
     
     final trimmedValue = value.trim();
     
-    if (trimmedValue.length > 30) {
-      return 'Organization name must be 30 characters or less';
+    if (trimmedValue.length > 40) {
+      return 'Organization name must be 40 characters or less';
     }
     
     if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
       return 'Organization name cannot contain only numbers';
     }
+    final specialCharError = _validateSpecialCharacters(value, 'Organization name');
+  if (specialCharError != null) return specialCharError;
     
     return null;
   }
@@ -163,8 +178,8 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
       return 'Link must be a GitHub URL https://github.com/';
     }
     
-    if (trimmedValue.length > 500) {
-      return 'URL must be 500 characters or less';
+    if (trimmedValue.length > 150) {
+      return 'URL must be 150 characters or less';
     }
     
     return null;
@@ -185,7 +200,9 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
   if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
     return 'Description cannot contain only numbers';
   }
-  
+  if (!RegExp(r'[a-zA-Z]').hasMatch(trimmedValue)) {
+    return 'Description must contain at least one letter';
+  }
   return null;
 }
   // Validation: Date Range
@@ -401,7 +418,7 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
                               controller: _titleController,
                               label: 'Project Title *',
                               hint: 'e.g., AI Research Project',
-                              maxLength: 30,
+                              maxLength:40,
                               validator: _validateTitle,
                             ),
                             const SizedBox(height: 16.0),
@@ -409,7 +426,7 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
                               controller: _organizationController,
                               label: 'Organization',
                               hint: 'e.g., Google Developer Student Club',
-                              maxLength: 30,
+                              maxLength: 40,
                               validator: _validateOrganization,
                             ),
                             const SizedBox(height: 16.0),
@@ -630,7 +647,7 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
           controller: controller,
           maxLines: maxLines,
           validator: validator,
-          autovalidateMode: AutovalidateMode.disabled,
+         autovalidateMode: AutovalidateMode.onUserInteraction, 
           decoration: _inputDecoration(hint),
         ),
         Padding(
