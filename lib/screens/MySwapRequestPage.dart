@@ -164,41 +164,106 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (_) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Row(
-            children: [
-              Icon(Icons.notification_important, color: Colors.teal),
-              SizedBox(width: 10),
-              Text("Swap Confirmation"),
-            ],
-          ),
-          content: Text(
-            "$partnerName wants to swap with you!\n\nFrom Group $from → To Group $to\n\nDo you want to confirm this swap?",
-            style: const TextStyle(fontSize: 16),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () async {
-                Navigator.pop(context);
-                await _declineSwap(partnerId);
-                _popupShown = false;
-              },
-              child: const Text("Decline", style: TextStyle(color: Colors.redAccent)),
+        builder: (_) {
+          final media = MediaQuery.of(context);
+          final maxWidth = media.size.width > 420
+              ? 420.0
+              : media.size.width * 0.9;
+          final maxHeight = media.size.height * 0.8;
+
+          return AlertDialog(
+            insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+            contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+            title: const Row(
+              children: [
+                Icon(Icons.notification_important, color: Colors.teal),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    "Swap Confirmation",
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
             ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.teal,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            content: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: maxWidth,
+                maxHeight: maxHeight,
               ),
-              onPressed: () async {
-                Navigator.pop(context);
-                await _confirmSwap(partnerId);
-              },
-              child: const Text("Confirm"),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "$partnerName wants to swap with you!",
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.teal.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            "Swap Details",
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.teal,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text("From Group $from → To Group $to",
+                              style: const TextStyle(fontSize: 14)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    const Text(
+                      "Do you want to confirm this swap?",
+                      style: TextStyle(fontSize: 15),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ],
-        ),
+            actions: [
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  await _declineSwap(partnerId);
+                  _popupShown = false;
+                },
+                child: const Text(
+                  "Decline",
+                  style: TextStyle(color: Colors.redAccent),
+                ),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.teal,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () async {
+                  Navigator.pop(context);
+                  await _confirmSwap(partnerId);
+                },
+                child: const Text("Confirm"),
+              ),
+            ],
+          );
+        },
       );
     }
   }
@@ -285,24 +350,16 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
     );
   }
 
+  void _navigateToMainTab(int index) {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => HomePage(initialIndex: index)),
+    );
+  }
+
   void _onNavTap(int index) {
-    if (index == 2) return;
     setState(() => _selectedIndex = index);
-    
-    switch (index) {
-      case 0:
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomePage()));
-        break;
-      case 1:
-        Navigator.pushReplacementNamed(context, '/calendar');
-        break;
-      case 3:
-        Navigator.pushReplacementNamed(context, '/experience');
-        break;
-      case 4:
-        Navigator.pushReplacementNamed(context, '/community');
-        break;
-    }
+    _navigateToMainTab(index);
   }
 
   @override
@@ -1407,8 +1464,11 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
       ),
     );
 
-    // Navigate to calendar
-    Navigator.pushReplacementNamed(context, '/calendar');
+    // Navigate back to the main shell (Schedule tab) so nav bar is visible
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => HomePage(initialIndex: 1)),
+    );
     
   } catch (e) {
     debugPrint("❌ FATAL ERROR in _addCoursesToSchedule: $e");
