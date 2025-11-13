@@ -854,7 +854,7 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
   bool _isSubmitting = false;
   final ImagePicker _picker = ImagePicker();
   XFile? _selectedImage;
-  bool _showImageWarning = false;
+  final _photoFieldKey = GlobalKey<FormFieldState<String>>();
 
   @override
   void initState() {
@@ -889,8 +889,8 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
       if (result != null) {
         setState(() {
           _selectedImage = result;
-          _showImageWarning = false;
         });
+        _photoFieldKey.currentState?.didChange(result.path);
       }
     } on PlatformException catch (e) {
       debugPrint('Image picker permission error: $e');
@@ -946,6 +946,7 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
 
   void _removeImage() {
     setState(() => _selectedImage = null);
+    _photoFieldKey.currentState?.didChange(null);
   }
 
   /// Uploads selected image to ImgBB and returns the public URL.
@@ -1003,10 +1004,7 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
     if (!(_formKey.currentState?.validate() ?? false)) {
       return;
     }
-    if (_selectedImage == null) {
-      setState(() => _showImageWarning = true);
-      return;
-    }
+    if (_photoFieldKey.currentState?.validate() == false) return;
 
     setState(() => _isSubmitting = true);
     try {
@@ -1119,22 +1117,18 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
                 ),
               ),
               const SizedBox(height: 20),
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: _showImageWarning ? Colors.red : Colors.transparent,
-                    width: 1.5,
-                  ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(4),
-                  child: Column(
+              FormField<String>(
+                key: _photoFieldKey,
+                validator: (_) =>
+                    _selectedImage == null ? 'A photo is required.' : null,
+                builder: (state) {
+                  final hasError = state.hasError;
+                  return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       if (_selectedImage != null) ...[
                         ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(20),
                           child: Stack(
                             children: [
                               AspectRatio(
@@ -1166,32 +1160,50 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
                       ],
                       OutlinedButton.icon(
                         onPressed: _isSubmitting ? null : _pickImage,
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(
+                            color: hasError
+                                ? Theme.of(context).colorScheme.error
+                                : const Color(0xFF4ECDC4),
+                            width: 1.5,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                        ),
                         icon: Icon(
                           Icons.photo_outlined,
-                          color: _showImageWarning ? Colors.red : null,
+                          color: hasError
+                              ? Theme.of(context).colorScheme.error
+                              : null,
                         ),
                         label: Text(
                           _selectedImage == null
                               ? 'Add photo'
                               : 'Change selected photo',
                           style: TextStyle(
-                            color: _showImageWarning ? Colors.red : null,
+                            color: hasError
+                                ? Theme.of(context).colorScheme.error
+                                : null,
                             fontWeight:
-                                _showImageWarning ? FontWeight.w600 : null,
+                                hasError ? FontWeight.w600 : null,
                           ),
                         ),
                       ),
+                      if (hasError) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          state.errorText!,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
                     ],
-                  ),
-                ),
+                  );
+                },
               ),
-              if (_showImageWarning) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'A photo is required for community posts.',
-                  style: TextStyle(color: Colors.red.shade600),
-                ),
-              ],
               const SizedBox(height: 20),
               TextFormField(
                 controller: _titleController,
