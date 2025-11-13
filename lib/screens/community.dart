@@ -32,6 +32,7 @@ class _CommunityPageState extends State<CommunityPage>
   String? _currentUserMajor;
   final Set<String> _likeOperationsInFlight = <String>{};
   final Set<String> _saveOperationsInFlight = <String>{};
+  final Set<String> _deleteOperationsInFlight = <String>{};
 
   @override
   void initState() {
@@ -183,8 +184,20 @@ class _CommunityPageState extends State<CommunityPage>
   }
 
   void _showAuthRequiredSnack(String actionDescription) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Please sign in to $actionDescription.')),
+    _showFloatingSnack('Please sign in to $actionDescription.');
+  }
+
+  void _showFloatingSnack(String message, {Color? backgroundColor}) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 90),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        backgroundColor: backgroundColor,
+      ),
     );
   }
 
@@ -207,6 +220,7 @@ class _CommunityPageState extends State<CommunityPage>
           avatarColor: _avatarColorFor(userId),
           currentUserId: userId,
           postBuilder: _buildPostCard,
+          showSavedTab: true,
         );
       },
     );
@@ -262,6 +276,8 @@ class _CommunityPageState extends State<CommunityPage>
     final heading = post.title.trim();
     final showHeading =
         heading.isNotEmpty && heading.toLowerCase() != caption.toLowerCase();
+    final isOwner = userId != null && userId == post.studentId;
+    final isDeleting = _deleteOperationsInFlight.contains(post.id);
 
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -273,14 +289,18 @@ class _CommunityPageState extends State<CommunityPage>
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                CircleAvatar(
-                  radius: 24,
-                  backgroundColor: color.withValues(alpha: 0.2),
-                  child: Text(
-                    _initialsFromName(post.studentName),
-                    style: const TextStyle(
-                      color: Colors.black87,
-                      fontWeight: FontWeight.w600,
+                InkWell(
+                  onTap: () => _openUserProfile(post),
+                  borderRadius: BorderRadius.circular(24),
+                  child: CircleAvatar(
+                    radius: 24,
+                    backgroundColor: color.withValues(alpha: 0.2),
+                    child: Text(
+                      _initialsFromName(post.studentName),
+                      style: const TextStyle(
+                        color: Colors.black87,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),
@@ -311,6 +331,7 @@ class _CommunityPageState extends State<CommunityPage>
                     ],
                   ),
                 ),
+                const SizedBox(width: 12),
                 Container(
                   decoration: BoxDecoration(
                     color: color.withValues(alpha: 0.12),
@@ -333,9 +354,62 @@ class _CommunityPageState extends State<CommunityPage>
                     ],
                   ),
                 ),
+                if (isOwner) ...[
+                  const SizedBox(width: 4),
+                  isDeleting
+                      ? SizedBox(
+                          width: 28,
+                          height: 28,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        )
+                      : PopupMenuButton<_PostAction>(
+                          onSelected: (action) =>
+                              _handlePostAction(action, post),
+                          itemBuilder: (context) => const [
+                            PopupMenuItem(
+                              value: _PostAction.delete,
+                              child: Text('Delete post'),
+                            ),
+                          ],
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                ],
               ],
             ),
             const SizedBox(height: 16),
+            if (hasImage) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: AspectRatio(
+                  aspectRatio: 4 / 5,
+                  child: Image.network(
+                    post.imageUrl!,
+                    fit: BoxFit.cover,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        color: Colors.grey.shade100,
+                        alignment: Alignment.center,
+                        child: const CircularProgressIndicator(),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        color: Colors.grey.shade200,
+                        alignment: Alignment.center,
+                        child: const Icon(Icons.broken_image_outlined, size: 32),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ],
+            if (hasImage) const SizedBox(height: 16),
             if (showHeading) ...[
               Text(
                 post.title,
@@ -378,34 +452,6 @@ class _CommunityPageState extends State<CommunityPage>
                       ),
                     ),
                   ],
-                ),
-              ),
-            ],
-            if (hasImage) ...[
-              const SizedBox(height: 16),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: AspectRatio(
-                  aspectRatio: 4 / 5,
-                  child: Image.network(
-                    post.imageUrl!,
-                    fit: BoxFit.cover,
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return Container(
-                        color: Colors.grey.shade100,
-                        alignment: Alignment.center,
-                        child: const CircularProgressIndicator(),
-                      );
-                    },
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        color: Colors.grey.shade200,
-                        alignment: Alignment.center,
-                        child: const Icon(Icons.broken_image_outlined, size: 32),
-                      );
-                    },
-                  ),
                 ),
               ),
             ],
@@ -477,11 +523,7 @@ class _CommunityPageState extends State<CommunityPage>
     } catch (e) {
       debugPrint('Failed to toggle like: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('We could not update your like. Please try again.'),
-          ),
-        );
+        _showFloatingSnack('We could not update your like. Please try again.');
       }
     } finally {
       if (mounted) {
@@ -511,11 +553,7 @@ class _CommunityPageState extends State<CommunityPage>
     } catch (e) {
       debugPrint('Failed to toggle save: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Unable to save this post right now.'),
-          ),
-        );
+        _showFloatingSnack('Unable to save this post right now.');
       }
     } finally {
       if (mounted) {
@@ -524,11 +562,90 @@ class _CommunityPageState extends State<CommunityPage>
     }
   }
 
+  void _handlePostAction(_PostAction action, CommunityPost post) {
+    switch (action) {
+      case _PostAction.delete:
+        _confirmDelete(post);
+        break;
+    }
+  }
+
+  void _openUserProfile(CommunityPost post) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) {
+        return _ProfileSheet(
+          userName: post.studentName,
+          userMajor: post.studentMajor,
+          userInitials: _initialsFromName(post.studentName),
+          avatarColor: _avatarColorFor(post.studentId),
+          currentUserId: post.studentId,
+          postBuilder: _buildPostCard,
+          showSavedTab: post.studentId == _currentUserId,
+        );
+      },
+    );
+  }
+
+  Future<void> _confirmDelete(CommunityPost post) async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Delete post?'),
+          content: const Text(
+            'This post will be removed from the community feed permanently.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldDelete == true) {
+      await _deletePost(post);
+    }
+  }
+
+  Future<void> _deletePost(CommunityPost post) async {
+    if (_deleteOperationsInFlight.contains(post.id)) return;
+
+    setState(() => _deleteOperationsInFlight.add(post.id));
+    try {
+      await FirebaseFirestore.instance
+          .collection('community_posts')
+          .doc(post.id)
+          .delete();
+      if (mounted) {
+        _showFloatingSnack('Post deleted.');
+      }
+    } catch (e) {
+      debugPrint('Failed to delete post: $e');
+      if (mounted) {
+        _showFloatingSnack('Could not delete this post. Please try again.');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _deleteOperationsInFlight.remove(post.id));
+      } else {
+        _deleteOperationsInFlight.remove(post.id);
+      }
+    }
+  }
+
   void _openCreatePostSheet() {
     if (!_canCreatePost) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please sign in to create a post.')),
-      );
+      _showFloatingSnack('Please sign in to create a post.');
       return;
     }
 
@@ -552,12 +669,9 @@ class _CommunityPageState extends State<CommunityPage>
           userInitials: initials,
           onPosted: () {
             if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Post published for the community.'),
-              ),
-            );
+            _showFloatingSnack('Post published for the community.');
           },
+          scaffoldContext: context,
         );
       },
     );
@@ -714,6 +828,7 @@ class _PostComposerSheet extends StatefulWidget {
     required this.avatarColor,
     required this.userInitials,
     required this.onPosted,
+    required this.scaffoldContext,
   });
 
   final List<String> categories;
@@ -724,6 +839,7 @@ class _PostComposerSheet extends StatefulWidget {
   final Color avatarColor;
   final String userInitials;
   final VoidCallback onPosted;
+  final BuildContext scaffoldContext;
 
   @override
   State<_PostComposerSheet> createState() => _PostComposerSheetState();
@@ -731,22 +847,26 @@ class _PostComposerSheet extends StatefulWidget {
 
 class _PostComposerSheetState extends State<_PostComposerSheet> {
   final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _titleController;
   late final TextEditingController _captionController;
   late final TextEditingController _linkController;
   late String _selectedCategory = widget.initialCategory;
   bool _isSubmitting = false;
   final ImagePicker _picker = ImagePicker();
   XFile? _selectedImage;
+  bool _showImageWarning = false;
 
   @override
   void initState() {
     super.initState();
+    _titleController = TextEditingController();
     _captionController = TextEditingController();
     _linkController = TextEditingController();
   }
 
   @override
   void dispose() {
+    _titleController.dispose();
     _captionController.dispose();
     _linkController.dispose();
     super.dispose();
@@ -756,11 +876,7 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
     final hasPermission = await _ensurePhotoPermission();
     if (!hasPermission) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Enable photo permissions in Settings to continue.'),
-        ),
-      );
+      _showSheetSnack('Enable photo permissions in Settings to continue.');
       return;
     }
 
@@ -771,7 +887,10 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
         maxWidth: 2000,
       );
       if (result != null) {
-        setState(() => _selectedImage = result);
+        setState(() {
+          _selectedImage = result;
+          _showImageWarning = false;
+        });
       }
     } on PlatformException catch (e) {
       debugPrint('Image picker permission error: $e');
@@ -783,16 +902,25 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
             'Camera permission is required to capture a new photo.',
         _ => 'We need photo permissions to continue. Check your settings.',
       };
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(friendlyMessage)),
-      );
+      _showSheetSnack(friendlyMessage);
     } catch (e) {
       debugPrint('Failed to pick image: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not access gallery right now.')),
-      );
+      _showSheetSnack('Could not access gallery right now.');
     }
+  }
+
+  void _showSheetSnack(String message) {
+    final messenger = ScaffoldMessenger.of(widget.scaffoldContext);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
   }
 
   Future<bool> _ensurePhotoPermission() async {
@@ -862,12 +990,8 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
     } catch (e) {
       debugPrint('❌ Error uploading community image: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Failed to upload image. Please check your internet connection.',
-            ),
-          ),
+        _showSheetSnack(
+          'Failed to upload image. Please check your internet connection.',
         );
       }
       rethrow;
@@ -880,22 +1004,20 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
       return;
     }
     if (_selectedImage == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Add a photo to share with everyone.')),
-      );
+      setState(() => _showImageWarning = true);
       return;
     }
 
     setState(() => _isSubmitting = true);
     try {
+      final title = _titleController.text.trim();
       final caption = _captionController.text.trim();
-      final heading = caption.split('\n').first.trim();
-      final derivedTitle = heading.isEmpty
+      final trimmedTitle = title.isEmpty
           ? 'Community photo'
-          : (heading.length > 80 ? '${heading.substring(0, 80)}…' : heading);
+          : (title.length > 120 ? '${title.substring(0, 120)}…' : title);
       final imageUrl = await _uploadSelectedImage();
       await FirebaseFirestore.instance.collection('community_posts').add({
-        'title': derivedTitle,
+        'title': trimmedTitle,
         'description': caption,
         'resourceLink': _linkController.text.trim().isEmpty
             ? null
@@ -915,11 +1037,7 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
     } catch (e) {
       debugPrint('Failed to publish post: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not publish post. Please try again.'),
-        ),
-      );
+      _showSheetSnack('Could not publish post. Please try again.');
     } finally {
       if (mounted) {
         setState(() => _isSubmitting = false);
@@ -1001,71 +1119,93 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
                 ),
               ),
               const SizedBox(height: 20),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (_selectedImage != null) ...[
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: Stack(
-                        children: [
-                          AspectRatio(
-                            aspectRatio: 4 / 5,
-                            child: Image.file(
-                              File(_selectedImage!.path),
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                          Positioned(
-                            top: 12,
-                            right: 12,
-                            child: CircleAvatar(
-                              backgroundColor: Colors.black54,
-                              child: IconButton(
-                                onPressed: _removeImage,
-                                icon: const Icon(
-                                  Icons.close,
-                                  color: Colors.white,
-                                  size: 18,
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: _showImageWarning ? Colors.red : Colors.transparent,
+                    width: 1.5,
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (_selectedImage != null) ...[
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: Stack(
+                            children: [
+                              AspectRatio(
+                                aspectRatio: 4 / 5,
+                                child: Image.file(
+                                  File(_selectedImage!.path),
+                                  fit: BoxFit.cover,
                                 ),
                               ),
-                            ),
+                              Positioned(
+                                top: 12,
+                                right: 12,
+                                child: CircleAvatar(
+                                  backgroundColor: Colors.black54,
+                                  child: IconButton(
+                                    onPressed: _removeImage,
+                                    icon: const Icon(
+                                      Icons.close,
+                                      color: Colors.white,
+                                      size: 18,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      OutlinedButton.icon(
+                        onPressed: _isSubmitting ? null : _pickImage,
+                        icon: Icon(
+                          Icons.photo_outlined,
+                          color: _showImageWarning ? Colors.red : null,
+                        ),
+                        label: Text(
+                          _selectedImage == null
+                              ? 'Add photo'
+                              : 'Change selected photo',
+                          style: TextStyle(
+                            color: _showImageWarning ? Colors.red : null,
+                            fontWeight:
+                                _showImageWarning ? FontWeight.w600 : null,
+                          ),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                  OutlinedButton.icon(
-                    onPressed: _isSubmitting ? null : _pickImage,
-                    icon: const Icon(Icons.photo_outlined),
-                    label: Text(
-                      _selectedImage == null
-                          ? 'Add photo'
-                          : 'Change selected photo',
-                    ),
+                    ],
                   ),
-                ],
+                ),
               ),
+              if (_showImageWarning) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'A photo is required for community posts.',
+                  style: TextStyle(color: Colors.red.shade600),
+                ),
+              ],
               const SizedBox(height: 20),
-              DropdownButtonFormField<String>(
-                initialValue: _selectedCategory,
-                items: widget.categories
-                    .map(
-                      (category) => DropdownMenuItem<String>(
-                        value: category,
-                        child: Text(category),
-                      ),
-                    )
-                    .toList(),
+              TextFormField(
+                controller: _titleController,
+                textCapitalization: TextCapitalization.sentences,
                 decoration: const InputDecoration(
-                  labelText: 'Category',
+                  labelText: 'Caption title',
+                  hintText: 'E.g. Campus showcase or Study meetup',
                   border: OutlineInputBorder(),
                 ),
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() => _selectedCategory = value);
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Please add a caption title.';
                   }
+                  return null;
                 },
               ),
               const SizedBox(height: 16),
@@ -1084,6 +1224,27 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
                     return 'Please write a caption.';
                   }
                   return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                initialValue: _selectedCategory,
+                items: widget.categories
+                    .map(
+                      (category) => DropdownMenuItem<String>(
+                        value: category,
+                        child: Text(category),
+                      ),
+                    )
+                    .toList(),
+                decoration: const InputDecoration(
+                  labelText: 'Category',
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _selectedCategory = value);
+                  }
                 },
               ),
               const SizedBox(height: 16),
@@ -1135,6 +1296,7 @@ class _ProfileSheet extends StatelessWidget {
     required this.avatarColor,
     required this.currentUserId,
     required this.postBuilder,
+    required this.showSavedTab,
   });
 
   final String userName;
@@ -1143,6 +1305,7 @@ class _ProfileSheet extends StatelessWidget {
   final Color avatarColor;
   final String currentUserId;
   final Widget Function(CommunityPost post) postBuilder;
+  final bool showSavedTab;
 
   @override
   Widget build(BuildContext context) {
@@ -1158,7 +1321,7 @@ class _ProfileSheet extends StatelessWidget {
             color: colorScheme.surface,
             height: MediaQuery.of(context).size.height * 0.9,
             child: DefaultTabController(
-              length: 2,
+              length: showSavedTab ? 2 : 1,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1203,15 +1366,14 @@ class _ProfileSheet extends StatelessWidget {
                       onPressed: () => Navigator.of(context).maybePop(),
                     ),
                   ),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: TabBar(
-                      indicatorColor: Color(0xFF0097b2),
-                      labelColor: Color(0xFF0097b2),
-                      tabs: [
-                        Tab(text: 'My posts'),
-                        Tab(text: 'Saved'),
-                      ],
+                      indicatorColor: const Color(0xFF0097b2),
+                      labelColor: const Color(0xFF0097b2),
+                      tabs: showSavedTab
+                          ? const [Tab(text: 'My posts'), Tab(text: 'Saved')]
+                          : const [Tab(text: 'Posts')],
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -1228,16 +1390,17 @@ class _ProfileSheet extends StatelessWidget {
                           emptyDescription:
                               'Share an update with the community and it will appear here.',
                         ),
-                        _ProfilePostsTab(
-                          query: FirebaseFirestore.instance
-                              .collection('community_posts')
-                              .where('saves', arrayContains: currentUserId),
-                          postBuilder: postBuilder,
-                          emptyIcon: Icons.bookmark_added_outlined,
-                          emptyTitle: 'Nothing saved',
-                          emptyDescription:
-                              'Use the save button on posts you want to revisit.',
-                        ),
+                        if (showSavedTab)
+                          _ProfilePostsTab(
+                            query: FirebaseFirestore.instance
+                                .collection('community_posts')
+                                .where('saves', arrayContains: currentUserId),
+                            postBuilder: postBuilder,
+                            emptyIcon: Icons.bookmark_added_outlined,
+                            emptyTitle: 'Nothing saved',
+                            emptyDescription:
+                                'Use the save button on posts you want to revisit.',
+                          ),
                       ],
                     ),
                   ),
@@ -1340,6 +1503,8 @@ class _ProfileEmptyState extends StatelessWidget {
     );
   }
 }
+
+enum _PostAction { delete }
 
 class CommunityPost {
   CommunityPost({
@@ -1482,3 +1647,5 @@ class _ErrorState extends StatelessWidget {
     );
   }
 }
+
+
