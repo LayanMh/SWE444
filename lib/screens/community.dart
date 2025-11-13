@@ -116,6 +116,7 @@ class _CommunityPageState extends State<CommunityPage>
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
+        centerTitle: true,
         title: const Text('Community'),
         actions: [_buildProfileAction()],
         bottom: TabBar(
@@ -193,9 +194,6 @@ class _CommunityPageState extends State<CommunityPage>
     messenger.showSnackBar(
       SnackBar(
         content: Text(message),
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 90),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         backgroundColor: backgroundColor,
       ),
     );
