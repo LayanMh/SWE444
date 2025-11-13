@@ -20,6 +20,7 @@ class CommunityPage extends StatefulWidget {
 class _CommunityPageState extends State<CommunityPage>
     with SingleTickerProviderStateMixin {
   static const List<String> _categories = [
+    'All',
     'Hackathon',
     'Course',
     'Certificate',
@@ -225,11 +226,13 @@ class _CommunityPageState extends State<CommunityPage>
   }
 
   Widget _buildCategoryFeed(String category) {
-    final stream = FirebaseFirestore.instance
+    final baseQuery = FirebaseFirestore.instance
         .collection('community_posts')
-        .where('category', isEqualTo: category)
-        .orderBy('createdAt', descending: true)
-        .snapshots();
+        .orderBy('createdAt', descending: true);
+
+    final stream = category == 'All'
+        ? baseQuery.snapshots()
+        : baseQuery.where('category', isEqualTo: category).snapshots();
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: stream,
@@ -250,6 +253,7 @@ class _CommunityPageState extends State<CommunityPage>
         }
 
         return ListView.separated(
+          key: PageStorageKey('community-$category'),
           padding: const EdgeInsets.fromLTRB(16, 20, 16, 96),
           itemCount: posts.length,
           separatorBuilder: (context, index) => const SizedBox(height: 12),
@@ -261,7 +265,6 @@ class _CommunityPageState extends State<CommunityPage>
 
   Widget _buildPostCard(CommunityPost post) {
     final color = _categoryColor(post.category);
-    final icon = _categoryIcon(post.category);
     final textTheme = Theme.of(context).textTheme;
     final userId = _currentUserId;
     final isLiked = userId != null && post.likedBy.contains(userId);
@@ -271,28 +274,27 @@ class _CommunityPageState extends State<CommunityPage>
     final hasImage =
         post.imageUrl != null && post.imageUrl!.trim().isNotEmpty;
     final caption = post.description.trim();
-    final heading = post.title.trim();
-    final showHeading =
-        heading.isNotEmpty && heading.toLowerCase() != caption.toLowerCase();
     final isOwner = userId != null && userId == post.studentId;
     final isDeleting = _deleteOperationsInFlight.contains(post.id);
 
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      clipBehavior: Clip.hardEdge,
+      elevation: 1,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 InkWell(
                   onTap: () => _openUserProfile(post),
                   borderRadius: BorderRadius.circular(24),
                   child: CircleAvatar(
                     radius: 24,
-                    backgroundColor: color.withValues(alpha: 0.2),
+                    backgroundColor: color.withValues(alpha: 0.25),
                     child: Text(
                       _initialsFromName(post.studentName),
                       style: const TextStyle(
@@ -304,64 +306,35 @@ class _CommunityPageState extends State<CommunityPage>
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        post.studentName,
-                        style: textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        [
-                          (post.studentMajor != null &&
-                                  post.studentMajor!.trim().isNotEmpty)
-                              ? post.studentMajor!
-                              : 'Student',
-                          _timeAgo(post.createdAt),
-                        ].join(' • '),
-                        style: textTheme.bodySmall?.copyWith(
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    post.studentName,
+                    style: textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
-                const SizedBox(width: 12),
                 Container(
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(icon, size: 16, color: color),
-                      const SizedBox(width: 4),
-                      Text(
-                        post.category,
-                        style: textTheme.bodySmall?.copyWith(
-                          color: color,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    post.category,
+                    style: textTheme.bodySmall?.copyWith(
+                      color: color,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
                 if (isOwner) ...[
                   const SizedBox(width: 4),
                   isDeleting
-                      ? SizedBox(
-                          width: 28,
-                          height: 28,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : PopupMenuButton<_PostAction>(
                           onSelected: (action) =>
@@ -372,134 +345,122 @@ class _CommunityPageState extends State<CommunityPage>
                               child: Text('Delete post'),
                             ),
                           ],
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
                         ),
                 ],
               ],
             ),
-            const SizedBox(height: 16),
-            if (hasImage) ...[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: AspectRatio(
-                  aspectRatio: 4 / 5,
-                  child: Image.network(
-                    post.imageUrl!,
-                    fit: BoxFit.cover,
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return Container(
-                        color: Colors.grey.shade100,
-                        alignment: Alignment.center,
-                        child: const CircularProgressIndicator(),
-                      );
-                    },
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        color: Colors.grey.shade200,
-                        alignment: Alignment.center,
-                        child: const Icon(Icons.broken_image_outlined, size: 32),
-                      );
-                    },
+          ),
+          if (hasImage)
+            AspectRatio(
+              aspectRatio: 4 / 5,
+              child: Image.network(
+                post.imageUrl!,
+                fit: BoxFit.cover,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Container(
+                    color: Colors.grey.shade100,
+                    alignment: Alignment.center,
+                    child: const CircularProgressIndicator(),
+                  );
+                },
+                errorBuilder: (context, error, stackTrace) => Container(
+                  color: Colors.grey.shade200,
+                  alignment: Alignment.center,
+                  child: const Icon(Icons.broken_image_outlined, size: 32),
+                ),
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: Icon(
+                    isLiked ? Icons.favorite : Icons.favorite_border,
+                    color: isLiked ? Colors.redAccent : Colors.black87,
                   ),
+                  onPressed: likeBusy
+                      ? null
+                      : (userId == null
+                          ? () => _showAuthRequiredSnack('like posts')
+                          : () => _toggleLike(post, isLiked)),
                 ),
-              ),
-            ],
-            if (hasImage) const SizedBox(height: 16),
-            if (showHeading) ...[
-              Text(
-                post.title,
-                style: textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  height: 1.2,
+                const Spacer(),
+                IconButton(
+                  icon: Icon(
+                    isSaved ? Icons.bookmark : Icons.bookmark_outline,
+                    color: isSaved
+                        ? Theme.of(context).colorScheme.primary
+                        : Colors.black87,
+                  ),
+                  onPressed: saveBusy
+                      ? null
+                      : (userId == null
+                          ? () => _showAuthRequiredSnack('save posts')
+                          : () => _toggleSave(post, isSaved)),
                 ),
-              ),
-              const SizedBox(height: 8),
-            ],
-            if (caption.isNotEmpty)
-              Text(
-                caption,
-                style: textTheme.bodyLarge?.copyWith(height: 1.4),
-              ),
-            if (post.resourceLink != null &&
-                post.resourceLink!.trim().isNotEmpty) ...[
-              const SizedBox(height: 16),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.grey.shade300),
-                  color: Colors.grey.shade50,
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.link_outlined, color: color),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        post.resourceLink!,
-                        style: textTheme.bodyMedium?.copyWith(
-                          color: Colors.blueGrey[700],
-                          decoration: TextDecoration.underline,
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (post.likesCount > 0 || likeBusy)
+                  Text(
+                    '${post.likesCount} '
+                    '${post.likesCount == 1 ? 'like' : 'likes'}',
+                    style: textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                const SizedBox(height: 4),
+                if (caption.isNotEmpty)
+                  RichText(
+                    text: TextSpan(
+                      style: textTheme.bodyMedium?.copyWith(height: 1.4),
+                      children: [
+                        TextSpan(
+                          text: '${post.studentName} ',
+                          style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                        TextSpan(text: caption),
+                      ],
+                    ),
+                  ),
+                if (post.resourceLink != null &&
+                    post.resourceLink!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  InkWell(
+                    onTap: () => _showFloatingSnack(
+                      'Open links from this post manually for now.',
+                    ),
+                    child: Text(
+                      post.resourceLink!,
+                      style: textTheme.bodyMedium?.copyWith(
+                        color: Colors.blueAccent,
+                        decoration: TextDecoration.underline,
                       ),
                     ),
-                  ],
-                ),
-              ),
-            ],
-            const SizedBox(height: 16),
-            Divider(color: Colors.grey.shade200, height: 28),
-            Row(
-              children: [
-                Expanded(
-                  child: _PostActionButton(
-                    icon: isLiked ? Icons.favorite : Icons.favorite_border,
-                    label: post.likesCount == 0
-                        ? 'Like'
-                        : '${post.likesCount} ${post.likesCount == 1 ? 'Like' : 'Likes'}',
-                    iconColor: isLiked ? Colors.redAccent : Colors.grey[800],
-                    isActive: isLiked,
-                    isLoading: likeBusy,
-                    onPressed: likeBusy
-                        ? null
-                        : (userId == null
-                            ? () => _showAuthRequiredSnack('like posts')
-                            : () => _toggleLike(post, isLiked)),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _PostActionButton(
-                    icon: isSaved ? Icons.bookmark : Icons.bookmark_outline,
-                    label: post.savesCount == 0
-                        ? 'Save'
-                        : '${post.savesCount} saved',
-                    iconColor: isSaved
-                        ? Theme.of(context).colorScheme.primary
-                        : Colors.grey[800],
-                    isActive: isSaved,
-                    isLoading: saveBusy,
-                    onPressed: saveBusy
-                        ? null
-                        : (userId == null
-                            ? () => _showAuthRequiredSnack('save posts')
-                            : () => _toggleSave(post, isSaved)),
+                ],
+                const SizedBox(height: 8),
+                Text(
+                  _timeAgo(post.createdAt),
+                  style: textTheme.bodySmall?.copyWith(
+                    color: Colors.grey[500],
                   ),
                 ),
               ],
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 12),
+        ],
       ),
     );
   }
-
   Future<void> _toggleLike(CommunityPost post, bool currentlyLiked) async {
     final userId = _currentUserId;
     if (userId == null) {
@@ -701,19 +662,6 @@ class _CommunityPageState extends State<CommunityPage>
     }
   }
 
-  IconData _categoryIcon(String category) {
-    switch (category) {
-      case 'Hackathon':
-        return Icons.rocket_launch_outlined;
-      case 'Course':
-        return Icons.menu_book_outlined;
-      case 'Certificate':
-        return Icons.workspace_premium_outlined;
-      default:
-        return Icons.forum_outlined;
-    }
-  }
-
   String _initialsFromName(String name) {
     final parts = name.trim().split(RegExp(r'\s+'));
     if (parts.isEmpty) {
@@ -757,65 +705,6 @@ class _CommunityPageState extends State<CommunityPage>
   }
 }
 
-class _PostActionButton extends StatelessWidget {
-  const _PostActionButton({
-    required this.icon,
-    required this.label,
-    required this.iconColor,
-    this.onPressed,
-    this.isActive = false,
-    this.isLoading = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final Color? iconColor;
-  final bool isActive;
-  final bool isLoading;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final borderColor = isActive ? colorScheme.primary : Colors.grey.shade300;
-
-    return OutlinedButton(
-      onPressed: isLoading ? null : onPressed,
-      style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-        side: BorderSide(color: borderColor),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      ),
-      child: isLoading
-          ? SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: colorScheme.primary,
-              ),
-            )
-          : Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, size: 18, color: iconColor ?? colorScheme.primary),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      color: isActive ? colorScheme.primary : Colors.grey[800],
-                      fontWeight: FontWeight.w600,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-    );
-  }
-}
-
 class _PostComposerSheet extends StatefulWidget {
   const _PostComposerSheet({
     required this.categories,
@@ -845,7 +734,6 @@ class _PostComposerSheet extends StatefulWidget {
 
 class _PostComposerSheetState extends State<_PostComposerSheet> {
   final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _titleController;
   late final TextEditingController _captionController;
   late final TextEditingController _linkController;
   late String _selectedCategory = widget.initialCategory;
@@ -857,14 +745,12 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
   @override
   void initState() {
     super.initState();
-    _titleController = TextEditingController();
     _captionController = TextEditingController();
     _linkController = TextEditingController();
   }
 
   @override
   void dispose() {
-    _titleController.dispose();
     _captionController.dispose();
     _linkController.dispose();
     super.dispose();
@@ -1006,14 +892,10 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
 
     setState(() => _isSubmitting = true);
     try {
-      final title = _titleController.text.trim();
       final caption = _captionController.text.trim();
-      final trimmedTitle = title.isEmpty
-          ? 'Community photo'
-          : (title.length > 120 ? '${title.substring(0, 120)}…' : title);
       final imageUrl = await _uploadSelectedImage();
       await FirebaseFirestore.instance.collection('community_posts').add({
-        'title': trimmedTitle,
+        'title': 'Community photo',
         'description': caption,
         'resourceLink': _linkController.text.trim().isEmpty
             ? null
@@ -1203,22 +1085,6 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
                 },
               ),
               const SizedBox(height: 20),
-              TextFormField(
-                controller: _titleController,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(
-                  labelText: 'Caption title',
-                  hintText: 'E.g. Campus showcase or Study meetup',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please add a caption title.';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
               TextFormField(
                 controller: _captionController,
                 minLines: 4,
