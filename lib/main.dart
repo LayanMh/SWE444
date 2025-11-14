@@ -37,7 +37,7 @@ Future<void> main() async {
     debugPrint('Firebase initialization failed: $e');
     debugPrintStack(stackTrace: st);
   }
-  
+  // Initialize local notifications (Android/iOS)
   await NotiService.initialize();
   runApp(const MyApp());
 }
