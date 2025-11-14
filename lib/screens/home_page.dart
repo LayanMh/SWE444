@@ -9,7 +9,9 @@ import 'community.dart';
 import 'profile.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  final int initialIndex;
+
+  const HomePage({super.key, this.initialIndex = 2});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -17,7 +19,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
 
-  int _selectedIndex = 2; 
+  late int _selectedIndex;
 final GlobalKey<ProfileScreenState> _profileKey = GlobalKey<ProfileScreenState>();
 late final List<Widget> _tabs = <Widget>[
   ProfileScreen(key: _profileKey),  // ← add key here
@@ -26,6 +28,12 @@ late final List<Widget> _tabs = <Widget>[
   const ExperiencePage(),
   const CommunityPage(),
 ];
+
+ @override
+ void initState() {
+   super.initState();
+   _selectedIndex = widget.initialIndex;
+ }
 
  void _onTap(int i) async {
   // If leaving Profile (index 0) while in edit mode

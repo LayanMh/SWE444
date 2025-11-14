@@ -20,9 +20,14 @@ import 'screens/my_courses_page.dart';
 import 'screens/welcome_screen.dart';
 import 'screens/calendar_screen.dart';
 import 'screens/add_lecture_screen.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Load environment variables
+  await dotenv.load(fileName: ".env");
+  
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,

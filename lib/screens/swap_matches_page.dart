@@ -273,29 +273,17 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
     );
   }
 
+  void _navigateToMainTab(int index) {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => HomePage(initialIndex: index)),
+    );
+  }
+
   // ✅ NEW: Handle bottom navigation
   void _onNavTap(int index) {
-    if (index == 2) {
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomePage()));
-      return;
-    }
-    
     setState(() => _selectedIndex = index);
-    
-    switch (index) {
-      case 0:
-        Navigator.pushReplacementNamed(context, '/profile');
-        break;
-      case 1:
-        Navigator.pushReplacementNamed(context, '/calendar');
-        break;
-      case 3:
-        Navigator.pushReplacementNamed(context, '/experience');
-        break;
-      case 4:
-        Navigator.pushReplacementNamed(context, '/community');
-        break;
-    }
+    _navigateToMainTab(index);
   }
 
   @override
@@ -584,112 +572,130 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (ctx) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.6,
-          minChildSize: 0.4,
-          maxChildSize: 0.9,
-          expand: false,
-          builder: (context, scrollController) {
-            return Padding(
-              padding: const EdgeInsets.all(20),
-              child: ListView(
-                controller: scrollController,
+        final media = MediaQuery.of(ctx);
+        final bool isTallDevice = media.size.height >= 820; // Pixel 7 ≈ 851 logical px
+        final double heightFactor = isTallDevice ? 0.78 : 0.9;
+        final double sheetHeight = media.size.height * heightFactor;
+        final double horizontalPadding = media.size.width > 500 ? 32 : 20;
+
+        return Padding(
+          padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              height: sheetHeight,
+              width: double.infinity,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+              ),
+              child: Column(
                 children: [
-                  Center(
-                    child: Container(
-                      width: 50,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade300,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
+                  const SizedBox(height: 12),
+                  Container(
+                    width: 50,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(10),
                     ),
                   ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    "Match Details",
-                    style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.teal),
-                  ),
-                  const SizedBox(height: 15),
-                  _buildDetailRow("Student Name", match["studentName"] ?? "N/A"),
-                  _buildDetailRow("From Group", match["fromGroup"]?.toString() ?? "-"),
-                  _buildDetailRow("To Group", match["toGroup"]?.toString() ?? "-"),
-                  _buildDetailRow("Major", match["major"] ?? "N/A"),
-                  _buildDetailRow("Level", match["level"]?.toString() ?? "N/A"),
-                  _buildDetailRow("Gender", match["gender"] ?? "N/A"),
-                  const SizedBox(height: 20),
-                  if (haveCourses.isNotEmpty) ...[
-                    const Text(
-                      "Additional Courses They Have:",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.teal,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    ...haveCourses.map((course) => Padding(
-                          padding: const EdgeInsets.only(bottom: 5),
-                          child: Text(
-                            "• ${course["course"]} - Section ${course["section"]}",
-                            style: const TextStyle(fontSize: 14),
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: ListView(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: horizontalPadding,
+                      ).copyWith(bottom: 24),
+                      children: [
+                        const Text(
+                          "Match Details",
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.teal,
                           ),
-                        )),
-                    const SizedBox(height: 15),
-                  ],
-                  if (wantCourses.isNotEmpty) ...[
-                    const Text(
-                      "Courses They Want:",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.orange,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    ...wantCourses.map((course) => Padding(
-                          padding: const EdgeInsets.only(bottom: 5),
-                          child: Text(
-                            "• ${course["course"]} - Section ${course["section"]} (${course["priority"]})",
-                            style: const TextStyle(fontSize: 14),
-                          ),
-                        )),
-                    const SizedBox(height: 15),
-                  ],
-                  const SizedBox(height: 20),
-                  Center(
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        _sendConfirmation(match);
-                      },
-                      icon: const Icon(Icons.check_circle_outline),
-                      label: const Text("Send Confirmation"),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.teal,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 24, vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
                         ),
-                      ),
+                        const SizedBox(height: 15),
+                        _buildDetailRow(
+                            "Student Name", match["studentName"] ?? "N/A"),
+                        _buildDetailRow("From Group",
+                            match["fromGroup"]?.toString() ?? "-"),
+                        _buildDetailRow(
+                            "To Group", match["toGroup"]?.toString() ?? "-"),
+                        _buildDetailRow("Major", match["major"] ?? "N/A"),
+                        _buildDetailRow(
+                            "Level", match["level"]?.toString() ?? "N/A"),
+                        _buildDetailRow("Gender", match["gender"] ?? "N/A"),
+                        const SizedBox(height: 20),
+                        if (haveCourses.isNotEmpty) ...[
+                          const Text(
+                            "Additional Courses They Have:",
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.teal,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          ...haveCourses.map((course) => Padding(
+                                padding: const EdgeInsets.only(bottom: 5),
+                                child: Text(
+                                  "• ${course["course"]} - Section ${course["section"]}",
+                                  style: const TextStyle(fontSize: 14),
+                                ),
+                              )),
+                          const SizedBox(height: 15),
+                        ],
+                        if (wantCourses.isNotEmpty) ...[
+                          const Text(
+                            "Courses They Want:",
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.orange,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          ...wantCourses.map((course) => Padding(
+                                padding: const EdgeInsets.only(bottom: 5),
+                                child: Text(
+                                  "• ${course["course"]} - Section ${course["section"]} (${course["priority"]})",
+                                  style: const TextStyle(fontSize: 14),
+                                ),
+                              )),
+                          const SizedBox(height: 15),
+                        ],
+                        const SizedBox(height: 12),
+                        Center(
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.pop(context);
+                              _sendConfirmation(match);
+                            },
+                            icon: const Icon(Icons.check_circle_outline),
+                            label: const Text("Send Confirmation"),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.teal,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 24, vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 20),
                 ],
               ),
-            );
-          },
+            ),
+          ),
         );
       },
     );

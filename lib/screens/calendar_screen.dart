@@ -75,7 +75,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
 void initState() {
   super.initState();
 
-  //  Refresh automatically when user's schedule changes
+  //  Refresh automatically when user�s schedule changes
   final user = FirebaseAuth.instance.currentUser;
   if (user != null) {
     FirebaseFirestore.instance
