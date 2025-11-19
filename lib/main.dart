@@ -126,7 +126,7 @@ class MyApp extends StatelessWidget {
           '/calculator': (_) => const GpaCalculator(),
 
           '/experience': (_) => const ExperiencePage(),
-          '/community': (_) => const CommunityPage(),
+          '/community': (_) =>  const CommunityPage(),
           '/absence': (_) => const AbsencePage(),
           '/my-courses': (_) => const MyCoursesPage(),
         },
