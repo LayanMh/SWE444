@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../services/microsoft_auth_service.dart';
@@ -75,7 +75,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
 void initState() {
   super.initState();
 
-  //  Refresh automatically when user's schedule changes
+  //  Refresh automatically when user�s schedule changes
   final user = FirebaseAuth.instance.currentUser;
   if (user != null) {
     FirebaseFirestore.instance
