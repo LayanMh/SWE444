@@ -1075,7 +1075,7 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                initialValue: _selectedCategory,
+                value: _selectedCategory,
                 items: widget.categories
                     .map(
                       (category) => DropdownMenuItem<String>(
