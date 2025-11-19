@@ -8,6 +8,18 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
+String? _validateSpecialCharacters(String? value, String fieldName) {
+  if (value == null || value.trim().isEmpty) return null;
+  final trimmedValue = value.trim();
+  
+  // Check for special characters (allowing only letters, numbers, spaces, hyphens, and apostrophes)
+  final specialCharRegex = RegExp(r'[!@#$%^&*()_+=\[\]{};:"\\|,.<>?/~`]');
+  if (specialCharRegex.hasMatch(trimmedValue)) {
+    return '$fieldName cannot contain special characters';
+  }
+  return null;
+}
+
 class NoEmojiInputFormatter extends TextInputFormatter {
   final RegExp _emojiRegex = RegExp(
     r'[\u{1F600}-\u{1F64F}' // Emoticons
@@ -99,13 +111,15 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
 
     final trimmedValue = value.trim();
 
-    if (trimmedValue.length > 30) {
-      return 'Title must be 30 characters or less';
+    if (trimmedValue.length > 40) {
+      return 'Title must be 40 characters or less';
     }
 
     if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
       return 'Title cannot contain only numbers';
     }
+    final specialCharError = _validateSpecialCharacters(value, 'Title');
+  if (specialCharError != null) return specialCharError;
 
     return null;
   }
@@ -118,13 +132,15 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
 
     final trimmedValue = value.trim();
 
-    if (trimmedValue.length > 30) {
-      return 'Organization name must be 30 characters or less';
+    if (trimmedValue.length > 40) {
+      return 'Organization name must be 40 characters or less';
     }
 
     if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
       return 'Organization name cannot contain only numbers';
     }
+    final specialCharError = _validateSpecialCharacters(value, 'Organization name');
+  if (specialCharError != null) return specialCharError;
 
     return null;
   }
@@ -172,6 +188,9 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
     if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
       return 'Description cannot contain only numbers';
     }
+    if (!RegExp(r'[a-zA-Z]').hasMatch(trimmedValue)) {
+    return 'Description must contain at least one letter';
+  }
 
     return null;
   }
@@ -396,7 +415,7 @@ setState(() {
                               controller: _titleController,
                               label: 'Workshop Title *',
                               hint: 'e.g., Machine Learning Workshop',
-                              maxLength: 30,
+                              maxLength: 40,
                               validator: _validateTitle,
                             ),
                             const SizedBox(height: 16.0),
@@ -404,7 +423,7 @@ setState(() {
                               controller: _organizationController,
                               label: 'Organization',
                               hint: 'e.g., IEEE Student Branch',
-                              maxLength: 30,
+                              maxLength: 40,
                               validator: _validateOrganization,
                             ),
                             const SizedBox(height: 16.0),
@@ -633,57 +652,56 @@ void _showCertificatePreview() {
       ],
     );
   }
+Widget _buildTextFieldWithCharCounter({
+  required TextEditingController controller,
+  required String label,
+  String? hint,
+  int maxLines = 1,
+  required int minChars,
+  String? Function(String?)? validator,
+}) {
+  final currentLength = controller.text.length;
 
-  Widget _buildTextFieldWithCharCounter({
-    required TextEditingController controller,
-    required String label,
-    String? hint,
-    int maxLines = 1,
-    required int minChars,
-    String? Function(String?)? validator,
-  }) {
-    final currentLength = controller.text.length;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 14.0,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF0e0259),
-          ),
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        style: const TextStyle(
+          fontSize: 14.0,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF0e0259),
         ),
-        const SizedBox(height: 8.0),
-        TextFormField(
-          inputFormatters: [
-  NoEmojiInputFormatter(),
-],
-          controller: controller,
-          maxLines: maxLines,
-          validator: validator,
-          autovalidateMode: AutovalidateMode.disabled,
-          decoration: _inputDecoration(hint),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(top: 4.0, right: 4.0),
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: Text(
-              '$currentLength/$minChars characters',
-              style: TextStyle(
-                fontSize: 12.0,
-                color: Colors.grey[600],
-                fontWeight: FontWeight.w500,
-              ),
+      ),
+      const SizedBox(height: 8.0),
+      TextFormField(
+        inputFormatters: [
+          LengthLimitingTextInputFormatter(minChars),  // ← ADD THIS LINE!
+          NoEmojiInputFormatter(),
+        ],
+        controller: controller,
+        maxLines: maxLines,
+        validator: validator,
+        autovalidateMode: AutovalidateMode.onUserInteraction,
+        decoration: _inputDecoration(hint),
+      ),
+      Padding(
+        padding: const EdgeInsets.only(top: 4.0, right: 4.0),
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: Text(
+            '$currentLength/$minChars characters',
+            style: TextStyle(
+              fontSize: 12.0,
+              color: Colors.grey[600],
+              fontWeight: FontWeight.w500,
             ),
           ),
         ),
-      ],
-    );
-  }
-
+      ),
+    ],
+  );
+}
   Widget _buildTextField({
     required TextEditingController controller,
     required String label,

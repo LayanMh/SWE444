@@ -4,6 +4,17 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
 
+String? _validateSpecialCharacters(String? value, String fieldName) {
+  if (value == null || value.trim().isEmpty) return null;
+  final trimmedValue = value.trim();
+  
+  final specialCharRegex = RegExp(r'[!@#$%^&*()_+=\[\]{};:"\\|,.<>?/~`]');
+  if (specialCharRegex.hasMatch(trimmedValue)) {
+    return '$fieldName cannot contain special characters';
+  }
+  return null;
+}
+
 class NoEmojiInputFormatter extends TextInputFormatter {
   final RegExp _emojiRegex = RegExp(
     r'[\u{1F600}-\u{1F64F}' // Emoticons
@@ -120,13 +131,15 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
     
     final trimmedValue = value.trim();
     
-    if (trimmedValue.length > 30) {
-      return 'Title must be 30 characters or less';
+    if (trimmedValue.length >40) {
+      return 'Title must be 40 characters or less';
     }
     
     if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
       return 'Title cannot contain only numbers';
     }
+    final specialCharError = _validateSpecialCharacters(value, 'Title');
+  if (specialCharError != null) return specialCharError;
     
     return null;
   }
@@ -139,36 +152,67 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
     
     final trimmedValue = value.trim();
     
-    if (trimmedValue.length > 30) {
-      return 'Organization name must be 30 characters or less';
+    if (trimmedValue.length > 40) {
+      return 'Organization name must be 40 characters or less';
     }
     
     if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
       return 'Organization name cannot contain only numbers';
     }
+    final specialCharError = _validateSpecialCharacters(value, 'Organization name');
+  if (specialCharError != null) return specialCharError;
     
     return null;
   }
 
   // Validation: Link/URL
-  String? _validateLink(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return null;
-    }
-    
-   final trimmedValue = value.trim().toLowerCase();
-    
-    if (!trimmedValue.startsWith('http://github.com/') &&
-        !trimmedValue.startsWith('https://github.com/')) {
-      return 'Link must be a GitHub URL https://github.com/';
-    }
-    
-    if (trimmedValue.length > 500) {
-      return 'URL must be 500 characters or less';
-    }
-    
+ String? _validateLink(String? value) {
+  if (value == null || value.trim().isEmpty) {
+    return null; // optional field
+  }
+
+  final trimmedValue = value.trim().toLowerCase();
+
+  // ✅ 1. Allow user to type any partial GitHub prefix without showing error
+  final allowedPrefixes = [
+    'h',
+    'ht',
+    'htt',
+    'http',
+    'https',
+    'http:',
+    'https:',
+    'http:/',
+    'https:/',
+    'http://',
+    'https://',
+    'https://g',
+    'https://gi',
+    'https://git',
+    'https://gith',
+    'https://githu',
+    'https://github',
+    'https://github.',
+    'https://github.c',
+    'https://github.co',
+    'https://github.com',
+  ];
+  if (allowedPrefixes.any((prefix) => trimmedValue == prefix)) {
     return null;
   }
+
+  // ✅ 2. Valid GitHub URLs
+  if (trimmedValue.startsWith('http://github.com/') ||
+      trimmedValue.startsWith('https://github.com/')) {
+    if (trimmedValue.length > 150) {
+      return 'URL must be 150 characters or less';
+    }
+    return null; // valid
+  }
+
+  // ✅ 3. Everything else = invalid
+  return 'Link must be a valid GitHub URL (https://github.com/...)';
+}
 
   // Validation: Description
  String? _validateDescription(String? value) {
@@ -185,7 +229,9 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
   if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
     return 'Description cannot contain only numbers';
   }
-  
+  if (!RegExp(r'[a-zA-Z]').hasMatch(trimmedValue)) {
+    return 'Description must contain at least one letter';
+  }
   return null;
 }
   // Validation: Date Range
@@ -401,7 +447,7 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
                               controller: _titleController,
                               label: 'Project Title *',
                               hint: 'e.g., AI Research Project',
-                              maxLength: 30,
+                              maxLength:40,
                               validator: _validateTitle,
                             ),
                             const SizedBox(height: 16.0),
@@ -409,7 +455,7 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
                               controller: _organizationController,
                               label: 'Organization',
                               hint: 'e.g., Google Developer Student Club',
-                              maxLength: 30,
+                              maxLength: 40,
                               validator: _validateOrganization,
                             ),
                             const SizedBox(height: 16.0),
@@ -418,6 +464,7 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
                               label: 'Link/Attachment',
                               hint: 'e.g., https://github.com/yourproject',
                               validator: _validateLink,
+                              maxLength: 150,
                             ),
                             const SizedBox(height: 16.0),
                             _buildDatePicker(
@@ -600,90 +647,91 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
       ],
     );
   }
-
-  Widget _buildTextFieldWithWordCounter({
-    required TextEditingController controller,
-    required String label,
-    String? hint,
-    int maxLines = 1,
-    required int minWords,
-    String? Function(String?)? validator,
-  }) {
-    final currentLength = controller.text.length;
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 14.0,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF0e0259),
-          ),
+  
+Widget _buildTextFieldWithWordCounter({
+  required TextEditingController controller,
+  required String label,
+  String? hint,
+  int maxLines = 1,
+  required int minWords,
+  String? Function(String?)? validator,
+}) {
+  final currentLength = controller.text.length;
+  
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        style: const TextStyle(
+          fontSize: 14.0,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF0e0259),
         ),
-        const SizedBox(height: 8.0),
-        TextFormField(
-          inputFormatters: [
-  NoEmojiInputFormatter(),
-],
-          controller: controller,
-          maxLines: maxLines,
-          validator: validator,
-          autovalidateMode: AutovalidateMode.disabled,
-          decoration: _inputDecoration(hint),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(top: 4.0, right: 4.0),
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: Text(
-              '$currentLength/$minWords characters',
-              style: TextStyle(
-                fontSize: 12.0,
-                color: Colors.grey[600],
-                fontWeight: FontWeight.w500,
-              ),
+      ),
+      const SizedBox(height: 8.0),
+      TextFormField(
+        inputFormatters: [
+          LengthLimitingTextInputFormatter(minWords),  // ← ADD THIS LINE!
+          NoEmojiInputFormatter(),
+        ],
+        controller: controller,
+        maxLines: maxLines,
+        validator: validator,
+        autovalidateMode: AutovalidateMode.onUserInteraction, 
+        decoration: _inputDecoration(hint),
+      ),
+      Padding(
+        padding: const EdgeInsets.only(top: 4.0, right: 4.0),
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: Text(
+            '$currentLength/$minWords characters',
+            style: TextStyle(
+              fontSize: 12.0,
+              color: Colors.grey[600],
+              fontWeight: FontWeight.w500,
             ),
           ),
         ),
-      ],
-    );
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    String? hint,
-    int maxLines = 1,
-    String? Function(String?)? validator,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 14.0,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF0e0259),
-          ),
+      ),
+    ],
+  );
+}
+ Widget _buildTextField({
+  required TextEditingController controller,
+  required String label,
+  String? hint,
+  int maxLines = 1,
+  String? Function(String?)? validator,
+  int? maxLength,  // ← ADD THIS PARAMETER
+}) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        style: const TextStyle(
+          fontSize: 14.0,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF0e0259),
         ),
-        const SizedBox(height: 8.0),
-        TextFormField(
-          inputFormatters: [
-  NoEmojiInputFormatter(),
-],
-          controller: controller,
-          maxLines: maxLines,
-          validator: validator,
-          autovalidateMode: AutovalidateMode.onUserInteraction,
-          decoration: _inputDecoration(hint),
-        ),
-      ],
-    );
-  }
-
+      ),
+      const SizedBox(height: 8.0),
+      TextFormField(
+        inputFormatters: [
+          if (maxLength != null) LengthLimitingTextInputFormatter(maxLength),  // ← ADD THIS LINE!
+          NoEmojiInputFormatter(),
+        ],
+        controller: controller,
+        maxLines: maxLines,
+        validator: validator,
+        autovalidateMode: AutovalidateMode.onUserInteraction,
+        decoration: _inputDecoration(hint),
+      ),
+    ],
+  );
+}
   InputDecoration _inputDecoration(String? hint) {
     return InputDecoration(
       hintText: hint,

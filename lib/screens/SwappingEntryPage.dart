@@ -62,110 +62,120 @@ class _SwappingEntryPageState extends State<SwappingEntryPage> {
   void _showInfoPopup() {
     showDialog(
       context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 40),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(26, 24, 26, 18),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                "Absherk Swapping is Easy Now!",
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF0097B2),
-                ),
-              ),
-              const SizedBox(height: 18),
-              const Text(
-                "Process Overview:",
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 16,
-                  color: Color(0xFF0E0259),
-                ),
-              ),
-              const SizedBox(height: 10),
-              const Text(
-                "• Fill out your current group and the group you wish to move to.\n"
-                "• Optionally, list the extra courses you have, want, or have completed.\n"
-                "• Submit your swap request.\n"
-                "• Once another student's request matches yours, both will be notified automatically.\n"
-                "• Finally, you can view the generated PDF.\n",
-                style: TextStyle(
-                  fontSize: 15.2,
-                  height: 1.55,
-                  color: Colors.black87,
-                ),
-              ),
-              const Divider(thickness: 1, height: 28, color: Color(0xFFE0E0E0)),
-              const Text(
-                "Important Notes:",
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 16,
-                  color: Colors.redAccent,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Color(0xFFFBEAEA),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Text(
-                  "• You can only have one swap request per semester.\n"
-                  "• Once confirmed, your request cannot be deleted or modified.\n",
-                  style: TextStyle(
-                    fontSize: 14.8,
-                    height: 1.5,
-                    color: Colors.redAccent,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 18),
-              const Align(
-                alignment: Alignment.centerRight,
-                child: Text(
-                  "Enjoy the journey.",
-                  style: TextStyle(
-                    fontSize: 15.5,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF0097B2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    backgroundColor: const Color(0xFF0097B2),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
+      builder: (dialogContext) {
+        final screenWidth = MediaQuery.of(dialogContext).size.width;
+        final maxDialogWidth = screenWidth < 360
+            ? screenWidth - 32.0
+            : 340.0; // keep compact on Pixel 7
+
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 30),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxDialogWidth),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "Absherk Swapping is Easy Now!",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF0097B2),
                     ),
                   ),
-                  child: const Text(
-                    "Got it",
+                  const SizedBox(height: 14),
+                  const Text(
+                    "Process Overview:",
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 15,
+                      color: Color(0xFF0E0259),
                     ),
                   ),
-                ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    "• Fill out your current group and the group you wish to move to.\n"
+                    "• Optionally, list the extra courses you have, want, or have completed.\n"
+                    "• Submit your swap request.\n"
+                    "• Once another student's request matches yours, both will be notified automatically.\n"
+                    "• Finally, you can view the generated PDF.\n",
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      height: 1.45,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const Divider(thickness: 1, height: 24, color: Color(0xFFE0E0E0)),
+                  const Text(
+                    "Important Notes:",
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                      color: Colors.redAccent,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFBEAEA),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Text(
+                      "• You can only have one swap request per semester.\n"
+                      "• Once confirmed, your request cannot be deleted or modified.\n",
+                      style: TextStyle(
+                        fontSize: 13,
+                        height: 1.4,
+                        color: Colors.redAccent,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  const Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      "Enjoy the journey.",
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF0097B2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(dialogContext),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        backgroundColor: const Color(0xFF0097B2),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 22, vertical: 10),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: const Text(
+                        "Got it",
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 

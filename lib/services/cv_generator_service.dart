@@ -228,6 +228,7 @@ DESCRIPTION HANDLING (CRITICAL):
         }
         buffer.writeln('  Has Certificate: ${project['certificateUrl'] != null ? 'Yes (completed and documented)' : 'No'}');
         buffer.writeln();
+        
       }
     }
     
@@ -333,6 +334,18 @@ DESCRIPTION HANDLING (CRITICAL):
     buffer.writeln('13. Format should be clean and ready for PDF conversion');
     buffer.writeln('14. Make bullet points short, powerful, and achievement-oriented');
     buffer.writeln('15. If certificate exists, subtly highlight completion/certification in description');
+    buffer.writeln('=== GIBBERISH & INVALID INPUT DETECTION ===');
+    buffer.writeln('16. QUALITY CHECK:');
+    buffer.writeln('   - If any user input appears to be gibberish, random characters, keyboard mashing, or meaningless text:');
+    buffer.writeln('     * Examples: "gjdjsjajajaj", "asdfasdf", "qwerty", "aaaaaaa", "12345", "test test test"');
+    buffer.writeln('     * DO NOT include that item in the CV');
+    buffer.writeln('     * Skip that entry entirely as if it doesn\'t exist');
+    buffer.writeln('   - Only include items with meaningful, coherent information');
+    buffer.writeln('   - If a title/name looks valid but description is gibberish, create a professional description');
+    buffer.writeln('   - If BOTH title and description are gibberish, omit the entire item');
+    buffer.writeln('   - If ALL items in a section are gibberish, omit the entire section');
+    buffer.writeln('   - Maintain professional standards - only include legitimate content');
+
     
     return buffer.toString();
   }
