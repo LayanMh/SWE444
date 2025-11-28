@@ -11,7 +11,6 @@ import 'dart:convert';
 String? _validateSpecialCharacters(String? value, String fieldName) {
   if (value == null || value.trim().isEmpty) return null;
   final trimmedValue = value.trim();
-  
   // Check for special characters (allowing only letters, numbers, spaces, hyphens, and apostrophes)
   final specialCharRegex = RegExp(r'[!@#$%^&*()_+=\[\]{};:"\\|,.<>?/~`]');
   if (specialCharRegex.hasMatch(trimmedValue)) {
@@ -108,19 +107,15 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
     if (value == null || value.trim().isEmpty) {
       return 'Please enter a workshop title';
     }
-
     final trimmedValue = value.trim();
-
     if (trimmedValue.length > 40) {
       return 'Title must be 40 characters or less';
     }
-
     if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
       return 'Title cannot contain only numbers';
     }
     final specialCharError = _validateSpecialCharacters(value, 'Title');
-  if (specialCharError != null) return specialCharError;
-
+    if (specialCharError != null) return specialCharError;
     return null;
   }
 
@@ -129,19 +124,15 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
     if (value == null || value.trim().isEmpty) {
       return null;
     }
-
     final trimmedValue = value.trim();
-
     if (trimmedValue.length > 40) {
       return 'Organization name must be 40 characters or less';
     }
-
     if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
       return 'Organization name cannot contain only numbers';
     }
     final specialCharError = _validateSpecialCharacters(value, 'Organization name');
-  if (specialCharError != null) return specialCharError;
-
+    if (specialCharError != null) return specialCharError;
     return null;
   }
 
@@ -150,24 +141,18 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
     if (value == null || value.trim().isEmpty) {
       return 'Please enter a year';
     }
-
     final trimmedValue = value.trim();
     final year = int.tryParse(trimmedValue);
-
     if (year == null) {
       return 'Please enter a valid year';
     }
-
     final currentYear = DateTime.now().year;
-
     if (year < 2000) {
       return 'Year must be 2000 or later';
     }
-
     if (year > currentYear) {
       return 'Year cannot be in the future';
     }
-
     return null;
   }
 
@@ -177,21 +162,17 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
     if (value == null || value.trim().isEmpty) {
       return null;
     }
-
     final trimmedValue = value.trim();
-
     // Only validate if user has entered something
     if (trimmedValue.length > 200) {
       return 'Description must be at most 200 characters';
     }
-
     if (RegExp(r'^[0-9]+$').hasMatch(trimmedValue)) {
       return 'Description cannot contain only numbers';
     }
     if (!RegExp(r'[a-zA-Z]').hasMatch(trimmedValue)) {
-    return 'Description must contain at least one letter';
-  }
-
+      return 'Description must contain at least one letter';
+    }
     return null;
   }
 
@@ -203,12 +184,12 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
         maxHeight: 1920,
         imageQuality: 85,
       );
-     if (image != null) {
-  setState(() {
-    _certificateFile = File(image.path);
-    _certificateError = null; // ← ADD THIS LINE
-  });
-}
+      if (image != null) {
+        setState(() {
+          _certificateFile = File(image.path);
+          _certificateError = null;
+        });
+      }
     } catch (e) {
       debugPrint('Error picking image: $e');
       _showErrorMessage('Failed to pick image');
@@ -220,7 +201,6 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
 
     try {
       debugPrint('📤 Starting upload to ImgBB...');
-      
       // Read file as bytes
       final bytes = await _certificateFile!.readAsBytes();
       final base64Image = base64Encode(bytes);
@@ -245,7 +225,6 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
         debugPrint('Response body: ${response.body}');
         throw Exception('Upload failed with status: ${response.statusCode}');
       }
-      
     } catch (e) {
       debugPrint('❌ Upload error: $e');
       _showErrorMessage('Failed to upload certificate. Please check your internet connection.');
@@ -257,18 +236,17 @@ class _WorkshopFormPageState extends State<WorkshopFormPage> {
     if (!_formKey.currentState!.validate()) return;
 
     // Check if certificate is provided
-    // Check if certificate is provided
-if (_certificateFile == null && _existingCertificateUrl == null) {
-  setState(() {
-    _certificateError = 'Please upload a certificate';
-  });
-  return;
-}
+    if (_certificateFile == null && _existingCertificateUrl == null) {
+      setState(() {
+        _certificateError = 'Please upload a certificate';
+      });
+      return;
+    }
 
-setState(() {
-  _isSaving = true;
-  _certificateError = null; // Clear any previous error
-});
+    setState(() {
+      _isSaving = true;
+      _certificateError = null; // Clear any previous error
+    });
 
     try {
       final docId = await _getUserDocId();
@@ -315,7 +293,6 @@ setState(() {
       }
     } catch (e) {
       debugPrint('Error saving workshop: $e');
-
       if (e is FirebaseException) {
         switch (e.code) {
           case 'permission-denied':
@@ -342,7 +319,6 @@ setState(() {
 
   void _showErrorMessage(String message) {
     if (!mounted) return;
-
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -357,14 +333,18 @@ setState(() {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: const Color(0xFFF5F8FA),
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF006B7A), Color(0xFF0097b2), Color(0xFF0e0259)],
-            stops: [0.0, 0.6, 1.0],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFF01509B),  // Deep blue (matching mockup)
+              Color(0xFF0571C5),  // Medium blue
+              Color(0xFF83C8EF),  // Light blue (matching mockup)
+            ],
+            stops: [0.0, 0.5, 1.0],
           ),
         ),
         child: SafeArea(
@@ -396,16 +376,16 @@ setState(() {
               ),
               Expanded(
                 child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.grey[50],
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(24),
-                      topRight: Radius.circular(24),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF5F8FA),
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(30),
+                      topRight: Radius.circular(30),
                     ),
                   ),
                   child: SingleChildScrollView(
                     child: Padding(
-                      padding: const EdgeInsets.all(16.0),
+                      padding: const EdgeInsets.all(20.0),
                       child: Form(
                         key: _formKey,
                         child: Column(
@@ -460,145 +440,154 @@ setState(() {
       ),
     );
   }
-Widget _buildCertificatePicker() {
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      const Text(
-        'Certificate *',
-        style: TextStyle(
-          fontSize: 14.0,
-          fontWeight: FontWeight.w600,
-          color: Color(0xFF0e0259),
-        ),
-      ),
-      const SizedBox(height: 8.0),
-      InkWell(
-        onTap: () {
-          if (_certificateFile != null || _existingCertificateUrl != null) {
-            _showCertificatePreview();
-          } else {
-            _pickCertificate();
-          }
-        },
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: _certificateError != null 
-                  ? Colors.red 
-                  : Colors.grey[300]!,
-            ),
+
+  Widget _buildCertificatePicker() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Certificate *',
+          style: TextStyle(
+            fontSize: 14.0,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF01509B),
           ),
-          child: Row(
-            children: [
-              const Icon(Icons.upload_file, color: Color(0xFF0097b2)),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  _certificateFile != null
-                      ? 'Certificate selected (tap to view)'
-                      : _existingCertificateUrl != null
-                          ? 'Certificate uploaded (tap to view)'
-                          : 'Tap to upload certificate',
-                  style: TextStyle(
-                    color: _certificateFile != null || _existingCertificateUrl != null
-                        ? const Color(0xFF0097b2)
-                        : Colors.grey[600],
-                  ),
-                ),
+        ),
+        const SizedBox(height: 8.0),
+        InkWell(
+          onTap: () {
+            if (_certificateFile != null || _existingCertificateUrl != null) {
+              _showCertificatePreview();
+            } else {
+              _pickCertificate();
+            }
+          },
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _certificateError != null 
+                    ? Colors.red 
+                    : const Color(0xFF01509B).withOpacity(0.3),
               ),
-              if (_certificateFile != null || _existingCertificateUrl != null) ...[
-                const SizedBox(width: 8),
-                InkWell(
-                  onTap: () {
-                    setState(() {
-                      _certificateFile = null;
-                      _existingCertificateUrl = null;
-                    });
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.close,
-                      color: Colors.white,
-                      size: 16,
-                    ),
-                  ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF01509B).withOpacity(0.05),
+                  spreadRadius: 0,
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
                 ),
               ],
-            ],
-          ),
-        ),
-      ),
-      // ← ADD ERROR MESSAGE DISPLAY
-      if (_certificateError != null)
-        Padding(
-          padding: const EdgeInsets.only(top: 8.0, left: 12.0),
-          child: Text(
-            _certificateError!,
-            style: const TextStyle(
-               color: Colors.red,
-              fontSize: 12.0,
             ),
-          ),
-        ),
-    ],
-  );
-}
-void _showCertificatePreview() {
-  showDialog(
-    context: context,
-    builder: (BuildContext context) {
-      return Dialog(
-        backgroundColor: Colors.transparent,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.8,
-              ),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Stack(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: _certificateFile != null
-                        ? Image.file(_certificateFile!, fit: BoxFit.contain)
+            child: Row(
+              children: [
+                Icon(Icons.upload_file, color: const Color(0xFF01509B)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    _certificateFile != null
+                        ? 'Certificate selected (tap to view)'
                         : _existingCertificateUrl != null
-                            ? Image.network(_existingCertificateUrl!, fit: BoxFit.contain)
-                            : const SizedBox.shrink(),
+                            ? 'Certificate uploaded (tap to view)'
+                            : 'Tap to upload certificate',
+                    style: TextStyle(
+                      color: _certificateFile != null || _existingCertificateUrl != null
+                          ? const Color(0xFF01509B)
+                          : Colors.grey[600],
+                    ),
                   ),
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close, color: Colors.white),
-                      style: IconButton.styleFrom(
-                        backgroundColor: Colors.black54,
+                ),
+                if (_certificateFile != null || _existingCertificateUrl != null) ...[
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: () {
+                      setState(() {
+                        _certificateFile = null;
+                        _existingCertificateUrl = null;
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.close,
+                        color: Colors.white,
+                        size: 16,
                       ),
                     ),
                   ),
                 ],
+              ],
+            ),
+          ),
+        ),
+        if (_certificateError != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8.0, left: 12.0),
+            child: Text(
+              _certificateError!,
+              style: const TextStyle(
+                color: Colors.red,
+                fontSize: 12.0,
               ),
             ),
-          ],
-        ),
-      );
-    },
-  );
-}
+          ),
+      ],
+    );
+  }
+
+  void _showCertificatePreview() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Stack(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: _certificateFile != null
+                          ? Image.file(_certificateFile!, fit: BoxFit.contain)
+                          : _existingCertificateUrl != null
+                              ? Image.network(_existingCertificateUrl!, fit: BoxFit.contain)
+                              : const SizedBox.shrink(),
+                    ),
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close, color: Colors.white),
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.black54,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
   Widget _buildTextFieldWithCounter({
     required TextEditingController controller,
@@ -619,7 +608,7 @@ void _showCertificatePreview() {
           style: const TextStyle(
             fontSize: 14.0,
             fontWeight: FontWeight.w600,
-            color: Color(0xFF0e0259),
+            color: Color(0xFF01509B),
           ),
         ),
         const SizedBox(height: 8.0),
@@ -652,56 +641,58 @@ void _showCertificatePreview() {
       ],
     );
   }
-Widget _buildTextFieldWithCharCounter({
-  required TextEditingController controller,
-  required String label,
-  String? hint,
-  int maxLines = 1,
-  required int minChars,
-  String? Function(String?)? validator,
-}) {
-  final currentLength = controller.text.length;
 
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(
-        label,
-        style: const TextStyle(
-          fontSize: 14.0,
-          fontWeight: FontWeight.w600,
-          color: Color(0xFF0e0259),
+  Widget _buildTextFieldWithCharCounter({
+    required TextEditingController controller,
+    required String label,
+    String? hint,
+    int maxLines = 1,
+    required int minChars,
+    String? Function(String?)? validator,
+  }) {
+    final currentLength = controller.text.length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14.0,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF01509B),
+          ),
         ),
-      ),
-      const SizedBox(height: 8.0),
-      TextFormField(
-        inputFormatters: [
-          LengthLimitingTextInputFormatter(minChars),  // ← ADD THIS LINE!
-          NoEmojiInputFormatter(),
-        ],
-        controller: controller,
-        maxLines: maxLines,
-        validator: validator,
-        autovalidateMode: AutovalidateMode.onUserInteraction,
-        decoration: _inputDecoration(hint),
-      ),
-      Padding(
-        padding: const EdgeInsets.only(top: 4.0, right: 4.0),
-        child: Align(
-          alignment: Alignment.centerRight,
-          child: Text(
-            '$currentLength/$minChars characters',
-            style: TextStyle(
-              fontSize: 12.0,
-              color: Colors.grey[600],
-              fontWeight: FontWeight.w500,
+        const SizedBox(height: 8.0),
+        TextFormField(
+          inputFormatters: [
+            LengthLimitingTextInputFormatter(minChars),
+            NoEmojiInputFormatter(),
+          ],
+          controller: controller,
+          maxLines: maxLines,
+          validator: validator,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+          decoration: _inputDecoration(hint),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 4.0, right: 4.0),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              '$currentLength/$minChars characters',
+              style: TextStyle(
+                fontSize: 12.0,
+                color: Colors.grey[600],
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ),
-      ),
-    ],
-  );
-}
+      ],
+    );
+  }
+
   Widget _buildTextField({
     required TextEditingController controller,
     required String label,
@@ -718,14 +709,14 @@ Widget _buildTextFieldWithCharCounter({
           style: const TextStyle(
             fontSize: 14.0,
             fontWeight: FontWeight.w600,
-            color: Color(0xFF0e0259),
+            color: Color(0xFF01509B),
           ),
         ),
         const SizedBox(height: 8.0),
         TextFormField(
           inputFormatters: [
-  NoEmojiInputFormatter(),
-],
+            NoEmojiInputFormatter(),
+          ],
           controller: controller,
           maxLines: maxLines,
           validator: validator,
@@ -740,24 +731,28 @@ Widget _buildTextFieldWithCharCounter({
   InputDecoration _inputDecoration(String? hint) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: TextStyle(color: Colors.grey[400]),
+      hintStyle: TextStyle(color: Colors.grey[500]),
       filled: true,
       fillColor: Colors.white,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey[300]!),
+        borderSide: BorderSide(color: const Color(0xFF01509B).withOpacity(0.3)),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey[300]!),
+        borderSide: BorderSide(color: const Color(0xFF01509B).withOpacity(0.3)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFF0097b2), width: 2),
+        borderSide: const BorderSide(color: Color(0xFF01509B), width: 2),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: Colors.red),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Colors.red, width: 2),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     );
@@ -768,14 +763,17 @@ Widget _buildTextFieldWithCharCounter({
       height: 48,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF0097b2), Color(0xFF006B7A)],
+          colors: [Color(0xFF01509B), Color(0xFF83C8EF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0097b2).withOpacity(0.3),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+            color: const Color(0xFF01509B).withOpacity(0.3),
+            spreadRadius: 0,
+            blurRadius: 8,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -809,5 +807,4 @@ Widget _buildTextFieldWithCharCounter({
       ),
     );
   }
-  
 }

@@ -96,12 +96,25 @@ class _ExperiencePageState extends State<ExperiencePage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Item'),
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text(
+          'Delete Item',
+          style: TextStyle(
+            color: Color(0xFF01509B),
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         content: const Text('Are you sure you want to delete this item?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: Colors.grey),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
@@ -136,18 +149,19 @@ class _ExperiencePageState extends State<ExperiencePage> {
         category: items,
         'updatedAt': FieldValue.serverTimestamp(),
       });
-// Delete certificate in background (non-blocking)
-final certificateUrl = item['certificateUrl'];
-if (certificateUrl != null && 
-    certificateUrl.toString().trim().isNotEmpty && 
-    certificateUrl.toString().contains('firebasestorage.googleapis.com')) {
-  try {
-    await FirebaseStorage.instance.refFromURL(certificateUrl).delete();
-    debugPrint('Certificate deleted successfully');
-  } catch (e) {
-    debugPrint('Error deleting certificate: $e');
-  }
-}
+      
+      // Delete certificate in background (non-blocking)
+      final certificateUrl = item['certificateUrl'];
+      if (certificateUrl != null && 
+          certificateUrl.toString().trim().isNotEmpty && 
+          certificateUrl.toString().contains('firebasestorage.googleapis.com')) {
+        try {
+          await FirebaseStorage.instance.refFromURL(certificateUrl).delete();
+          debugPrint('Certificate deleted successfully');
+        } catch (e) {
+          debugPrint('Error deleting certificate: $e');
+        }
+      }
     } catch (e) {
       debugPrint('Error deleting item: $e');
       // Revert UI on error
@@ -161,7 +175,7 @@ if (certificateUrl != null &&
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: const Color(0xFF4ECDC4),
+        backgroundColor: const Color(0xFF01509B),
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 2),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -256,10 +270,10 @@ if (certificateUrl != null &&
         borderRadius: BorderRadius.circular(16.0),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 6,
-            offset: const Offset(0, 3),
+            color: Colors.black.withOpacity(0.08),
+            spreadRadius: 0,
+            blurRadius: 10,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
@@ -273,10 +287,10 @@ if (certificateUrl != null &&
                 Container(
                   padding: const EdgeInsets.all(10.0),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0097b2).withOpacity(0.1),
+                    color: const Color(0xFF01509B).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12.0),
                   ),
-                  child: Icon(icon, color: const Color(0xFF0097b2), size: 24.0),
+                  child: Icon(icon, color: const Color(0xFF01509B), size: 24.0),
                 ),
                 const SizedBox(width: 12.0),
                 Expanded(
@@ -285,7 +299,7 @@ if (certificateUrl != null &&
                     style: const TextStyle(
                       fontSize: 18.0,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF0e0259),
+                      color: Color(0xFF01509B),
                     ),
                   ),
                 ),
@@ -321,12 +335,16 @@ if (certificateUrl != null &&
                   child: Container(
                     padding: const EdgeInsets.all(8.0),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF4ECDC4).withOpacity(0.1),
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF83C8EF), Color(0xFF01509B)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
                       borderRadius: BorderRadius.circular(12.0),
                     ),
                     child: const Icon(
                       Icons.add,
-                      color: Color(0xFF0097b2),
+                      color: Colors.white,
                       size: 24.0,
                     ),
                   ),
@@ -384,10 +402,17 @@ if (certificateUrl != null &&
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 12.0),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0097b2).withOpacity(0.05),
+                      gradient: LinearGradient(
+                        colors: [
+                          const Color(0xFF01509B).withOpacity(0.05),
+                          const Color(0xFF83C8EF).withOpacity(0.05),
+                        ],
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                      ),
                       borderRadius: BorderRadius.circular(8.0),
                       border: Border.all(
-                        color: const Color(0xFF0097b2).withOpacity(0.3),
+                        color: const Color(0xFF01509B).withOpacity(0.3),
                       ),
                     ),
                     child: Row(
@@ -398,14 +423,14 @@ if (certificateUrl != null &&
                           style: const TextStyle(
                             fontSize: 14.0,
                             fontWeight: FontWeight.w600,
-                            color: Color(0xFF0097b2),
+                            color: Color(0xFF01509B),
                           ),
                         ),
                         const SizedBox(width: 4),
                         const Icon(
                           Icons.arrow_forward_ios,
                           size: 14,
-                          color: Color(0xFF0097b2),
+                          color: Color(0xFF01509B),
                         ),
                       ],
                     ),
@@ -442,10 +467,17 @@ if (certificateUrl != null &&
     return Container(
       margin: const EdgeInsets.only(left: 16.0, right: 16.0, bottom: 12.0),
       decoration: BoxDecoration(
-        color: const Color(0xFF95E1D3).withOpacity(0.05),
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFF83C8EF).withOpacity(0.1),
+            const Color(0xFF01509B).withOpacity(0.05),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: BorderRadius.circular(12.0),
         border: Border.all(
-          color: const Color(0xFF95E1D3).withOpacity(0.2),
+          color: const Color(0xFF83C8EF).withOpacity(0.3),
         ),
       ),
       child: Material(
@@ -479,7 +511,7 @@ if (certificateUrl != null &&
                             style: const TextStyle(
                               fontSize: 16.0,
                               fontWeight: FontWeight.w600,
-                              color: Color(0xFF0e0259),
+                              color: Color(0xFF01509B),
                             ),
                           ),
                           if (dateOrHoursText.isNotEmpty)
@@ -501,7 +533,7 @@ if (certificateUrl != null &&
                                 'Tap to view details',
                                 style: TextStyle(
                                   fontSize: 12.0,
-                                  color: const Color(0xFF0097b2).withOpacity(0.7),
+                                  color: const Color(0xFF01509B).withOpacity(0.7),
                                   fontStyle: FontStyle.italic,
                                 ),
                               ),
@@ -511,7 +543,10 @@ if (certificateUrl != null &&
                     ),
                     const SizedBox(width: 8.0),
                     PopupMenuButton<String>(
-                      icon: Icon(Icons.more_vert, color: Colors.grey[600], size: 20.0),
+                      icon: Icon(Icons.more_vert, color: const Color(0xFF01509B).withOpacity(0.7), size: 20.0),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       onSelected: (value) async {
                         if (value == 'edit') {
                           Widget formPage;
@@ -548,7 +583,7 @@ if (certificateUrl != null &&
                           value: 'edit',
                           child: Row(
                             children: [
-                              Icon(Icons.edit, color: Color(0xFF0097b2), size: 20),
+                              Icon(Icons.edit, color: Color(0xFF01509B), size: 20),
                               SizedBox(width: 8),
                               Text('Edit'),
                             ],
@@ -610,7 +645,7 @@ if (certificateUrl != null &&
                                 item['link'],
                                 style: const TextStyle(
                                   fontSize: 13.0,
-                                  color: Color(0xFF0097b2),
+                                  color: Color(0xFF01509B),
                                   decoration: TextDecoration.underline,
                                 ),
                                 maxLines: null,
@@ -629,13 +664,13 @@ if (certificateUrl != null &&
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.upload_file, size: 16, color: Color(0xFF0097b2)),
+                            Icon(Icons.upload_file, size: 16, color: Color(0xFF01509B)),
                             SizedBox(width: 6),
                             Text(
                               'Certificate uploaded (tap to view)',
                               style: TextStyle(
                                 fontSize: 13.0,
-                                color: Color(0xFF0097b2),
+                                color: Color(0xFF01509B),
                                 fontWeight: FontWeight.w500,
                                 decoration: TextDecoration.underline,
                               ),
@@ -668,63 +703,78 @@ if (certificateUrl != null &&
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: const Color(0xFFF5F8FA),
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
             colors: [
-              Color(0xFF006B7A),
-              Color(0xFF0097b2),
-              Color(0xFF0e0259),
+              Color(0xFF01509B),  // Deep blue (matching mockup)
+              Color(0xFF0571C5),  // Medium blue
+              Color(0xFF83C8EF),  // Light blue (matching mockup)
             ],
-            stops: [0.0, 0.6, 1.0],
+            stops: [0.0, 0.5, 1.0],
           ),
         ),
         child: SafeArea(
           child: Column(
             children: [
-              const Padding(
-                padding: EdgeInsets.only(
-                  top: 16.0,
+              // Header section
+              Container(
+                padding: const EdgeInsets.only(
+                  top: 20.0,
                   left: 16.0,
                   right: 16.0,
-                  bottom: 8.0, 
+                  bottom: 20.0,
                 ),
-                child: SizedBox(
-                  height: 70, 
-                  child: Center(
-                    child: Text(
-                      'My Experience',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                        letterSpacing: 0.5,
+                child: Center(
+                  child: Column(
+                    children: [
+                      const Text(
+                        'My Experience',
+                        style: TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          letterSpacing: 0.5,
+                        ),
                       ),
-                      textAlign: TextAlign.center,
-                    ),
+                      const SizedBox(height: 4),
+                      Container(
+                        width: 40,
+                        height: 3,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.7),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
               Expanded(
                 child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.grey[50],
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(24),
-                      topRight: Radius.circular(24),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF5F8FA),
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(30),
+                      topRight: Radius.circular(30),
                     ),
                   ),
                   child: isLoading
-                      ? const Center(child: CircularProgressIndicator())
+                      ? Center(
+                          child: CircularProgressIndicator(
+                            color: const Color(0xFF01509B),
+                          ),
+                        )
                       : RefreshIndicator(
+                          color: const Color(0xFF01509B),
                           onRefresh: _loadExperienceData,
                           child: SingleChildScrollView(
                             physics: const AlwaysScrollableScrollPhysics(),
                             child: Padding(
-                              padding: const EdgeInsets.only(top: 16.0, bottom: 80.0),
+                              padding: const EdgeInsets.only(top: 20.0, bottom: 80.0),
                               child: Column(
                                 children: [
                                   _buildCategorySection(
@@ -762,71 +812,91 @@ if (certificateUrl != null &&
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          // Show loading indicator
-          showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => const Center(
-              child: CircularProgressIndicator(color: Colors.white),
+      floatingActionButton: Container(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF01509B), Color(0xFF83C8EF)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(30),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF01509B).withOpacity(0.3),
+              spreadRadius: 0,
+              blurRadius: 8,
+              offset: const Offset(0, 4),
             ),
-          );
+          ],
+        ),
+        child: FloatingActionButton.extended(
+          onPressed: () async {
+            // Show loading indicator
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (context) => const Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              ),
+            );
 
-          try {
-            // Check if user has experiences
-            final docId = await _getUserDocId();
-            if (docId == null) {
-              if (mounted) Navigator.pop(context); // Close loading
-              _showErrorMessage('Unable to identify user');
-              return;
-            }
+            try {
+              // Check if user has experiences
+              final docId = await _getUserDocId();
+              if (docId == null) {
+                if (mounted) Navigator.pop(context); // Close loading
+                _showErrorMessage('Unable to identify user');
+                return;
+              }
 
-            final doc = await _firestore.collection('users').doc(docId).get();
-            
-            if (!doc.exists) {
+              final doc = await _firestore.collection('users').doc(docId).get();
+              
+              if (!doc.exists) {
+                if (mounted) Navigator.pop(context);
+                _showErrorMessage('User data not found');
+                return;
+              }
+
+              final data = doc.data();
+              final projects = data?['projects'] ?? [];
+              final workshops = data?['workshops'] ?? [];
+              final clubs = data?['clubs'] ?? [];
+              final volunteering = data?['volunteering'] ?? [];
+
+              // Check if user has at least one experience
+              if (projects.isEmpty && workshops.isEmpty && clubs.isEmpty && volunteering.isEmpty) {
+                if (mounted) Navigator.pop(context); // Close loading
+                _showErrorMessage('Please add at least one project, workshop, club, or volunteering experience before generating CV');
+                return;
+              }
+
+              // Close loading dialog
               if (mounted) Navigator.pop(context);
-              _showErrorMessage('User data not found');
-              return;
-            }
 
-            final data = doc.data();
-            final projects = data?['projects'] ?? [];
-            final workshops = data?['workshops'] ?? [];
-            final clubs = data?['clubs'] ?? [];
-            final volunteering = data?['volunteering'] ?? [];
-
-            // Check if user has at least one experience
-            if (projects.isEmpty && workshops.isEmpty && clubs.isEmpty && volunteering.isEmpty) {
+              // Navigate to CV page
+              if (mounted) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const CVPage(autoGenerate: true),
+                  ),
+                );
+              }
+            } catch (e) {
               if (mounted) Navigator.pop(context); // Close loading
-              _showErrorMessage('Please add at least one project, workshop, club, or volunteering experience before generating CV');
-              return;
+              _showErrorMessage('Failed to check experiences: ${e.toString()}');
             }
-
-            // Close loading dialog
-            if (mounted) Navigator.pop(context);
-
-            // Navigate to CV page
-            if (mounted) {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const CVPage(autoGenerate: true),
-                ),
-              );
-            }
-          } catch (e) {
-            if (mounted) Navigator.pop(context); // Close loading
-            _showErrorMessage('Failed to check experiences: ${e.toString()}');
-          }
-        },
-        backgroundColor: const Color(0xFF0097b2),
-        icon: const Icon(Icons.description, color: Colors.white),
-        label: const Text(
-          'Generate CV',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
+          },
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          icon: const Icon(Icons.description, color: Colors.white),
+          label: const Text(
+            'Generate CV',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+              fontSize: 16,
+            ),
           ),
         ),
       ),

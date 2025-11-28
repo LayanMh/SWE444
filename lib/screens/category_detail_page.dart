@@ -314,9 +314,10 @@ Future<void> _deleteAll() async {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                Color(0xFF006B7A),
-                Color(0xFF0097b2),
-                Color(0xFF0e0259),
+              Color(0xFF01509B),
+    Color(0xFF0571C5),
+    Color(0xFF83C8EF),
+
               ],
               stops: [0.0, 0.6, 1.0],
             ),
@@ -341,7 +342,7 @@ Future<void> _deleteAll() async {
                       Container(
                         padding: const EdgeInsets.all(8.0),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.white.withOpacity(0.25),
                           borderRadius: BorderRadius.circular(10.0),
                         ),
                         child: Icon(widget.icon, color: Colors.white, size: 20.0),
@@ -370,13 +371,13 @@ Future<void> _deleteAll() async {
                 ),
                 Expanded(
                   child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.grey[50],
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(24),
-                        topRight: Radius.circular(24),
-                      ),
-                    ),
+                   decoration: const BoxDecoration(
+  color: Color(0xFFF5F8FA),
+  borderRadius: BorderRadius.only(
+    topLeft: Radius.circular(30),
+    topRight: Radius.circular(30),
+  ),
+),
                     child: isLoading
                         ? const Center(child: CircularProgressIndicator())
                         : items.isEmpty
@@ -418,11 +419,11 @@ Future<void> _deleteAll() async {
     return Container(
       margin: const EdgeInsets.only(bottom: 12.0),
       decoration: BoxDecoration(
-        color: const Color(0xFF95E1D3).withOpacity(0.05),
-        borderRadius: BorderRadius.circular(12.0),
-        border: Border.all(
-          color: const Color(0xFF95E1D3).withOpacity(0.2),
-        ),
+        color: Colors.white,
+border: Border.all(
+  color: const Color(0xFF01509B).withOpacity(0.15),
+),
+
       ),
       child: Material(
         color: Colors.transparent,
@@ -455,7 +456,7 @@ Future<void> _deleteAll() async {
                             style: const TextStyle(
                               fontSize: 16.0,
                               fontWeight: FontWeight.w600,
-                              color: Color(0xFF0e0259),
+                              color: Color(0xFF01509B),
                             ),
                           ),
                           if (dateOrHoursText.isNotEmpty)
@@ -477,7 +478,7 @@ Future<void> _deleteAll() async {
                                 'Tap to view details',
                                 style: TextStyle(
                                   fontSize: 12.0,
-                                  color: const Color(0xFF0097b2).withOpacity(0.7),
+                                  color: const Color(0xFF01509B).withOpacity(0.7),
                                   fontStyle: FontStyle.italic,
                                 ),
                               ),
@@ -526,7 +527,7 @@ Future<void> _deleteAll() async {
                           value: 'edit',
                           child: Row(
                             children: [
-                              Icon(Icons.edit, color: Color(0xFF0097b2), size: 20),
+                              Icon(Icons.edit, color: Color(0xFF01509B), size: 20),
                               SizedBox(width: 8),
                               Text('Edit'),
                             ],
@@ -588,7 +589,7 @@ Future<void> _deleteAll() async {
                                 item['link'],
                                 style: const TextStyle(
                                   fontSize: 13.0,
-                                  color: Color(0xFF0097b2),
+                                  color: Color(0xFF01509B),
                                   decoration: TextDecoration.underline,
                                 ),
                                 maxLines: null,
@@ -607,13 +608,13 @@ Future<void> _deleteAll() async {
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.upload_file, size: 16, color: Color(0xFF0097b2)),
+                            Icon(Icons.upload_file, size: 16, color: Color(0xFF01509B)),
                             SizedBox(width: 6),
                             Text(
                               'Certificate uploaded (tap to view)',
                               style: TextStyle(
                                 fontSize: 13.0,
-                                color: Color(0xFF0097b2),
+                                color: Color(0xFF01509B),
                                 fontWeight: FontWeight.w500,
                                 decoration: TextDecoration.underline,
                               ),

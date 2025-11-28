@@ -393,11 +393,15 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF006B7A), Color(0xFF0097b2), Color(0xFF0e0259)],
-            stops: [0.0, 0.6, 1.0],
-          ),
+  begin: Alignment.topCenter,
+  end: Alignment.bottomCenter,
+  colors: [
+    Color(0xFF01509B),
+    Color(0xFF0571C5),
+    Color(0xFF83C8EF),
+  ],
+  stops: [0.0, 0.5, 1.0],
+)
         ),
         child: SafeArea(
           child: Column(
@@ -428,13 +432,13 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
               ),
               Expanded(
                 child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.grey[50],
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(24),
-                      topRight: Radius.circular(24),
-                    ),
-                  ),
+                  decoration: const BoxDecoration(
+  color: Color(0xFFF5F8FA),
+  borderRadius: BorderRadius.only(
+    topLeft: Radius.circular(30),
+    topRight: Radius.circular(30),
+  ),
+),
                   child: SingleChildScrollView(
                     child: Padding(
                       padding: const EdgeInsets.all(16.0),
@@ -563,7 +567,7 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
           style: const TextStyle(
             fontSize: 14.0,
             fontWeight: FontWeight.w600,
-            color: Color(0xFF0e0259),
+            color: Color(0xFF01509B),
           ),
         ),
         const SizedBox(height: 8.0),
@@ -615,7 +619,7 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
           style: const TextStyle(
             fontSize: 14.0,
             fontWeight: FontWeight.w600,
-            color: Color(0xFF0e0259),
+            color: Color(0xFF01509B),
           ),
         ),
         const SizedBox(height: 8.0),
@@ -666,7 +670,7 @@ Widget _buildTextFieldWithWordCounter({
         style: const TextStyle(
           fontSize: 14.0,
           fontWeight: FontWeight.w600,
-          color: Color(0xFF0e0259),
+          color: Color(0xFF01509B),
         ),
       ),
       const SizedBox(height: 8.0),
@@ -714,7 +718,7 @@ Widget _buildTextFieldWithWordCounter({
         style: const TextStyle(
           fontSize: 14.0,
           fontWeight: FontWeight.w600,
-          color: Color(0xFF0e0259),
+          color: Color(0xFF01509B),
         ),
       ),
       const SizedBox(height: 8.0),
@@ -732,39 +736,45 @@ Widget _buildTextFieldWithWordCounter({
     ],
   );
 }
-  InputDecoration _inputDecoration(String? hint) {
-    return InputDecoration(
-      hintText: hint,
-      hintStyle: TextStyle(color: Colors.grey[400]),
-      filled: true,
-      fillColor: Colors.white,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey[300]!),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey[300]!),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFF0097b2), width: 2),
-      ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Colors.red),
-      ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-    );
-  }
+ InputDecoration _inputDecoration(String? hint) {
+  return InputDecoration(
+    hintText: hint,
+    hintStyle: TextStyle(color: Colors.grey[500]),
+    filled: true,
+    fillColor: Colors.white,
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(color: Color(0xFF01509B).withOpacity(0.3)),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(color: Color(0xFF01509B).withOpacity(0.3)),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(color: Color(0xFF01509B), width: 2),
+    ),
+    errorBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(color: Colors.red),
+    ),
+    focusedErrorBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(color: Colors.red, width: 2),
+    ),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+  );
+}
 
   Widget _buildSaveButton() {
     return Container(
       height: 48,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF0097b2), Color(0xFF006B7A)],
-        ),
+  colors: [Color(0xFF01509B), Color(0xFF83C8EF)],
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+),
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(

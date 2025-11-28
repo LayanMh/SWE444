@@ -752,7 +752,7 @@ class _CVPageState extends State<CVPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: const Color(0xFF4ECDC4),
+       backgroundColor: Color(0xFF01509B),
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 4),
       ),
@@ -777,12 +777,16 @@ class _CVPageState extends State<CVPage> {
       backgroundColor: Colors.grey[50],
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF006B7A), Color(0xFF0097b2), Color(0xFF0e0259)],
-            stops: [0.0, 0.6, 1.0],
-          ),
+         gradient: const LinearGradient(
+  begin: Alignment.topCenter,
+  end: Alignment.bottomCenter,
+  colors: [
+    Color(0xFF01509B),
+    Color(0xFF0571C5),
+    Color(0xFF83C8EF),
+  ],
+  stops: [0.0, 0.5, 1.0],
+),
         ),
         child: SafeArea(
           child: Column(
@@ -831,17 +835,17 @@ class _CVPageState extends State<CVPage> {
               // Content
               Expanded(
                 child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.grey[50],
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(24),
-                      topRight: Radius.circular(24),
-                    ),
-                  ),
+                  decoration: const BoxDecoration(
+  color: Color(0xFFF5F8FA),
+  borderRadius: BorderRadius.only(
+    topLeft: Radius.circular(30),
+    topRight: Radius.circular(30),
+  ),
+),
                   child: _isLoading
                       ? const Center(
                           child: CircularProgressIndicator(
-                            color: Color(0xFF0097b2),
+                            color: Color(0xFF01509B),
                           ),
                         )
                       : _pdfDocument == null
@@ -870,35 +874,49 @@ class _CVPageState extends State<CVPage> {
                     child: SizedBox(
                       width: double.infinity,
                       height: 50,
-                      child: ElevatedButton.icon(
-                        onPressed: _isDownloading ? null : _downloadPDF,
-                        icon: _isDownloading
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.download, color: Colors.white),
-                        label: Text(
-                          _isDownloading ? 'Downloading...' : 'Download PDF',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
-                          ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0097b2),
-                          disabledBackgroundColor: Colors.grey,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          elevation: 2,
-                        ),
-                      ),
+                      child:GestureDetector(
+  onTap: _isDownloading ? null : _downloadPDF,
+  child: Container(
+    height: 50,
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        colors: [
+          Color(0xFF01509B),
+          Color(0xFF83C8EF),
+        ],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Center(
+      child: _isDownloading
+          ? const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
+          : const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.download, color: Colors.white),
+                SizedBox(width: 8),
+                Text(
+                  'Download PDF',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+    ),
+  ),
+),
                     ),
                   ),
                 ),
@@ -919,13 +937,13 @@ class _CVPageState extends State<CVPage> {
             Container(
               padding: const EdgeInsets.all(32),
               decoration: BoxDecoration(
-                color: const Color(0xFF0097b2).withOpacity(0.1),
+                color: const Color(0xFF01509B).withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
                 Icons.description_outlined,
                 size: 80,
-                color: Color(0xFF0097b2),
+                color: Color(0xFF01509B),
               ),
             ),
             const SizedBox(height: 32),
@@ -948,7 +966,7 @@ class _CVPageState extends State<CVPage> {
             ),
             const SizedBox(height: 32),
             const CircularProgressIndicator(
-              color: Color(0xFF0097b2),
+              color: Color(0xFF01509B),
             ),
             const SizedBox(height: 16),
           ],
@@ -964,7 +982,7 @@ class _CVPageState extends State<CVPage> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const CircularProgressIndicator(
-              color: Color(0xFF0097b2),
+              color: Color(0xFF01509B),
               strokeWidth: 3,
             ),
             const SizedBox(height: 24),
@@ -992,43 +1010,44 @@ class _CVPageState extends State<CVPage> {
     return Column(
       children: [
         // Info banner with regenerate button
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: const Color(0xFF4ECDC4).withOpacity(0.15),
-            border: Border(
-              bottom: BorderSide(
-                color: const Color(0xFF4ECDC4).withOpacity(0.3),
-                width: 1,
-              ),
-            ),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.check_circle, color: Color(0xFF4ECDC4), size: 20),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'CV and PDF ready for download',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey[700],
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              TextButton.icon(
-                onPressed: _generateCV,
-                icon: const Icon(Icons.refresh, size: 18),
-                label: const Text('Regenerate'),
-                style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF0097b2),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                ),
-              ),
-            ],
+      Container(
+  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+  decoration: BoxDecoration(
+    color: const Color(0xFF01509B).withOpacity(0.10),
+    border: Border(
+      bottom: BorderSide(
+        color: const Color(0xFF01509B).withOpacity(0.2),
+        width: 1,
+      ),
+    ),
+  ),
+  child: Row(
+    children: [
+      const Icon(Icons.check_circle, color: Color(0xFF01509B), size: 20),
+      const SizedBox(width: 12),
+      Expanded(
+        child: Text(
+          'CV and PDF ready for download',
+          style: TextStyle(
+            fontSize: 13,
+            color: Colors.grey[700],
+            fontWeight: FontWeight.w600,
           ),
         ),
+      ),
+      TextButton.icon(
+        onPressed: _generateCV,
+        icon: const Icon(Icons.refresh, size: 18),
+        label: const Text('Regenerate'),
+        style: TextButton.styleFrom(
+          foregroundColor: const Color(0xFF01509B),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        ),
+      ),
+    ],
+  ),
+),
+
         
         // PDF Preview with zoom controls
         Expanded(
@@ -1070,7 +1089,7 @@ class _CVPageState extends State<CVPage> {
                         right: 12,
                         child: DecoratedBox(
                           decoration: BoxDecoration(
-                            color: Colors.black54,
+                            color: Color(0xFF01509B).withOpacity(0.85),
                             borderRadius: BorderRadius.circular(32),
                           ),
                           child: Row(

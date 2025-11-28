@@ -104,13 +104,13 @@ class CVPreviewPage extends StatelessWidget {
               ),
               Expanded(
                 child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.grey[50],
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(24),
-                      topRight: Radius.circular(24),
-                    ),
-                  ),
+                 decoration: const BoxDecoration(
+  color: Color(0xFFF5F8FA),
+  borderRadius: BorderRadius.only(
+    topLeft: Radius.circular(30),
+    topRight: Radius.circular(30),
+  ),
+),
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(24.0),
                     child: Container(
@@ -132,7 +132,7 @@ class CVPreviewPage extends StatelessWidget {
                         style: const TextStyle(
                           fontSize: 14,
                           height: 1.6,
-                          color: Color(0xFF0e0259),
+                         color: Color(0xFF01509B)
                         ),
                       ),
                     ),
@@ -160,7 +160,7 @@ class CVPreviewPage extends StatelessWidget {
                         icon: const Icon(Icons.download),
                         label: const Text('Save as Text'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0097b2),
+                         backgroundColor: Color(0xFF01509B),
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
@@ -176,8 +176,8 @@ class CVPreviewPage extends StatelessWidget {
                         icon: const Icon(Icons.copy),
                         label: const Text('Copy'),
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF0097b2),
-                          side: const BorderSide(color: Color(0xFF0097b2)),
+                          foregroundColor: Color(0xFF01509B),
+side: BorderSide(color: Color(0xFF01509B)),
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
