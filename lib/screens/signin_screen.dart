@@ -536,28 +536,28 @@ Future<Map<String, dynamic>?> _findExistingUserByEmail(String email) async {
 class MicrosoftUserProfileForm extends StatefulWidget {
   final Map<String, dynamic> microsoftUserInfo;
   final String accessToken;
-
+ 
   const MicrosoftUserProfileForm({
     super.key,
     required this.microsoftUserInfo,
     required this.accessToken,
   });
-
+ 
   @override
   State<MicrosoftUserProfileForm> createState() => _MicrosoftUserProfileFormState();
 }
-
+ 
 class _MicrosoftUserProfileFormState extends State<MicrosoftUserProfileForm> {
   final _formKey = GlobalKey<FormState>();
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
   final _gpaController = TextEditingController();
-  
+ 
   String? _selectedMajor;
   int? _selectedLevel;
   String? _selectedGender;
   bool _isLoading = false;
-
+ 
   // Fetch arrays from Firebase like in signup screen
   Future<List<String>> getArrayFromFirebase(String fieldName) async {
     try {
@@ -570,7 +570,7 @@ class _MicrosoftUserProfileFormState extends State<MicrosoftUserProfileForm> {
     }
     return []; // fallback empty list
   }
-
+ 
   Future<List<int>> getArrayFromFirebaseInt(String fieldName) async {
     try {
       final doc = await FirebaseFirestore.instance
@@ -586,7 +586,7 @@ class _MicrosoftUserProfileFormState extends State<MicrosoftUserProfileForm> {
     }
     return [];
   }
-
+ 
   @override
   void initState() {
     super.initState();
@@ -594,7 +594,7 @@ class _MicrosoftUserProfileFormState extends State<MicrosoftUserProfileForm> {
     _firstNameController.text = widget.microsoftUserInfo['firstName'] ?? '';
     _lastNameController.text = widget.microsoftUserInfo['lastName'] ?? '';
   }
-
+ 
   @override
   void dispose() {
     _firstNameController.dispose();
@@ -602,17 +602,17 @@ class _MicrosoftUserProfileFormState extends State<MicrosoftUserProfileForm> {
     _gpaController.dispose();
     super.dispose();
   }
-
+ 
   Future<void> _saveUserProfile() async {
   if (!_formKey.currentState!.validate()) return;
-  
+ 
   if (_selectedMajor == null || _selectedLevel == null || _selectedGender == null) {
     _showErrorMessage('Please fill all required fields');
     return;
   }
-
+ 
   setState(() => _isLoading = true);
-
+ 
   try {
     // Parse GPA safely
     double gpaValue = 0.0;
@@ -620,10 +620,10 @@ class _MicrosoftUserProfileFormState extends State<MicrosoftUserProfileForm> {
     if (gpaText.isNotEmpty) {
       gpaValue = double.parse(gpaText);
     }
-
+ 
     // Generate a unique document ID using Microsoft ID
     final docId = 'ms_${widget.microsoftUserInfo['microsoftId']}';
-
+ 
     // Save user data directly to Firestore without Firebase Auth
     await FirebaseFirestore.instance
         .collection('users')
@@ -645,12 +645,12 @@ class _MicrosoftUserProfileFormState extends State<MicrosoftUserProfileForm> {
       'accessToken': widget.accessToken,
       'displayName': '${_firstNameController.text.trim()} ${_lastNameController.text.trim()}',
     });
-
+ 
     // Save to SharedPreferences AFTER Firestore save succeeds
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('microsoft_user_email', widget.microsoftUserInfo['email']);
     await prefs.setString('microsoft_user_doc_id', docId);
-
+ 
     if (mounted) {
       _showSuccessMessage('Profile completed successfully!');
       Navigator.pushReplacementNamed(context, '/home');
@@ -666,12 +666,12 @@ class _MicrosoftUserProfileFormState extends State<MicrosoftUserProfileForm> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: const Color(0xFF4ECDC4),
+        backgroundColor: const Color(0xFF01509B), // Updated to match experience
         duration: const Duration(seconds: 3),
       ),
     );
   }
-
+ 
   void _showErrorMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -680,22 +680,13 @@ class _MicrosoftUserProfileFormState extends State<MicrosoftUserProfileForm> {
       ),
     );
   }
-
+ 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF006B7A),
-              Color(0xFF0097b2),
-              Color(0xFF0e0259),
-            ],
-            stops: [0.0, 0.6, 1.0],
-          ),
+          color: Color(0xFFE6F3FF), // Match experience page background
         ),
         child: SafeArea(
           child: Column(
@@ -713,29 +704,54 @@ class _MicrosoftUserProfileFormState extends State<MicrosoftUserProfileForm> {
       ),
     );
   }
-
+ 
   Widget _buildAppBar() {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Row(
-        children: [
-          const Expanded(
-            child: Text(
-              'Complete Your Profile',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-                letterSpacing: 0.5,
-              ),
-              textAlign: TextAlign.center,
-            ),
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        color: Color(0xFF0D4F94), // Match experience page top bar
+        borderRadius: BorderRadius.only(
+          bottomRight: Radius.circular(32),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black26,
+            blurRadius: 12,
+            offset: Offset(0, 6),
           ),
         ],
       ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+          child: Column(
+            children: const [
+              SizedBox(height: 18),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                  SizedBox(width: 8),
+                  Text(
+                    'Complete Your Profile',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
-
+ 
   Widget _buildProfileForm() {
     return Container(
       padding: const EdgeInsets.all(24.0),
@@ -744,7 +760,7 @@ class _MicrosoftUserProfileFormState extends State<MicrosoftUserProfileForm> {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0e0259).withOpacity(0.1),
+            color: const Color(0xFF0D4F94).withOpacity(0.12), // Updated shadow color
             blurRadius: 30,
             offset: const Offset(0, 15),
           ),
@@ -778,33 +794,30 @@ class _MicrosoftUserProfileFormState extends State<MicrosoftUserProfileForm> {
       ),
     );
   }
-
+ 
   Widget _buildHeader() {
     return Column(
       children: [
         Container(
-          width: 64,
-          height: 64,
+          width: 72,
+          height: 72,
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF0097b2), Color(0xFF006B7A), Color(0xFF0e0259)],
-            ),
-            borderRadius: BorderRadius.circular(16),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFF4A98E9).withOpacity(0.3)),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF0097b2).withOpacity(0.3),
+                color: const Color(0xFF0D4F94).withOpacity(0.15),
                 blurRadius: 20,
-                offset: const Offset(0, 8),
+                offset: const Offset(0, 10),
               ),
             ],
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(8.0),
             child: Image.asset(
               'assets/images/logo.png',
-              width: 64,
-              height: 64,
-              fit: BoxFit.cover,
+              fit: BoxFit.contain,
             ),
           ),
         ),
@@ -814,14 +827,14 @@ class _MicrosoftUserProfileFormState extends State<MicrosoftUserProfileForm> {
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.w800,
-            color: Color(0xFF0e0259),
+            color: Color(0xFF0D4F94), // Updated to match experience
             letterSpacing: -0.5,
           ),
         ),
       ],
     );
   }
-
+ 
   Widget _buildWelcomeText() {
     return Column(
       children: [
@@ -830,7 +843,7 @@ class _MicrosoftUserProfileFormState extends State<MicrosoftUserProfileForm> {
           'Please complete your academic profile to get started.',
           style: TextStyle(
             fontSize: 14,
-            color: const Color(0xFF0e0259).withOpacity(0.7),
+            color: const Color(0xFF0D4F94).withOpacity(0.7), // Updated color
             fontWeight: FontWeight.w500,
           ),
           textAlign: TextAlign.center,
@@ -838,29 +851,31 @@ class _MicrosoftUserProfileFormState extends State<MicrosoftUserProfileForm> {
       ],
     );
   }
-Widget _buildNameFields() {
-  return Row(
-    children: [
-      Expanded(
-        child: TextFormField(
-          controller: _firstNameController,
-          validator: _Validators.name('first name'),
-          keyboardType: TextInputType.name,  // Add this line
-          decoration: _inputDecoration('First Name'),
+ 
+  Widget _buildNameFields() {
+    return Row(
+      children: [
+        Expanded(
+          child: TextFormField(
+            controller: _firstNameController,
+            validator: _Validators.name('first name'),
+            keyboardType: TextInputType.name,
+            decoration: _inputDecoration('First Name'),
+          ),
         ),
-      ),
-      const SizedBox(width: 12),
-      Expanded(
-        child: TextFormField(
-          controller: _lastNameController,
-          validator: _Validators.name('last name'),
-          keyboardType: TextInputType.name,  // Add this line
-          decoration: _inputDecoration('Last Name'),
+        const SizedBox(width: 12),
+        Expanded(
+          child: TextFormField(
+            controller: _lastNameController,
+            validator: _Validators.name('last name'),
+            keyboardType: TextInputType.name,
+            decoration: _inputDecoration('Last Name'),
+          ),
         ),
-      ),
-    ],
-  );
-}
+      ],
+    );
+  }
+ 
   Widget _buildMajorDropdown() {
     return FutureBuilder<List<String>>(
       future: getArrayFromFirebase('major'),
@@ -881,7 +896,7 @@ Widget _buildNameFields() {
       },
     );
   }
-
+ 
   Widget _buildLevelDropdown() {
     return FutureBuilder<List<int>>(
       future: getArrayFromFirebaseInt('level'),
@@ -902,7 +917,7 @@ Widget _buildNameFields() {
       },
     );
   }
-
+ 
   Widget _buildGenderDropdown() {
     return FutureBuilder<List<String>>(
       future: getArrayFromFirebase('gender'),
@@ -923,71 +938,72 @@ Widget _buildNameFields() {
       },
     );
   }
-Widget _buildGPAField() {
-  return TextFormField(
-    controller: _gpaController,
-    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-    // REMOVED inputFormatters - now users can type anything
-    validator: (value) {
-      if (value == null || value.trim().isEmpty) {
-        return 'Please enter your current GPA';
-      }
-      final gpa = double.tryParse(value.trim());
-      if (gpa == null || gpa < 0 || gpa > 5) {
-        return 'GPA must be between 0.00 and 5.00';
-      }
-      
-      // Check for more than 2 decimal places
-      if (value.trim().contains('.')) {
-        final decimalPart = value.trim().split('.')[1];
-        if (decimalPart.length > 2) {
-          return 'GPA can have at most 2 decimal places';
+ 
+  Widget _buildGPAField() {
+    return TextFormField(
+      controller: _gpaController,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      validator: (value) {
+        if (value == null || value.trim().isEmpty) {
+          return 'Please enter your current GPA';
         }
-      }
-      
-      return null;
-    },
-    decoration: _inputDecoration('Current GPA', hint: 'e.g., 3.75'),
-  );
-}
+        final gpa = double.tryParse(value.trim());
+        if (gpa == null || gpa < 0 || gpa > 5) {
+          return 'GPA must be between 0.00 and 5.00';
+        }
+       
+        // Check for more than 2 decimal places
+        if (value.trim().contains('.')) {
+          final decimalPart = value.trim().split('.')[1];
+          if (decimalPart.length > 2) {
+            return 'GPA can have at most 2 decimal places';
+          }
+        }
+       
+        return null;
+      },
+      decoration: _inputDecoration('Current GPA', hint: 'e.g., 3.75'),
+    );
+  }
+ 
   InputDecoration _inputDecoration(String label, {String? hint}) {
     return InputDecoration(
       labelText: label,
       hintText: hint,
       errorStyle: const TextStyle(
-      fontSize: 10,  // Slightly larger
-      height: 1.3,
-      fontWeight: FontWeight.w600,  // Bolder text
-    ),
-      errorMaxLines: 2,
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(
-        color: const Color(0xFF4ECDC4).withOpacity(0.5),
+        fontSize: 10,
+        height: 1.3,
+        fontWeight: FontWeight.w600,
       ),
-    ),
+      errorMaxLines: 2,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(
+          color: const Color(0xFF83C8EF).withOpacity(0.5), // Updated border color
+        ),
+      ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFF0097b2), width: 2),
+        borderSide: const BorderSide(color: Color(0xFF01509B), width: 2), // Updated focus color
       ),
       filled: true,
-      fillColor: const Color(0xFF95E1D3).withOpacity(0.1),
+      fillColor: const Color(0xFF83C8EF).withOpacity(0.1), // Updated fill color
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
     );
   }
-
+ 
   Widget _buildCompleteButton() {
     return Container(
       width: double.infinity,
       height: 48,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF0097b2), Color(0xFF006B7A)],
+          colors: [Color(0xFF01509B), Color(0xFF83C8EF)], // Updated gradient colors
         ),
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0097b2).withOpacity(0.3),
+            color: const Color(0xFF01509B).withOpacity(0.3), // Updated shadow color
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -1029,7 +1045,6 @@ Widget _buildGPAField() {
     );
   }
 }
-
 /// Custom App Bar with Deep Sea theme - FIXED VERSION
 class _AppBar extends StatelessWidget {
   const _AppBar();
