@@ -134,40 +134,46 @@ class _GpaCalculatorState extends State<GpaCalculator> {
 
     return Scaffold(
       backgroundColor: kBg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-              decoration: BoxDecoration(
-                color: kTopBar,
-                borderRadius: const BorderRadius.only(
-                  bottomRight: Radius.circular(32),
-                ),
-                boxShadow: [
-                  BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 4)),
-                ],
+      body: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: kTopBar,
+              borderRadius: const BorderRadius.only(
+                bottomRight: Radius.circular(32),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Icon(Icons.auto_awesome, color: Colors.white, size: 18),
-                  SizedBox(width: 8),
-                  Text(
-                    "GPA Calculator",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w600,
+              boxShadow: const [
+                BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 4)),
+              ],
+            ),
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                    SizedBox(width: 8),
+                    Text(
+                      "GPA Calculator",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
-                  SizedBox(width: 8),
-                  Icon(Icons.auto_awesome, color: Colors.white, size: 18),
-                ],
+                    SizedBox(width: 8),
+                    Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                  ],
+                ),
               ),
             ),
-            Expanded(
+          ),
+          Expanded(
+            child: SafeArea(
+              top: false,
               child: currentGpa == null
                   ? const Center(child: CircularProgressIndicator())
                   : Form(
@@ -412,8 +418,8 @@ class _GpaCalculatorState extends State<GpaCalculator> {
                       ),
                     ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
       bottomNavigationBar: _buildNavBar(currentIndex: 2),
     );

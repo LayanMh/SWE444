@@ -259,7 +259,7 @@ class _WelcomeTextSection extends StatelessWidget {
             end: Alignment.bottomCenter,
           ).createShader(bounds),
           child: const Text(
-            'أبشرك سهّلنا كل شي',
+            'أبشرك سهّلنا كل شيء',
             style: TextStyle(
               fontSize: 38,
               fontWeight: FontWeight.w900,

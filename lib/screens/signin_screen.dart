@@ -330,11 +330,12 @@ Future<Map<String, dynamic>?> _findExistingUserByEmail(String email) async {
     return Scaffold(
       body: Container(
         decoration: _AppTheme.gradientBackground,
-        child: SafeArea(
-          child: Column(
-            children: [
-              const _AppBar(),
-              Expanded(
+        child: Column(
+          children: [
+            const _AppBar(),
+            Expanded(
+              child: SafeArea(
+                top: false,
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16.0,
@@ -357,8 +358,8 @@ Future<Map<String, dynamic>?> _findExistingUserByEmail(String email) async {
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -1037,7 +1038,6 @@ class _AppBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 28),
       decoration: const BoxDecoration(
         color: _kTopBarColor,
         borderRadius: BorderRadius.only(
@@ -1051,59 +1051,65 @@ class _AppBar extends StatelessWidget {
           ),
         ],
       ),
-      child: Column(
-        children: [
-          Row(
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+          child: Column(
             children: [
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Colors.black26,
-                      blurRadius: 8,
-                      offset: Offset(0, 4),
+              Row(
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Colors.black26,
+                          blurRadius: 8,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                child: IconButton(
-                  onPressed: () {
-                    Navigator.pushAndRemoveUntil(
-                      context,
-                      MaterialPageRoute(builder: (context) => const WelcomeScreen()),
-                      (route) => false,
-                    );
-                  },
-                  icon: const Icon(
-                    Icons.arrow_back_ios_new,
-                    color: _kTopBarColor,
-                    size: 20,
+                    child: IconButton(
+                      onPressed: () {
+                        Navigator.pushAndRemoveUntil(
+                          context,
+                          MaterialPageRoute(builder: (context) => const WelcomeScreen()),
+                          (route) => false,
+                        );
+                      },
+                      icon: const Icon(
+                        Icons.arrow_back_ios_new,
+                        color: _kTopBarColor,
+                        size: 20,
+                      ),
+                    ),
                   ),
-                ),
+                  const Spacer(),
+                ],
               ),
-              const Spacer(),
+              const SizedBox(height: 18),
+              const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                  SizedBox(width: 8),
+                  Text(
+                    'Sign In',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                ],
+              ),
             ],
           ),
-          const SizedBox(height: 18),
-          const Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.auto_awesome, color: Colors.white, size: 18),
-              SizedBox(width: 8),
-              Text(
-                'Sign In',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              SizedBox(width: 8),
-              Icon(Icons.auto_awesome, color: Colors.white, size: 18),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }

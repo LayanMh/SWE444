@@ -1015,101 +1015,107 @@ Widget build(BuildContext context) {
     },
     child: Scaffold(
       backgroundColor: kBg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Header - matching Club form style with decorative stars
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-              decoration: BoxDecoration(
-                color: kTopBar,
-                borderRadius: const BorderRadius.only(
-                  bottomRight: Radius.circular(32),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black26,
-                    blurRadius: 8,
-                    offset: Offset(0, 4),
-                  ),
-                ],
+      body: Column(
+        children: [
+          // Header - matching Club form style with decorative stars
+          Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: kTopBar,
+              borderRadius: const BorderRadius.only(
+                bottomRight: Radius.circular(32),
               ),
-              child: Row(
-                children: [
-                  const SizedBox(width: 48),
-                  Expanded(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        Icon(Icons.auto_awesome, color: Colors.white, size: 18),
-                        SizedBox(width: 8),
-                        Text(
-                          'My Profile',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black26,
+                  blurRadius: 8,
+                  offset: Offset(0, 4),
+                ),
+              ],
+            ),
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                child: Row(
+                  children: [
+                    const SizedBox(width: 48),
+                    Expanded(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                          SizedBox(width: 8),
+                          Text(
+                            'My Profile',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                        ],
+                      ),
+                    ),
+                    PopupMenuButton<String>(
+                      onSelected: (value) {
+                        if (value == 'edit') {
+                          setState(() => _isEditMode = true);
+                        } else if (value == 'delete') {
+                          _deleteAccount();
+                        }
+                      },
+                      icon: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white.withOpacity(0.2)),
+                        ),
+                        child: const Padding(
+                          padding: EdgeInsets.all(12.0),
+                          child: Icon(
+                            Icons.more_vert,
                             color: Colors.white,
-                            letterSpacing: 0.5,
+                            size: 20,
                           ),
                         ),
-                        SizedBox(width: 8),
-                        Icon(Icons.auto_awesome, color: Colors.white, size: 18),
-                      ],
-                    ),
-                  ),
-                  PopupMenuButton<String>(
-                    onSelected: (value) {
-                      if (value == 'edit') {
-                        setState(() => _isEditMode = true);
-                      } else if (value == 'delete') {
-                        _deleteAccount();
-                      }
-                    },
-                    icon: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.white.withOpacity(0.2)),
                       ),
-                      child: const Padding(
-                        padding: EdgeInsets.all(12.0),
-                        child: Icon(
-                          Icons.more_vert,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                      ),
-                    ),
-                    itemBuilder: (BuildContext context) => [
-                      if (!_isEditMode)
+                      itemBuilder: (BuildContext context) => [
+                        if (!_isEditMode)
+                          const PopupMenuItem<String>(
+                            value: 'edit',
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit, color: Color(0xFF01509B)),
+                                SizedBox(width: 8),
+                                Text('Edit Profile'),
+                              ],
+                            ),
+                          ),
                         const PopupMenuItem<String>(
-                          value: 'edit',
+                          value: 'delete',
                           child: Row(
                             children: [
-                              Icon(Icons.edit, color: Color(0xFF01509B)),
+                              Icon(Icons.delete_forever, color: Colors.red),
                               SizedBox(width: 8),
-                              Text('Edit Profile'),
+                              Text('Delete Account'),
                             ],
                           ),
                         ),
-                      const PopupMenuItem<String>(
-                        value: 'delete',
-                        child: Row(
-                          children: [
-                            Icon(Icons.delete_forever, color: Colors.red),
-                            SizedBox(width: 8),
-                            Text('Delete Account'),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
-            // Profile Content
-            Expanded(
+          ),
+          // Profile Content
+          Expanded(
+            child: SafeArea(
+              top: false,
               child: RefreshIndicator(
                 onRefresh: _loadUserData,
                 child: isLoading
@@ -1369,10 +1375,10 @@ Widget build(BuildContext context) {
                               ),
                             ),
                           ),
-              ),
+                          ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     ),
   );

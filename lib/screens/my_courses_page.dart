@@ -214,10 +214,10 @@ class _MyCoursesPageState extends State<MyCoursesPage> {
           backgroundColor: _kBgColor,
           appBar: PreferredSize(
             preferredSize: const Size.fromHeight(86),
-            child: Container(
-              padding: const EdgeInsets.only(top: 12, left: 8, right: 8),
-              decoration: const BoxDecoration(
-                color: Color(0xFF2E5D9F),
+          child: Container(
+            padding: const EdgeInsets.only(top: 12, left: 8, right: 8),
+            decoration: const BoxDecoration(
+              color: Color(0xFF2E5D9F),
                 borderRadius: BorderRadius.only(
                   bottomLeft: Radius.circular(24),
                   bottomRight: Radius.circular(24),
@@ -227,23 +227,46 @@ class _MyCoursesPageState extends State<MyCoursesPage> {
                 bottom: false,
                 child: Row(
                   children: [
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back, color: Colors.white),
-                      onPressed: () => Navigator.of(context).maybePop(),
-                    ),
-                    const Spacer(),
-                    const Text(
-                      'My Courses',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
+                    const SizedBox(width: 48),
+                    Expanded(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                          SizedBox(width: 8),
+                          Text(
+                            'My Courses',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                        ],
                       ),
                     ),
-                    const Spacer(),
-                    IconButton(
-                      icon: const Icon(Icons.auto_awesome, color: Colors.white),
-                      onPressed: () {},
+                    TextButton(
+                      onPressed: (entries.isEmpty || _bulkDeleting)
+                          ? null
+                          : _confirmBulkDelete,
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        textStyle: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      child: _bulkDeleting
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text('Clear All'),
                     ),
                   ],
                 ),
