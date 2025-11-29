@@ -1055,16 +1055,17 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
                   );
                 },
               ),
-              const SizedBox(height: 20),
-              TextFormField(
-                controller: _captionController,
-                minLines: 4,
-                maxLines: 8,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(
-                  labelText: 'Caption',
-                  hintText: 'Describe the story behind this photo.',
-                  border: OutlineInputBorder(),
+               const SizedBox(height: 20),
+               TextFormField(
+                 controller: _captionController,
+                 minLines: 4,
+                 maxLines: 8,
+                 maxLength: 300,
+                 textCapitalization: TextCapitalization.sentences,
+                 decoration: const InputDecoration(
+                   labelText: 'Caption',
+                   hintText: 'Describe the story behind this photo.',
+                   border: OutlineInputBorder(),
                 ),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
@@ -1098,6 +1099,30 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
               TextFormField(
                 controller: _linkController,
                 keyboardType: TextInputType.url,
+                validator: (value) {
+                  final text = value?.trim() ?? '';
+                  if (text.isEmpty) return null;
+                  if (text.length < 5 || text.length > 2000) {
+                    return 'Link must be between 5 and 2000 characters.';
+                  }
+                  if (text.contains(RegExp(r'\s'))) {
+                    return 'Link cannot contain spaces.';
+                  }
+                  String? scheme;
+                  if (text.startsWith('https://')) {
+                    scheme = 'https://';
+                  } else if (text.startsWith('http://')) {
+                    scheme = 'http://';
+                  }
+                  if (scheme == null) {
+                    return 'Link must start with http:// or https://';
+                  }
+                  final remainder = text.substring(scheme.length);
+                  if (remainder.startsWith('/')) {
+                    return 'Use only two slashes after the scheme (e.g., https://example.com).';
+                  }
+                  return null;
+                },
                 decoration: const InputDecoration(
                   labelText: 'Resource link (optional)',
                   hintText:
