@@ -477,7 +477,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          if (hasToday)
+                          if (hasToday && !isToday)
                             _chip(
                               label: 'Jump to today',
                               onTap: _jumpToToday,
