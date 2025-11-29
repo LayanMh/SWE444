@@ -378,7 +378,7 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: Colors.red[400],
+        backgroundColor: Colors.red[600],
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         duration: const Duration(seconds: 4),
@@ -388,165 +388,168 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
 
   @override
   Widget build(BuildContext context) {
+    const Color kBg = Color(0xFFE6F3FF);
+    const Color kTopBar = Color(0xFF0D4F94);
+
     return Scaffold(
-      backgroundColor: Colors.grey[50],
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-  begin: Alignment.topCenter,
-  end: Alignment.bottomCenter,
-  colors: [
-    Color(0xFF01509B),
-    Color(0xFF0571C5),
-    Color(0xFF83C8EF),
-  ],
-  stops: [0.0, 0.5, 1.0],
-)
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    Expanded(
-                      child: Text(
-                        widget.existingItem != null ? 'Edit Project' : 'Add Project',
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                          letterSpacing: 0.5,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                    const SizedBox(width: 48),
-                  ],
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Header section - matching Club form style
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              decoration: BoxDecoration(
+                color: kTopBar,
+                borderRadius: const BorderRadius.only(
+                  bottomRight: Radius.circular(32),
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 8,
+                    offset: Offset(0, 4),
+                  ),
+                ],
               ),
-              Expanded(
-                child: Container(
-                  decoration: const BoxDecoration(
-  color: Color(0xFFF5F8FA),
-  borderRadius: BorderRadius.only(
-    topLeft: Radius.circular(30),
-    topRight: Radius.circular(30),
-  ),
-),
-                  child: SingleChildScrollView(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Form(
-                        key: _formKey,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            _buildTextFieldWithCounter(
-                              controller: _titleController,
-                              label: 'Project Title *',
-                              hint: 'e.g., AI Research Project',
-                              maxLength:40,
-                              validator: _validateTitle,
-                            ),
-                            const SizedBox(height: 16.0),
-                            _buildTextFieldWithCounter(
-                              controller: _organizationController,
-                              label: 'Organization',
-                              hint: 'e.g., Google Developer Student Club',
-                              maxLength: 40,
-                              validator: _validateOrganization,
-                            ),
-                            const SizedBox(height: 16.0),
-                            _buildTextField(
-                              controller: _linkController,
-                              label: 'Link/Attachment',
-                              hint: 'e.g., https://github.com/yourproject',
-                              validator: _validateLink,
-                              maxLength: 150,
-                            ),
-                            const SizedBox(height: 16.0),
-                            _buildDatePicker(
-                              label: 'Start Date',
-                              selectedMonth: _startMonth,
-                              selectedYear: _startYear,
-                              onMonthChanged: (month) {
-                                setState(() => _startMonth = month);
-                                _validateDates();
-                              },
-                              onYearChanged: (year) {
-                                setState(() => _startYear = year);
-                                _validateDates();
-                              },
-                            ),
-                            const SizedBox(height: 16.0),
-                            CheckboxListTile(
-                              title: const Text('Currently working on this'),
-                              value: _isCurrentlyActive,
-                              onChanged: (value) {
-                                setState(() {
-                                  _isCurrentlyActive = value ?? false;
-                                  if (_isCurrentlyActive) {
-                                    _endMonth = null;
-                                    _endYear = null;
-                                  }
-                                });
-                                _validateDates();
-                              },
-                              activeColor: const Color(0xFF0097b2),
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                            if (!_isCurrentlyActive) ...[
-                              _buildDatePicker(
-                                label: 'End Date',
-                                selectedMonth: _endMonth,
-                                selectedYear: _endYear,
-                                onMonthChanged: (month) {
-                                  setState(() => _endMonth = month);
-                                  _validateDates();
-                                },
-                                onYearChanged: (year) {
-                                  setState(() => _endYear = year);
-                                  _validateDates();
-                                },
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  Expanded(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          widget.existingItem != null ? 'Edit Project' : 'Add Project',
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 48),
+                ],
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildTextFieldWithCounter(
+                          controller: _titleController,
+                          label: 'Project Title *',
+                          hint: 'e.g., AI Research Project',
+                          maxLength:40,
+                          validator: _validateTitle,
+                        ),
+                        const SizedBox(height: 16.0),
+                        _buildTextFieldWithCounter(
+                          controller: _organizationController,
+                          label: 'Organization',
+                          hint: 'e.g., Google Developer Student Club',
+                          maxLength: 40,
+                          validator: _validateOrganization,
+                        ),
+                        const SizedBox(height: 16.0),
+                        _buildTextField(
+                          controller: _linkController,
+                          label: 'Link/Attachment',
+                          hint: 'e.g., https://github.com/yourproject',
+                          validator: _validateLink,
+                          maxLength: 150,
+                        ),
+                        const SizedBox(height: 16.0),
+                        _buildDatePicker(
+                          label: 'Start Date',
+                          selectedMonth: _startMonth,
+                          selectedYear: _startYear,
+                          onMonthChanged: (month) {
+                            setState(() => _startMonth = month);
+                            _validateDates();
+                          },
+                          onYearChanged: (year) {
+                            setState(() => _startYear = year);
+                            _validateDates();
+                          },
+                        ),
+                        const SizedBox(height: 16.0),
+                        CheckboxListTile(
+                          title: const Text('Currently working on this'),
+                          value: _isCurrentlyActive,
+                          onChanged: (value) {
+                            setState(() {
+                              _isCurrentlyActive = value ?? false;
+                              if (_isCurrentlyActive) {
+                                _endMonth = null;
+                                _endYear = null;
+                              }
+                            });
+                            _validateDates();
+                          },
+                          activeColor: const Color(0xFF0097b2),
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                        if (!_isCurrentlyActive) ...[
+                          _buildDatePicker(
+                            label: 'End Date',
+                            selectedMonth: _endMonth,
+                            selectedYear: _endYear,
+                            onMonthChanged: (month) {
+                              setState(() => _endMonth = month);
+                              _validateDates();
+                            },
+                            onYearChanged: (year) {
+                              setState(() => _endYear = year);
+                              _validateDates();
+                            },
+                          ),
+                        ],
+                        if (_dateError != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8.0),
+                            child: Text(
+                              _dateError!,
+                              style: const TextStyle(
+                                color: Colors.red,
+                                fontSize: 12,
                               ),
-                            ],
-                            if (_dateError != null)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 8.0),
-                                child: Text(
-                                  _dateError!,
-                                  style: const TextStyle(
-                                    color: Colors.red,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 16.0),
-                          _buildTextFieldWithWordCounter(
+                            ),
+                          ),
+                          const SizedBox(height: 16.0),
+                      _buildTextFieldWithCharCounter(
   controller: _descriptionController,
-  label: 'Description',  // ← Removed asterisk
+  label: 'Description',
   hint: 'Describe your project...',
   maxLines: 5,
-  minWords: 200,
+  minChars: 200,
   validator: _validateDescription,
 ),
-                            const SizedBox(height: 24.0),
-                            _buildSaveButton(),
-                          ],
-                        ),
-                      ),
+                        const SizedBox(height: 24.0),
+                        _buildSaveButton(),
+                      ],
                     ),
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -652,12 +655,12 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
     );
   }
   
-Widget _buildTextFieldWithWordCounter({
+Widget _buildTextFieldWithCharCounter({
   required TextEditingController controller,
   required String label,
   String? hint,
   int maxLines = 1,
-  required int minWords,
+  required int minChars,
   String? Function(String?)? validator,
 }) {
   final currentLength = controller.text.length;
@@ -676,7 +679,7 @@ Widget _buildTextFieldWithWordCounter({
       const SizedBox(height: 8.0),
       TextFormField(
         inputFormatters: [
-          LengthLimitingTextInputFormatter(minWords),  // ← ADD THIS LINE!
+          LengthLimitingTextInputFormatter(minChars),
           NoEmojiInputFormatter(),
         ],
         controller: controller,
@@ -690,7 +693,7 @@ Widget _buildTextFieldWithWordCounter({
         child: Align(
           alignment: Alignment.centerRight,
           child: Text(
-            '$currentLength/$minWords characters',
+            '$currentLength/$minChars characters',
             style: TextStyle(
               fontSize: 12.0,
               color: Colors.grey[600],
@@ -708,7 +711,7 @@ Widget _buildTextFieldWithWordCounter({
   String? hint,
   int maxLines = 1,
   String? Function(String?)? validator,
-  int? maxLength,  // ← ADD THIS PARAMETER
+  int? maxLength,
 }) {
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -724,7 +727,7 @@ Widget _buildTextFieldWithWordCounter({
       const SizedBox(height: 8.0),
       TextFormField(
         inputFormatters: [
-          if (maxLength != null) LengthLimitingTextInputFormatter(maxLength),  // ← ADD THIS LINE!
+          if (maxLength != null) LengthLimitingTextInputFormatter(maxLength),
           NoEmojiInputFormatter(),
         ],
         controller: controller,
@@ -771,16 +774,17 @@ Widget _buildTextFieldWithWordCounter({
       height: 48,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-  colors: [Color(0xFF01509B), Color(0xFF83C8EF)],
-  begin: Alignment.topLeft,
-  end: Alignment.bottomRight,
-),
+          colors: [Color(0xFF01509B), Color(0xFF83C8EF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0097b2).withOpacity(0.3),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+            color: const Color(0xFF01509B).withOpacity(0.3),
+            spreadRadius: 0,
+            blurRadius: 8,
+            offset: const Offset(0, 4),
           ),
         ],
       ),

@@ -11,7 +11,7 @@ import 'workshops_page.dart';
 import 'clubs_page.dart';
 import 'volunteering_page.dart';
 import 'cv_page.dart';
-import 'category_detail_page.dart'; // NEW: Import the separate detail page
+import 'category_detail_page.dart';
 
 class ExperiencePage extends StatefulWidget {
   const ExperiencePage({super.key});
@@ -30,7 +30,7 @@ class _ExperiencePageState extends State<ExperiencePage> {
     'clubs': [],
     'volunteering': [],
   };
-  Set<String> expandedItems = {}; // Track expanded items by unique key
+  Set<String> expandedItems = {};
 
   @override
   void initState() {
@@ -133,10 +133,8 @@ class _ExperiencePageState extends State<ExperiencePage> {
 
       List<dynamic> items = List.from(experienceData[category]);
       
-      // Store the item for potential certificate deletion
       final item = items[index];
       
-      // Optimistically update UI immediately
       items.removeAt(index);
       if (mounted) {
         setState(() {
@@ -144,13 +142,11 @@ class _ExperiencePageState extends State<ExperiencePage> {
         });
       }
 
-      // Delete from Firestore
       await _firestore.collection('users').doc(docId).update({
         category: items,
         'updatedAt': FieldValue.serverTimestamp(),
       });
       
-      // Delete certificate in background (non-blocking)
       final certificateUrl = item['certificateUrl'];
       if (certificateUrl != null && 
           certificateUrl.toString().trim().isNotEmpty && 
@@ -164,7 +160,6 @@ class _ExperiencePageState extends State<ExperiencePage> {
       }
     } catch (e) {
       debugPrint('Error deleting item: $e');
-      // Revert UI on error
       await _loadExperienceData();
       if (mounted) _showErrorMessage('Failed to delete item');
     }
@@ -188,7 +183,7 @@ class _ExperiencePageState extends State<ExperiencePage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: Colors.red[400],
+        backgroundColor: Colors.red[600],
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 2),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -383,7 +378,6 @@ class _ExperiencePageState extends State<ExperiencePage> {
                 padding: const EdgeInsets.only(left: 16.0, right: 16.0, bottom: 12.0),
                 child: InkWell(
                   onTap: () async {
-                    // Navigate to the separate detail page
                     final result = await Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -394,7 +388,6 @@ class _ExperiencePageState extends State<ExperiencePage> {
                         ),
                       ),
                     );
-                    // Reload data when returning if changes were made
                     if (result == true && mounted) {
                       await _loadExperienceData();
                     }
@@ -444,7 +437,6 @@ class _ExperiencePageState extends State<ExperiencePage> {
   }
 
   String _getDateOrHoursText(Map<String, dynamic> item) {
-    // Priority: startDate/endDate > year > hours
     if (item['startDate'] != null || item['endDate'] != null) {
       return '${item['startDate'] ?? 'N/A'} - ${item['endDate'] ?? 'Present'}';
     } else if (item['year'] != null) {
@@ -498,7 +490,6 @@ class _ExperiencePageState extends State<ExperiencePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header - Always visible
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -525,7 +516,6 @@ class _ExperiencePageState extends State<ExperiencePage> {
                                 ),
                               ),
                             ),
-                          // "Tap to expand" hint when collapsed
                           if (!isExpanded)
                             Padding(
                               padding: const EdgeInsets.only(top: 6.0),
@@ -604,7 +594,6 @@ class _ExperiencePageState extends State<ExperiencePage> {
                   ],
                 ),
                 
-                // Expanded details
                 if (isExpanded) ...[
                   const SizedBox(height: 8.0),
                   if (item['organization'] != null && item['organization'].toString().isNotEmpty)
@@ -702,114 +691,123 @@ class _ExperiencePageState extends State<ExperiencePage> {
 
   @override
   Widget build(BuildContext context) {
+    const Color kBg = Color(0xFFE6F3FF);
+    const Color kTopBar = Color(0xFF0D4F94);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F8FA),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF01509B),  // Deep blue (matching mockup)
-              Color(0xFF0571C5),  // Medium blue
-              Color(0xFF83C8EF),  // Light blue (matching mockup)
-            ],
-            stops: [0.0, 0.5, 1.0],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Header section
-              Container(
-                padding: const EdgeInsets.only(
-                  top: 20.0,
-                  left: 16.0,
-                  right: 16.0,
-                  bottom: 20.0,
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Header section - matching profile page style
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              decoration: BoxDecoration(
+                color: kTopBar,
+                borderRadius: const BorderRadius.only(
+                  bottomRight: Radius.circular(32),
                 ),
-                child: Center(
-                  child: Column(
-                    children: [
-                      const Text(
-                        'My Experience',
-                        style: TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Container(
-                        width: 40,
-                        height: 3,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.7),
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ],
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 8,
+                    offset: Offset(0, 4),
                   ),
-                ),
+                ],
               ),
-              Expanded(
-                child: Container(
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFF5F8FA),
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(30),
-                      topRight: Radius.circular(30),
+              child: Row(
+                children: [
+                  const SizedBox(width: 48), // Left spacing to match profile
+                  Expanded(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                        SizedBox(width: 8),
+                        Text(
+                          "My Experience",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                      ],
                     ),
                   ),
-                  child: isLoading
-                      ? Center(
-                          child: CircularProgressIndicator(
-                            color: const Color(0xFF01509B),
-                          ),
-                        )
-                      : RefreshIndicator(
-                          color: const Color(0xFF01509B),
-                          onRefresh: _loadExperienceData,
-                          child: SingleChildScrollView(
-                            physics: const AlwaysScrollableScrollPhysics(),
-                            child: Padding(
-                              padding: const EdgeInsets.only(top: 20.0, bottom: 80.0),
-                              child: Column(
-                                children: [
-                                  _buildCategorySection(
-                                    title: 'Projects',
-                                    icon: Icons.work_outline,
-                                    category: 'projects',
-                                    items: experienceData['projects'],
-                                  ),
-                                  _buildCategorySection(
-                                    title: 'Workshops',
-                                    icon: Icons.school_outlined,
-                                    category: 'workshops',
-                                    items: experienceData['workshops'],
-                                  ),
-                                  _buildCategorySection(
-                                    title: 'Student Clubs',
-                                    icon: Icons.groups_outlined,
-                                    category: 'clubs',
-                                    items: experienceData['clubs'],
-                                  ),
-                                  _buildCategorySection(
-                                    title: 'Volunteering',
-                                    icon: Icons.volunteer_activism_outlined,
-                                    category: 'volunteering',
-                                    items: experienceData['volunteering'],
-                                  ),
-                                ],
+                  // Invisible placeholder to match profile menu button dimensions exactly
+                  Padding(
+                    padding: EdgeInsets.all(8.0), // Extra outer padding
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.transparent,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.transparent),
+                      ),
+                      child: const Padding(
+                        padding: EdgeInsets.all(12.0),
+                        child: Icon(
+                          Icons.more_vert,
+                          color: Colors.transparent,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: isLoading
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        color: Color(0xFF01509B),
+                      ),
+                    )
+                  : RefreshIndicator(
+                      color: const Color(0xFF01509B),
+                      onRefresh: _loadExperienceData,
+                      child: SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 20.0, bottom: 80.0),
+                          child: Column(
+                            children: [
+                              _buildCategorySection(
+                                title: 'Projects',
+                                icon: Icons.work_outline,
+                                category: 'projects',
+                                items: experienceData['projects'],
                               ),
-                            ),
+                              _buildCategorySection(
+                                title: 'Workshops',
+                                icon: Icons.school_outlined,
+                                category: 'workshops',
+                                items: experienceData['workshops'],
+                              ),
+                              _buildCategorySection(
+                                title: 'Student Clubs',
+                                icon: Icons.groups_outlined,
+                                category: 'clubs',
+                                items: experienceData['clubs'],
+                              ),
+                              _buildCategorySection(
+                                title: 'Volunteering',
+                                icon: Icons.volunteer_activism_outlined,
+                                category: 'volunteering',
+                                items: experienceData['volunteering'],
+                              ),
+                            ],
                           ),
                         ),
-                ),
-              ),
-            ],
-          ),
+                      ),
+                    ),
+            ),
+          ],
         ),
       ),
       floatingActionButton: Container(
@@ -831,7 +829,6 @@ class _ExperiencePageState extends State<ExperiencePage> {
         ),
         child: FloatingActionButton.extended(
           onPressed: () async {
-            // Show loading indicator
             showDialog(
               context: context,
               barrierDismissible: false,
@@ -841,10 +838,9 @@ class _ExperiencePageState extends State<ExperiencePage> {
             );
 
             try {
-              // Check if user has experiences
               final docId = await _getUserDocId();
               if (docId == null) {
-                if (mounted) Navigator.pop(context); // Close loading
+                if (mounted) Navigator.pop(context);
                 _showErrorMessage('Unable to identify user');
                 return;
               }
@@ -863,17 +859,14 @@ class _ExperiencePageState extends State<ExperiencePage> {
               final clubs = data?['clubs'] ?? [];
               final volunteering = data?['volunteering'] ?? [];
 
-              // Check if user has at least one experience
               if (projects.isEmpty && workshops.isEmpty && clubs.isEmpty && volunteering.isEmpty) {
-                if (mounted) Navigator.pop(context); // Close loading
+                if (mounted) Navigator.pop(context);
                 _showErrorMessage('Please add at least one project, workshop, club, or volunteering experience before generating CV');
                 return;
               }
 
-              // Close loading dialog
               if (mounted) Navigator.pop(context);
 
-              // Navigate to CV page
               if (mounted) {
                 Navigator.push(
                   context,
@@ -883,7 +876,7 @@ class _ExperiencePageState extends State<ExperiencePage> {
                 );
               }
             } catch (e) {
-              if (mounted) Navigator.pop(context); // Close loading
+              if (mounted) Navigator.pop(context);
               _showErrorMessage('Failed to check experiences: ${e.toString()}');
             }
           },
