@@ -1,5 +1,3 @@
-
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -17,6 +15,10 @@ class SwappingEntryPage extends StatefulWidget {
 }
 
 class _SwappingEntryPageState extends State<SwappingEntryPage> {
+  // Design colors matching profile page
+  static const Color kBg = Color(0xFFE6F3FF);
+  static const Color kTopBar = Color(0xFF0D4F94);
+  
   bool _loading = true;
   String? _existingRequestId;
 
@@ -66,7 +68,7 @@ class _SwappingEntryPageState extends State<SwappingEntryPage> {
         final screenWidth = MediaQuery.of(dialogContext).size.width;
         final maxDialogWidth = screenWidth < 360
             ? screenWidth - 32.0
-            : 340.0; // keep compact on Pixel 7
+            : 340.0;
 
         return Dialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
@@ -79,21 +81,21 @@ class _SwappingEntryPageState extends State<SwappingEntryPage> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     "Absherk Swapping is Easy Now!",
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF0097B2),
+                      color: kTopBar,
                     ),
                   ),
                   const SizedBox(height: 14),
-                  const Text(
+                  Text(
                     "Process Overview:",
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 15,
-                      color: Color(0xFF0E0259),
+                      color: kTopBar,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -136,14 +138,14 @@ class _SwappingEntryPageState extends State<SwappingEntryPage> {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  const Align(
+                  Align(
                     alignment: Alignment.centerRight,
                     child: Text(
                       "Enjoy the journey.",
                       style: TextStyle(
                         fontSize: 14.5,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF0097B2),
+                        color: kTopBar,
                       ),
                     ),
                   ),
@@ -154,7 +156,7 @@ class _SwappingEntryPageState extends State<SwappingEntryPage> {
                       onPressed: () => Navigator.pop(dialogContext),
                       style: TextButton.styleFrom(
                         foregroundColor: Colors.white,
-                        backgroundColor: const Color(0xFF0097B2),
+                        backgroundColor: kTopBar,
                         padding: const EdgeInsets.symmetric(
                             horizontal: 22, vertical: 10),
                         shape: RoundedRectangleBorder(
@@ -191,17 +193,9 @@ class _SwappingEntryPageState extends State<SwappingEntryPage> {
   Widget build(BuildContext context) {
     if (_loading) {
       return Scaffold(
-        body: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFF0097B2), Color(0xFF0E0259)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-          child: const Center(
-            child: CircularProgressIndicator(color: Colors.white),
-          ),
+        backgroundColor: kBg,
+        body: Center(
+          child: CircularProgressIndicator(color: kTopBar),
         ),
       );
     }
