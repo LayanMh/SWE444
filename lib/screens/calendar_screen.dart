@@ -13,22 +13,22 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _CalendarPalette {
-  static const Color gradientStart = Color(0xFF0092A5);
-  static const Color gradientEnd = Color(0xFF0E1D6F);
-  static const Color cardGradientStart = Color(0xFFF1F7FF);
-  static const Color cardGradientEnd = Color(0xFFE5F1FF);
-  static const Color cardBorder = Color(0xFFA5C2F5);
-  static const Color textStrong = Color(0xFF122448);
-  static const Color textMuted = Color(0xFF4D5C7C);
-  static const Color accentPrimary = Color(0xFF4C6EF5);
-  static const Color accentSecondary = Color(0xFF5AD7C0);
-  static const Color chipBackground = Color(0xFFE3EDFF);
-  static const Color chipText = Color(0xFF2F4FA2);
-  static const Color headerStrong = Color(0xFFF1F9FF);
-  static const Color headerMuted = Color(0xCCF1F9FF);
-  static const Color headerChipBackground = Color(0x40FFFFFF);
-  static const Color headerChipText = Color(0xFFEFF6FF);
-  static const Color indicatorInactive = Color(0x66FFFFFF);
+  static const Color gradientStart = Color(0xFFDFF5FF);
+  static const Color gradientEnd = Color(0xFFDFF5FF);
+  static const Color cardGradientStart = Color(0xFF01509B);
+  static const Color cardGradientEnd = Color(0xFF01509B);
+  static const Color cardBorder = Color(0xFFBFD3F1);
+  static const Color textStrong = Color(0xFF1F3A5F);
+  static const Color textMuted = Color(0xFF60759C);
+  static const Color accentPrimary = Color(0xFF2E5D9F);
+  static const Color accentSecondary = Color(0xFF6FA8DC);
+  static const Color chipBackground = Color(0xFFEAF3FF);
+  static const Color chipText = Color(0xFF2E5D9F);
+  static const Color headerStrong = Color(0xFF1F3A5F);
+  static const Color headerMuted = Color(0xFF60759C);
+  static const Color headerChipBackground = Color(0xFF2E5D9F);
+  static const Color headerChipText = Colors.white;
+  static const Color indicatorInactive = Color(0x6689A5C7);
   static const Color iconOnGradient = Colors.white;
 }
 
@@ -71,27 +71,26 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 
   @override
-@override
-void initState() {
-  super.initState();
+  void initState() {
+    super.initState();
 
-  //  Refresh automatically when user�s schedule changes
-  final user = FirebaseAuth.instance.currentUser;
-  if (user != null) {
-    FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .collection('schedule')
-        .snapshots()
-        .listen((_) {
-      if (mounted && !_isLoading) {
-        _loadCalendar(interactive: false, showSpinner: false);
-      }
-    });
+    //  Refresh automatically when user?s schedule changes
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('schedule')
+          .snapshots()
+          .listen((_) {
+        if (mounted && !_isLoading) {
+          _loadCalendar(interactive: false, showSpinner: false);
+        }
+      });
+    }
+
+    _loadCalendar(interactive: false);
   }
-
-  _loadCalendar(interactive: false);
-}
 
 
 
@@ -213,85 +212,97 @@ void initState() {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        centerTitle: true,
-        title: const Text('My Schedule'),
-        
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-      floatingActionButton:
-          (_account != null && _events.isNotEmpty && !_isLoading)
-          ? _buildAddSectionButton()
-          : null,
-      body: _buildBody(),
-    );
-  }
-
-  Widget _buildAddSectionButton({
-    EdgeInsetsGeometry padding = const EdgeInsets.only(right: 16, bottom: 12),
-    double width = 152,
-  }) {
-    return Padding(
-      padding: padding,
-      child: Material(
-        color: Colors.transparent,
-        elevation: 8,
-        shadowColor: const Color(0x334C6EF5),
-        borderRadius: BorderRadius.circular(24),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(24),
-          onTap: _openAddLecture,
-          child: Ink(
-            height: 54,
-            width: width,
-            decoration: const BoxDecoration(
-              borderRadius: BorderRadius.all(Radius.circular(24)),
-              gradient: LinearGradient(
-                colors: <Color>[
-                  _CalendarPalette.accentPrimary,
-                  _CalendarPalette.accentSecondary,
-                ],
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-              ),
+      backgroundColor: const Color(0xFFDFF5FF),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(86),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFF2E5D9F),
+            borderRadius: BorderRadius.only(
+              bottomLeft: Radius.circular(24),
+              bottomRight: Radius.circular(24),
             ),
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+          ),
+          padding: const EdgeInsets.only(top: 12, left: 8, right: 8),
+          child: SafeArea(
+            bottom: false,
+            child: Row(
               children: [
-                Icon(Icons.school_rounded, color: Colors.white, size: 22),
-                SizedBox(width: 10),
-                Text(
-                  'Add Section',
+                const SizedBox(width: 48),
+                const Spacer(),
+                const Text(
+                  'My Schedule',
                   style: TextStyle(
                     color: Colors.white,
+                    fontSize: 18,
                     fontWeight: FontWeight.w600,
-                    fontSize: 15,
                   ),
                 ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.auto_awesome, color: Colors.white),
+                  onPressed: () {},
+                ),
+                const SizedBox(width: 48),
               ],
             ),
           ),
         ),
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      floatingActionButton:
+          (_account != null && !_isLoading) ? _buildAddSectionButton() : null,
+      body: _buildBody(),
     );
   }
 
-  Widget _decorateBackground(Widget child) {
-    return Container(
-      constraints: const BoxConstraints.expand(),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: <Color>[
-            _CalendarPalette.gradientStart,
-            _CalendarPalette.gradientEnd,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+  Widget _buildAddSectionButton({
+    EdgeInsetsGeometry padding = const EdgeInsets.only(bottom: 10),
+    double width = 220,
+  }) =>
+      Padding(
+        padding: padding,
+        child: Material(
+          color: Colors.transparent,
+          elevation: 10,
+          shadowColor: const Color(0x33000000),
+          borderRadius: BorderRadius.circular(26),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(26),
+            onTap: _openAddLecture,
+            child: Ink(
+              height: 54,
+              width: width,
+              decoration: const BoxDecoration(
+                borderRadius: BorderRadius.all(Radius.circular(26)),
+                gradient: LinearGradient(
+                  colors: [Color(0xFF6FA8DC), Color(0xFF2E5D9F)],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                ),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.add, color: Colors.white, size: 20),
+                  SizedBox(width: 8),
+                  Text(
+                    'Add Section',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
-      ),
-      child: child,
-    );
+      );
+
+  Widget _decorateBackground(Widget child) {
+    return Container(color: const Color(0xFFDFF5FF), child: child);
   }
 
   Widget _buildBody() {
@@ -342,7 +353,7 @@ void initState() {
               'Build your calendar',
               style: theme.textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.w700,
-                color: Colors.white,
+                color: _CalendarPalette.textStrong,
               ),
               textAlign: TextAlign.center,
             ),
@@ -350,7 +361,7 @@ void initState() {
             Text(
               'Tap "Add Section" to start crafting your schedule.',
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: Colors.white70,
+                color: _CalendarPalette.textMuted,
               ),
               textAlign: TextAlign.center,
             ),
@@ -391,135 +402,101 @@ void initState() {
 
     return Container(
       constraints: const BoxConstraints.expand(),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: <Color>[
-            _CalendarPalette.gradientStart,
-            _CalendarPalette.gradientEnd,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
+      color: const Color(0xFFDFF5FF),
       child: SafeArea(
         bottom: true,
         minimum: const EdgeInsets.only(bottom: 24),
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
-              child: Row(
+              padding: const EdgeInsets.fromLTRB(16, 18, 16, 10),
+              child: Column(
                 children: [
-                  IconButton(
-                    onPressed: pageIndex > 0
-                        ? () => _goToPage(pageIndex - 1)
-                        : null,
-                    icon: const Icon(Icons.chevron_left_rounded),
-                    color: _CalendarPalette.iconOnGradient,
-                    splashRadius: 24,
-                  ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Text(
-                          DateFormat('EEEE').format(currentDay),
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: _CalendarPalette.headerStrong,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          DateFormat('MMMM d, yyyy').format(currentDay),
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: _CalendarPalette.headerMuted,
-                          ),
-                        ),
-                        if (isToday)
-                          Container(
-                            margin: const EdgeInsets.only(top: 8),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 4,
+                  Row(
+                    children: [
+                      _circleIcon(
+                        Icons.chevron_left,
+                        onTap: pageIndex > 0
+                            ? () => _goToPage(pageIndex - 1)
+                            : null,
+                      ),
+                      const Spacer(),
+                      Column(
+                        children: [
+                          Text(
+                            DateFormat('EEEE').format(currentDay),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 20,
+                              color: _CalendarPalette.headerStrong,
                             ),
-                            decoration: BoxDecoration(
-                              color: _CalendarPalette.headerChipBackground,
-                              borderRadius: BorderRadius.circular(12),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            DateFormat('MMMM d, yyyy').format(currentDay),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: _CalendarPalette.headerMuted,
                             ),
-                            child: Text(
-                              'Today',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: _CalendarPalette.headerChipText,
-                                fontWeight: FontWeight.w700,
+                          ),
+                          if (isToday) ...[
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _CalendarPalette.headerChipBackground,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Text(
+                                'Today',
+                                style: TextStyle(
+                                  color: _CalendarPalette.headerChipText,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ),
-                          ),
-                      ],
+                          ],
+                        ],
+                      ),
+                      const Spacer(),
+                      _circleIcon(
+                        Icons.chevron_right,
+                        onTap: pageIndex < _dayKeys.length - 1
+                            ? () => _goToPage(pageIndex + 1)
+                            : null,
+                      ),
+                    ],
+                  ),
+                  if (hasToday || currentDayEvents.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (hasToday)
+                            _chip(
+                              label: 'Jump to today',
+                              onTap: _jumpToToday,
+                              icon: Icons.chevron_right,
+                            ),
+                          if (currentDayEvents.isNotEmpty && !isFutureDay) ...[
+                            const SizedBox(width: 8),
+                            _chip(
+                              label: 'Absence All Day',
+                              onTap: () => _confirmAbsenceAllDay(currentDay),
+                              icon: Icons.event_busy_rounded,
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
-                  ),
-                  IconButton(
-                    onPressed: pageIndex < _dayKeys.length - 1
-                        ? () => _goToPage(pageIndex + 1)
-                        : null,
-                    icon: const Icon(Icons.chevron_right_rounded),
-                    color: _CalendarPalette.iconOnGradient,
-                    splashRadius: 24,
-                  ),
                 ],
               ),
             ),
-            if ((!isToday && hasToday) || currentDayEvents.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    if (currentDayEvents.isNotEmpty && !isFutureDay)
-                      TextButton.icon(
-                        style: TextButton.styleFrom(
-                          foregroundColor: _CalendarPalette.headerMuted,
-                        ),
-                        onPressed: () => _confirmAbsenceAllDay(currentDay),
-                        icon: const Icon(
-                          Icons.event_busy_rounded,
-                          color: _CalendarPalette.headerMuted,
-                        ),
-                        label: Text(
-                          'Absence All Day',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: _CalendarPalette.headerMuted,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    if (currentDayEvents.isNotEmpty &&
-                        !isFutureDay &&
-                        !isToday &&
-                        hasToday)
-                      const SizedBox(width: 12),
-                    if (!isToday && hasToday)
-                      TextButton.icon(
-                        style: TextButton.styleFrom(
-                          foregroundColor: _CalendarPalette.headerStrong,
-                        ),
-                        onPressed: _jumpToToday,
-                        icon: const Icon(
-                          Icons.today_rounded,
-                          color: _CalendarPalette.headerStrong,
-                        ),
-                        label: Text(
-                          'Jump to today',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: _CalendarPalette.headerStrong,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            const SizedBox(height: 8),
             Expanded(
               child: PageView.builder(
                 controller: controller,
@@ -554,14 +531,14 @@ void initState() {
             Icon(
               Icons.emoji_emotions_outlined,
               size: 52,
-              color: const Color.fromARGB(255, 255, 255, 255),
+              color: _CalendarPalette.accentPrimary,
             ),
             const SizedBox(height: 18),
             Text(
               'No classes scheduled',
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w600,
-                color: const Color.fromARGB(255, 246, 248, 250),
+                color: _CalendarPalette.textStrong,
               ),
               textAlign: TextAlign.center,
             ),
@@ -569,7 +546,7 @@ void initState() {
             Text(
               'Enjoy your day or add a new section to stay ahead.',
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: const Color.fromARGB(255, 251, 251, 251),
+                color: _CalendarPalette.textMuted,
               ),
               textAlign: TextAlign.center,
             ),
@@ -594,168 +571,109 @@ void initState() {
   }
 
   Widget _buildEventCard(MicrosoftCalendarEvent event) {
-    final theme = Theme.of(context);
     final subject = event.subject.isNotEmpty ? event.subject : 'Untitled event';
     final location = event.location?.trim() ?? '';
-    final timeLabel = _formatEventTime(event);
+    final timeParts = _formatEventTime(event).split(' - ');
 
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(22),
       child: InkWell(
-        borderRadius: BorderRadius.circular(22),
-        onTap: null, // Recording absence is via the icon only
+        borderRadius: BorderRadius.circular(8),
+        onTap: null,
         child: Ink(
+          height: 108,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(22),
-            gradient: const LinearGradient(
-              colors: <Color>[
-                _CalendarPalette.cardGradientStart,
-                _CalendarPalette.cardGradientEnd,
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            border: Border.all(
-              color: _CalendarPalette.cardBorder.withValues(alpha: 0.55),
-            ),
-            boxShadow: <BoxShadow>[
+            color: _CalendarPalette.cardGradientStart,
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: const [
               BoxShadow(
-                color: _CalendarPalette.cardBorder.withValues(alpha: 0.25),
-                blurRadius: 18,
-                offset: const Offset(0, 12),
+                color: Color(0x22000000),
+                blurRadius: 10,
+                offset: Offset(0, 6),
               ),
             ],
           ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 6,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    gradient: const LinearGradient(
-                      colors: <Color>[
-                        _CalendarPalette.accentPrimary,
-                        _CalendarPalette.accentSecondary,
-                      ],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.chevron_right, color: Colors.white, size: 20),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    timeParts.first,
+                    style: const TextStyle(
+                      color: Color(0xFFC6EAFA),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        subject,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: _CalendarPalette.textStrong,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.schedule_rounded,
-                            size: 18,
-                            color: _CalendarPalette.textMuted,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            timeLabel,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: _CalendarPalette.textMuted,
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (location.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 10),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: _CalendarPalette.chipBackground,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(
-                                  Icons.location_on_outlined,
-                                  size: 16,
-                                  color: _CalendarPalette.chipText,
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  location,
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: _CalendarPalette.chipText,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                // Hide the action icon for future events
-                if (!(event.start != null &&
-                    DateTime(
-                      event.start!.year,
-                      event.start!.month,
-                      event.start!.day,
-                    ).isAfter(
-                      DateTime(
-                        DateTime.now().year,
-                        DateTime.now().month,
-                        DateTime.now().day,
-                      ),
-                    ))) ...[
-                  const SizedBox(width: 12),
-                  FutureBuilder<bool>(
-                    future: _isEventAlreadyAbsent(event.id),
-                    builder: (context, snap) {
-                      final isAbsent = snap.data == true;
-                      final icon = isAbsent
-                          ? const Icon(Icons.person_off_outlined)
-                          : const Icon(Icons.person_outline);
-                      final color = isAbsent
-                          ? Colors.redAccent
-                          : _CalendarPalette.accentPrimary;
-                      final tooltip = isAbsent
-                          ? 'Absence recorded'
-                          : 'Record absence';
-                      return IconButton(
-                        tooltip: tooltip,
-                        visualDensity: VisualDensity.compact,
-                        icon: icon,
-                        color: color,
-                        onPressed: () async {
-                          await _confirmAbsenceToggle(
-                            event,
-                            isAbsent: isAbsent,
-                          );
-                          if (mounted) setState(() {});
-                        },
-                      );
-                    },
+                  const SizedBox(height: 4),
+                  Text(
+                    timeParts.last,
+                    style: const TextStyle(
+                      color: Color(0xFFC6EAFA),
+                      fontSize: 13,
+                    ),
                   ),
                 ],
-              ],
-            ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      subject,
+                      maxLines: 2,
+                      overflow: TextOverflow.visible,
+                      softWrap: true,
+                      style: const TextStyle(
+                        color: Color(0xFF83C8EF),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    if (location.isNotEmpty)
+                      Text(
+                        location,
+                        style: const TextStyle(
+                          color: Color(0xFFBFD3F1),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              if (!_isFutureEvent(event))
+                FutureBuilder<bool>(
+                  future: _isEventAlreadyAbsent(event.id),
+                  builder: (context, snap) {
+                    final isAbsent = snap.data == true;
+                    return IconButton(
+                      padding: EdgeInsets.zero,
+                      icon: Icon(
+                        isAbsent
+                            ? Icons.person_off_outlined
+                            : Icons.person_outline,
+                        color: const Color(0xFFC6EAFA),
+                      ),
+                      onPressed: () async {
+                        await _confirmAbsenceToggle(
+                          event,
+                          isAbsent: isAbsent,
+                        );
+                        if (mounted) setState(() {});
+                      },
+                    );
+                  },
+                ),
+            ],
           ),
         ),
       ),
@@ -785,6 +703,80 @@ void initState() {
         );
       }),
     );
+  }
+
+  Widget _circleIcon(IconData icon, {VoidCallback? onTap}) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Ink(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: const Color(0xFFEAF3FF),
+            border: Border.all(color: const Color(0xFFBFD3F1)),
+          ),
+          child: Icon(icon, size: 20, color: _CalendarPalette.accentPrimary),
+        ),
+      ),
+    );
+  }
+
+  Widget _chip({
+    required String label,
+    required VoidCallback onTap,
+    IconData? icon,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEAF3FF),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFBFD3F1)),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x22000000),
+                blurRadius: 6,
+                offset: Offset(0, 2),
+              )
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  color: _CalendarPalette.accentPrimary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
+              ),
+              if (icon != null) ...[
+                const SizedBox(width: 6),
+                Icon(icon, size: 14, color: _CalendarPalette.accentPrimary),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  bool _isFutureEvent(MicrosoftCalendarEvent e) {
+    if (e.start == null) return false;
+    final d = e.start!;
+    final today = DateTime.now();
+    return DateTime(d.year, d.month, d.day)
+        .isAfter(DateTime(today.year, today.month, today.day));
   }
 
 

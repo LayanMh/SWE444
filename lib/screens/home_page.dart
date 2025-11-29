@@ -73,39 +73,120 @@ late final List<Widget> _tabs = <Widget>[
   }
 
   setState(() => _selectedIndex = i);
-}
+  }
 
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: IndexedStack(index: _selectedIndex, children: _tabs),
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        currentIndex: _selectedIndex,
-        onTap: _onTap,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_rounded),
-            label: 'Profile',
+      bottomNavigationBar: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xF2EAF3FF), // light tinted background with slight opacity
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x22000000),
+              blurRadius: 10,
+              offset: Offset(0, -2),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          top: false,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _NavItem(
+                icon: Icons.person_outline,
+                label: 'Profile',
+                active: _selectedIndex == 0,
+                onTap: () => _onTap(0),
+              ),
+              _NavItem(
+                icon: Icons.event_available_outlined,
+                label: 'Schedule',
+                active: _selectedIndex == 1,
+                onTap: () => _onTap(1),
+              ),
+              _NavItem(
+                icon: Icons.home_outlined,
+                label: 'Home',
+                active: _selectedIndex == 2,
+                onTap: () => _onTap(2),
+              ),
+              _NavItem(
+                icon: Icons.school_outlined,
+                label: 'Experience',
+                active: _selectedIndex == 3,
+                onTap: () => _onTap(3),
+              ),
+              _NavItem(
+                icon: Icons.people_outline,
+                label: 'Community',
+                active: _selectedIndex == 4,
+                onTap: () => _onTap(4),
+              ),
+            ],
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.calendar_today_rounded),
-            label: 'Schedule',
+        ),
+      ),
+    );
+  }
+}
+
+class _NavItem extends StatelessWidget {
+  const _NavItem({
+    required this.icon,
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    const inactiveColor = Color(0xFF7A8DA8);
+    const activeColor = Color(0xFF2E5D9F);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: active ? activeColor : inactiveColor, size: 24),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  color: active ? activeColor : inactiveColor,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 4),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                height: 3,
+                width: active ? 26 : 0,
+                decoration: BoxDecoration(
+                  color: active ? activeColor : Colors.transparent,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ],
           ),
-          BottomNavigationBarItem(
-            icon: ImageIcon(AssetImage('assets/images/logo.png')),
-            label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.school_rounded),
-            label: 'Experience',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.people_alt_rounded),
-            label: 'Community',
-          ),
-        ],
+        ),
       ),
     );
   }
