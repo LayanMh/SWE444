@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
 import 'signin_screen.dart';
 import 'signup_screen.dart';
+import 'package:video_player/video_player.dart';
 
 /// Welcome screen with beautiful Deep Sea themed design
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
 
-  // Deep Sea Color Palette
-  static const _deepNavy = Color(0xFF0e0259);
-  static const _oceanTeal = Color(0xFF006B7A);
-  static const _brightTeal = Color(0xFF0097b2);
+  // GPA Calculator palette
+  static const _deepNavy = Color(0xFF0D4F94);
+  static const _brightTeal = Color(0xFF4A98E9);
+  static const _oceanTeal = Color(0xFFE6F3FF);
   static const _pureWhite = Color(0xFFFFFFFF);
-  static const _softWhite = Color(0xFFF8FDFF);
+  static const _softWhite = Color(0xFFF2FAFF);
 
   @override
   Widget build(BuildContext context) {
@@ -27,7 +28,7 @@ class WelcomeScreen extends StatelessWidget {
                 child: Column(
                   children: [
                     const Spacer(),
-                    const _LogoSection(),
+                    const _VideoHero(),
                     const SizedBox(height: 48),
                     const _WelcomeTextSection(),
                     const Spacer(flex: 2),
@@ -50,11 +51,11 @@ class WelcomeScreen extends StatelessWidget {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          _oceanTeal, // Deep ocean teal
-          _brightTeal, // Bright teal
-          _deepNavy, // Deep navy depths
+          _deepNavy,
+          _brightTeal,
+          _oceanTeal,
         ],
-        stops: [0.0, 0.6, 1.0],
+        stops: [0.0, 0.55, 1.0],
       ),
     );
   }
@@ -143,7 +144,7 @@ class _FloatingShape extends StatelessWidget {
           borderRadius: shape == null && borderRadius != null
               ? BorderRadius.circular(borderRadius!)
               : null,
-          color: WelcomeScreen._pureWhite.withValues(alpha: opacity),
+          color: WelcomeScreen._pureWhite.withOpacity(opacity),
         ),
       ),
     );
@@ -153,41 +154,90 @@ class _FloatingShape extends StatelessWidget {
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 /// Enhanced logo section with glassmorphism effect
-class _LogoSection extends StatelessWidget {
-  const _LogoSection();
+class _VideoHero extends StatefulWidget {
+  const _VideoHero();
+
+  @override
+  State<_VideoHero> createState() => _VideoHeroState();
+}
+
+class _VideoHeroState extends State<_VideoHero> {
+  late final VideoPlayerController _controller;
+  bool _initialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.asset('assets/images/welcome.mp4')
+      ..setLooping(true)
+      ..setVolume(0);
+    _controller.initialize().then((_) {
+      if (!mounted) return;
+      setState(() => _initialized = true);
+      _controller.play();
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 150,
-      height: 150,
+      width: 180,
+      height: 180,
       decoration: BoxDecoration(
         color: WelcomeScreen._softWhite,
         borderRadius: BorderRadius.circular(36),
         boxShadow: [
-          // Main shadow
           BoxShadow(
-            color: WelcomeScreen._deepNavy.withValues(alpha: 0.25),
+            color: WelcomeScreen._deepNavy.withOpacity(0.25),
             blurRadius: 40,
             offset: const Offset(0, 20),
           ),
-          // Highlight shadow
           BoxShadow(
-            color: WelcomeScreen._pureWhite.withValues(alpha: 0.1),
+            color: WelcomeScreen._pureWhite.withOpacity(0.15),
             blurRadius: 15,
             offset: const Offset(0, -8),
           ),
         ],
-        // Subtle border for glass effect
         border: Border.all(
-          color: WelcomeScreen._pureWhite.withValues(alpha: 0.2),
+          color: WelcomeScreen._brightTeal.withOpacity(0.25),
           width: 1.5,
         ),
       ),
-      child: Center(
-        child: Image.asset(
-          'assets/images/logo.png', // path to your logo
-          fit: BoxFit.contain,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(30),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (_initialized)
+              FittedBox(
+                fit: BoxFit.cover,
+                child: SizedBox(
+                  width: _controller.value.size.width,
+                  height: _controller.value.size.height,
+                  child: VideoPlayer(_controller),
+                ),
+              )
+            else
+              const Center(child: CircularProgressIndicator()),
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.transparent,
+                    WelcomeScreen._deepNavy.withOpacity(0.1),
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -321,21 +371,21 @@ class _SecondaryButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(22),
         gradient: LinearGradient(
           colors: [
-            WelcomeScreen._pureWhite.withValues(alpha: 0.12),
-            WelcomeScreen._pureWhite.withValues(alpha: 0.06),
+            WelcomeScreen._brightTeal,
+            WelcomeScreen._deepNavy,
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         border: Border.all(
-          color: WelcomeScreen._pureWhite.withValues(alpha: 0.3),
-          width: 1.5,
+          color: WelcomeScreen._brightTeal.withOpacity(0.4),
+          width: 1.2,
         ),
         boxShadow: [
           BoxShadow(
-            color: WelcomeScreen._deepNavy.withValues(alpha: 0.1),
+            color: WelcomeScreen._deepNavy.withOpacity(0.18),
             blurRadius: 20,
-            offset: const Offset(0, 8),
+            offset: const Offset(0, 10),
           ),
         ],
       ),
@@ -350,15 +400,15 @@ class _SecondaryButton extends StatelessWidget {
               Icon(
                 icon,
                 size: 22,
-                color: WelcomeScreen._pureWhite.withValues(alpha: 0.95),
+                color: WelcomeScreen._pureWhite,
               ),
               const SizedBox(width: 12),
               Text(
                 label,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.w600,
-                  color: WelcomeScreen._pureWhite.withValues(alpha: 0.95),
+                  color: Colors.white,
                   letterSpacing: 0.3,
                 ),
               ),

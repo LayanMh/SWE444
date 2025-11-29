@@ -20,9 +20,14 @@ import 'screens/my_courses_page.dart';
 import 'screens/welcome_screen.dart';
 import 'screens/calendar_screen.dart';
 import 'screens/add_lecture_screen.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Load environment variables
+  await dotenv.load(fileName: ".env");
+  
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -32,7 +37,7 @@ Future<void> main() async {
     debugPrint('Firebase initialization failed: $e');
     debugPrintStack(stackTrace: st);
   }
-  // Initialize local notifications (Android/iOS)
+  
   await NotiService.initialize();
   runApp(const MyApp());
 }
@@ -121,7 +126,7 @@ class MyApp extends StatelessWidget {
           '/calculator': (_) => const GpaCalculator(),
 
           '/experience': (_) => const ExperiencePage(),
-          '/community': (_) => const CommunityPage(),
+          '/community': (_) =>  const CommunityPage(),
           '/absence': (_) => const AbsencePage(),
           '/my-courses': (_) => const MyCoursesPage(),
         },

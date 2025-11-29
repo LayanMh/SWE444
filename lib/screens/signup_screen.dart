@@ -5,6 +5,11 @@ import 'signin_screen.dart';
 import 'email_verification_screen.dart';
 import 'welcome_screen.dart';
 
+const _kBgColor = Color(0xFFE6F3FF);
+const _kTopBarColor = Color(0xFF0D4F94);
+const _kAccentColor = Color(0xFF4A98E9);
+const _kCardColor = Colors.white;
+
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
 
@@ -245,44 +250,60 @@ class _AppBar extends StatelessWidget {
   const _AppBar();
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Row(
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 28),
+      decoration: const BoxDecoration(
+        color: _kTopBarColor,
+        borderRadius: BorderRadius.only(bottomRight: Radius.circular(32)),
+        boxShadow: [
+          BoxShadow(color: Colors.black26, blurRadius: 12, offset: Offset(0, 6)),
+        ],
+      ),
+      child: Column(
         children: [
-          Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFFE0E0E0).withOpacity(0.15),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white.withOpacity(0.2)),
-            ),
-            child: IconButton(
-              onPressed: () {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (context) => const WelcomeScreen()),
-                  (route) => false,
-                );
-              },
-              icon: const Icon(
-                Icons.arrow_back_ios_rounded,
-                color: Colors.white,
-                size: 20,
+          Row(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 4)),
+                  ],
+                ),
+                child: IconButton(
+                  onPressed: () {
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(builder: (context) => const WelcomeScreen()),
+                      (route) => false,
+                    );
+                  },
+                  icon: const Icon(Icons.arrow_back_ios_new, color: _kTopBarColor, size: 20),
+                ),
               ),
-            ),
+              const Spacer(),
+            ],
           ),
-          const Expanded(
-            child: Text(
-              'Create Account',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-                letterSpacing: 0.5,
+          const SizedBox(height: 18),
+          const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+              SizedBox(width: 8),
+              Text(
+                'Create Account',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-              textAlign: TextAlign.center,
-            ),
+              SizedBox(width: 8),
+              Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+            ],
           ),
-          const SizedBox(width: 48),
         ],
       ),
     );
@@ -311,14 +332,14 @@ class _SignUpCard extends StatelessWidget {
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.95),
+        color: _kCardColor,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.2)),
+        border: Border.all(color: _kTopBarColor.withOpacity(0.08)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0e0259).withOpacity(0.1),
-            blurRadius: 30,
-            offset: const Offset(0, 15),
+            color: _kTopBarColor.withOpacity(0.12),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
           ),
         ],
       ),
@@ -358,47 +379,53 @@ class _Header extends StatelessWidget {
     return Column(
       children: [
         Container(
-          width: 64,
-          height: 64,
+          width: 72,
+          height: 72,
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF0097b2), Color(0xFF006B7A), Color(0xFF0e0259)],
-            ),
-            borderRadius: BorderRadius.circular(16),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: _kAccentColor.withOpacity(0.3)),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF0097b2).withOpacity(0.3),
+                color: _kTopBarColor.withOpacity(0.15),
                 blurRadius: 20,
-                offset: const Offset(0, 8),
+                offset: const Offset(0, 10),
               ),
             ],
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(8.0),
             child: Image.asset(
               'assets/images/logo.png',
-              width: 64,
-              height: 64,
-              fit: BoxFit.cover,
+              fit: BoxFit.contain,
             ),
           ),
         ),
         const SizedBox(height: 12),
-        const Text(
-          'Join ABSHERK',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w800,
-            color: Color(0xFF0e0259),
-            letterSpacing: -0.5,
-          ),
+        const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.auto_awesome, color: _kTopBarColor, size: 18),
+            SizedBox(width: 8),
+            Text(
+              'Join ABSHERK',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                color: _kTopBarColor,
+                letterSpacing: -0.5,
+              ),
+            ),
+            SizedBox(width: 8),
+            Icon(Icons.auto_awesome, color: _kTopBarColor, size: 18),
+          ],
         ),
         const SizedBox(height: 4),
         Text(
           'Email verification required to complete registration',
           style: TextStyle(
             fontSize: 14,
-            color: const Color(0xFF0e0259).withOpacity(0.7),
+            color: _kTopBarColor.withOpacity(0.7),
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -420,7 +447,7 @@ class _PersonalInfoSection extends StatelessWidget {
       children: [
         const _SectionTitle(
           title: 'Personal Information',
-         icon: Icons.person_outline_rounded,
+          icon: Icons.person_outline_rounded,
         ),
         const SizedBox(height: 12),
         Row(
@@ -644,7 +671,7 @@ errorMaxLines: 2,
             labelText: widget.label,
             prefixIcon: const Icon(
               Icons.lock_outline_rounded,
-              color: Color(0xFF006B7A),
+              color: _kTopBarColor,
               size: 20,
             ),
             suffixIcon: IconButton(
@@ -652,7 +679,7 @@ errorMaxLines: 2,
                 _obscureText
                     ? Icons.visibility_off_rounded
                     : Icons.visibility_rounded,
-                color: const Color(0xFF006B7A),
+                color: _kTopBarColor,
                 size: 20,
               ),
               onPressed: () => setState(() => _obscureText = !_obscureText),
@@ -660,17 +687,17 @@ errorMaxLines: 2,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(
-                color: const Color(0xFF4ECDC4).withOpacity(0.5),
+                color: _kTopBarColor.withOpacity(0.15),
               ),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF0097b2), width: 2),
+              borderSide: const BorderSide(color: _kAccentColor, width: 2),
             ),
             filled: true,
-            fillColor: const Color(0xFF95E1D3).withOpacity(0.1),
+            fillColor: Colors.white,
             labelStyle: TextStyle(
-              color: const Color(0xFF006B7A).withOpacity(0.8),
+              color: _kTopBarColor.withOpacity(0.8),
             ),
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
@@ -730,7 +757,7 @@ class _PasswordRequirement extends StatelessWidget {
           Icon(
             isValid ? Icons.check_circle : Icons.radio_button_unchecked,
             size: 16,
-            color: isValid ? const Color(0xFF4ECDC4) : Colors.grey[400],
+            color: isValid ? _kAccentColor : Colors.grey[400],
           ),
           const SizedBox(width: 8),
           Flexible(
@@ -738,7 +765,7 @@ class _PasswordRequirement extends StatelessWidget {
               text,
               style: TextStyle(
                 fontSize: 12,
-                color: isValid ? const Color(0xFF006B7A) : Colors.grey[600],
+                color: isValid ? _kTopBarColor : Colors.grey[600],
                 fontWeight: isValid ? FontWeight.w500 : FontWeight.normal,
               ),
             ),
@@ -785,25 +812,23 @@ class _CustomTextField extends StatelessWidget {
 errorMaxLines: 2,
         labelText: label,
         hintText: hint,
-        prefixIcon: Icon(icon, color: const Color(0xFF006B7A), size: 20),
-        hintStyle: TextStyle(
-  color: const Color(0xFF006B7A).withOpacity(0.4), // Much lighter
-),
+        prefixIcon: Icon(icon, color: _kTopBarColor, size: 20),
+        hintStyle: TextStyle(color: _kTopBarColor.withOpacity(0.4)),
 
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(
-            color: const Color(0xFF4ECDC4).withOpacity(0.5),
+            color: _kTopBarColor.withOpacity(0.15),
           ),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF0097b2), width: 2),
+          borderSide: const BorderSide(color: _kAccentColor, width: 2),
         ),
         filled: true,
-        fillColor: const Color(0xFF95E1D3).withOpacity(0.1),
+        fillColor: Colors.white,
         labelStyle: TextStyle(
-          color: const Color(0xFF006B7A).withOpacity(0.8),
+          color: _kTopBarColor.withOpacity(0.8),
         ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
@@ -845,7 +870,7 @@ errorMaxLines: 2,
         labelText: widget.label,
         prefixIcon: const Icon(
           Icons.lock_outline_rounded,
-          color: Color(0xFF006B7A),
+          color: _kTopBarColor,
           size: 20,
         ),
         suffixIcon: IconButton(
@@ -853,7 +878,7 @@ errorMaxLines: 2,
             _obscureText
                 ? Icons.visibility_off_rounded
                 : Icons.visibility_rounded,
-            color: const Color(0xFF006B7A),
+            color: _kTopBarColor,
             size: 20,
           ),
           onPressed: () => setState(() => _obscureText = !_obscureText),
@@ -861,17 +886,17 @@ errorMaxLines: 2,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(
-            color: const Color(0xFF4ECDC4).withOpacity(0.5),
+            color: _kTopBarColor.withOpacity(0.15),
           ),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF0097b2), width: 2),
+          borderSide: const BorderSide(color: _kAccentColor, width: 2),
         ),
         filled: true,
-        fillColor: const Color(0xFF95E1D3).withOpacity(0.1),
+        fillColor: Colors.white,
         labelStyle: TextStyle(
-          color: const Color(0xFF006B7A).withOpacity(0.8),
+          color: _kTopBarColor.withOpacity(0.8),
         ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
@@ -919,21 +944,21 @@ class _CustomDropdownState<T> extends State<_CustomDropdown<T>> {
         errorStyle: const TextStyle(fontSize: 11, height: 1.2),
 errorMaxLines: 2,
         labelText: widget.label,
-        prefixIcon: Icon(widget.icon, color: const Color(0xFF006B7A), size: 20),
+        prefixIcon: Icon(widget.icon, color: _kTopBarColor, size: 20),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(
-            color: const Color(0xFF4ECDC4).withOpacity(0.5),
+            color: _kTopBarColor.withOpacity(0.15),
           ),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF0097b2), width: 2),
+          borderSide: const BorderSide(color: _kAccentColor, width: 2),
         ),
         filled: true,
-        fillColor: const Color(0xFF95E1D3).withOpacity(0.1),
+        fillColor: Colors.white,
         labelStyle: TextStyle(
-          color: const Color(0xFF006B7A).withOpacity(0.8),
+          color: _kTopBarColor.withOpacity(0.8),
         ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
@@ -961,14 +986,14 @@ class _SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, color: const Color(0xFF0097b2), size: 18),
+        Icon(icon, color: _kTopBarColor, size: 18),
         const SizedBox(width: 6),
         Text(
           title,
           style: const TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
-            color: Color(0xFF0e0259),
+            color: _kTopBarColor,
           ),
         ),
       ],
@@ -990,12 +1015,12 @@ class _SignUpButton extends StatelessWidget {
       height: 48,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF0097b2), Color(0xFF006B7A)],
+          colors: [_kAccentColor, _kTopBarColor],
         ),
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0097b2).withOpacity(0.3),
+            color: _kAccentColor.withOpacity(0.4),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -1049,7 +1074,7 @@ class _SignInPrompt extends StatelessWidget {
         Text(
           'Already have an account? ',
           style: TextStyle(
-            color: const Color(0xFF0e0259).withOpacity(0.7),
+            color: _kTopBarColor.withOpacity(0.7),
             fontSize: 14,
           ),
         ),
@@ -1085,7 +1110,7 @@ class _SignInPrompt extends StatelessWidget {
           child: const Text(
             'Sign In',
             style: TextStyle(
-              color: Color(0xFF0097b2),
+              color: _kAccentColor,
               fontWeight: FontWeight.w600,
               fontSize: 14,
             ),
@@ -1231,16 +1256,5 @@ static String? gpa(String? value) {
 }
 }
 class _AppTheme {
-  static const gradientBackground = BoxDecoration(
-    gradient: LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [
-        Color(0xFF006B7A), // Deep ocean teal
-        Color(0xFF0097b2), // Bright teal
-        Color(0xFF0e0259), // Deep navy depths
-      ],
-      stops: [0.0, 0.6, 1.0],
-    ),
-  );
+  static const gradientBackground = BoxDecoration(color: _kBgColor);
 }

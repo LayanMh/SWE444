@@ -8,6 +8,9 @@ import '../services/attendance_totals.dart';
 import 'package:absherk/services/absence_calculator.dart';
 import 'package:absherk/services/noti_service.dart';
 import 'package:absherk/services/schedule_service.dart';
+import 'home_page.dart';
+
+const _kTopBarColor = Color(0xFF0D4F94);
 
 class AbsencePage extends StatefulWidget {
   const AbsencePage({super.key});
@@ -29,10 +32,42 @@ class _AbsencePageState extends State<AbsencePage> {
       return {};
     }
   }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('My Absences')),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(110),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
+          decoration: const BoxDecoration(
+            color: _kTopBarColor,
+            borderRadius: BorderRadius.only(bottomRight: Radius.circular(32)),
+            boxShadow: [
+              BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 6)),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: const [
+              Spacer(),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                  SizedBox(width: 8),
+                  Text(
+                    'My Absences',
+                    style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w600),
+                  ),
+                  SizedBox(width: 8),
+                  Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: AttendanceService.streamMyAbsences(),
         builder: (context, snap) {
@@ -106,6 +141,25 @@ class _AbsencePageState extends State<AbsencePage> {
           );
         },
       ),
+      bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
+        currentIndex: 2,
+        onTap: _onNavTap,
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.person_rounded), label: 'Profile'),
+          BottomNavigationBarItem(icon: Icon(Icons.calendar_today_rounded), label: 'Schedule'),
+          BottomNavigationBarItem(icon: ImageIcon(AssetImage('assets/images/logo.png')), label: 'Home'),
+          BottomNavigationBarItem(icon: Icon(Icons.school_rounded), label: 'Experience'),
+          BottomNavigationBarItem(icon: Icon(Icons.people_alt_rounded), label: 'Community'),
+        ],
+      ),
+    );
+  }
+
+  void _onNavTap(int index) {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => HomePage(initialIndex: index)),
     );
   }
 }
@@ -189,7 +243,7 @@ class _PercentBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Prefer CalendarScreen-provided total minutes; otherwise, fall back
-    // to computing minutes from Firestore lectures via _computeDenominator.
+    // to computing minutes from Firestore lectures via _computeDenominatorMinutes.
     return ValueListenableBuilder<Map<String, int>>(
       valueListenable: AttendanceTotals.instance.totalMinutesByCourse,
       builder: (context, totals, _) {
@@ -243,7 +297,7 @@ class _PercentBar extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          'Absence: ${pct.toStringAsFixed(1)}% (absent $absentEvents of ' 
+          'Absence: ${pct.toStringAsFixed(1)}% (absent $absentEvents of '
           '${_totalClassesFor(courseCode)} classes)',
           style: TextStyle(
             fontSize: 12,
@@ -385,7 +439,6 @@ Future<_Denom> _computeDenominator(String normalizedCourseCode) async {
 
   return _Denom(totalEvents: totalEvents, totalMinutes: totalMinutes);
 }
-
 
 int _countWeekdayOccurrences(DateTime from, DateTime to, int weekdayZeroBased) {
   // Convert to DateTime.weekday (1=Mon..7=Sun). Your model is 0..6.
@@ -558,8 +611,6 @@ class _AbsenceRow extends StatelessWidget {
   }
 }
 
-/* (Filter removed) */
-
 /* =========================== Small helpers ============================ */
 
 class _Badge extends StatelessWidget {
@@ -669,4 +720,5 @@ DateTime? _asDateTime(dynamic v) {
 
 String _normalize(String s) => s.toUpperCase().replaceAll(' ', '');
 DateTime _atStartOfDay(DateTime d) => DateTime(d.year, d.month, d.day);
-DateTime _atEndOfDay(DateTime d) => DateTime(d.year, d.month, d.day, 23, 59, 59);
+DateTime _atEndOfDay(DateTime d) =>
+    DateTime(d.year, d.month, d.day, 23, 59, 59);

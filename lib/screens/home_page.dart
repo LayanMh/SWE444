@@ -8,8 +8,14 @@ import 'experience.dart';
 import 'community.dart';
 import 'profile.dart';
 
+const _kBgColor = Color(0xFFE6F3FF);
+const _kTopBar = Color(0xFF0D4F94);
+const _kAccent = Color(0xFF4A98E9);
+
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  final int initialIndex;
+
+  const HomePage({super.key, this.initialIndex = 2});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -17,7 +23,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
 
-  int _selectedIndex = 2; 
+  late int _selectedIndex;
 final GlobalKey<ProfileScreenState> _profileKey = GlobalKey<ProfileScreenState>();
 late final List<Widget> _tabs = <Widget>[
   ProfileScreen(key: _profileKey),  // ← add key here
@@ -26,6 +32,12 @@ late final List<Widget> _tabs = <Widget>[
   const ExperiencePage(),
   const CommunityPage(),
 ];
+
+ @override
+ void initState() {
+   super.initState();
+   _selectedIndex = widget.initialIndex;
+ }
 
  void _onTap(int i) async {
   // If leaving Profile (index 0) while in edit mode
@@ -162,20 +174,20 @@ class _HomeTabState extends State<_HomeTab> {
 
   @override
   Widget build(BuildContext context) {
+    final displayName = firstName ?? 'User';
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment(-1, -1),
           end: Alignment(1, 1),
-          colors: [Color(0xFF006B7A), Color(0xFF0097B2), Color(0xFF0E0259)],
-          stops: [0.0, 0.55, 1.0],
+          colors: [_kTopBar, _kAccent, Color(0xFF123B73)],
+          stops: [0.0, 0.5, 1.0],
         ),
       ),
       child: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
               child: Row(
@@ -190,16 +202,38 @@ class _HomeTabState extends State<_HomeTab> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: const [
+                            Icon(Icons.auto_awesome, color: Colors.white, size: 16),
+                            SizedBox(width: 6),
+                            Text(
+                              'Hi there!',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$displayName, plan your learning journey today',
+                          style: const TextStyle(color: Colors.white70),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
-
-            // Quick Actions
             const Padding(
               padding: EdgeInsets.fromLTRB(20, 16, 20, 8),
               child: Text(
-                "Quick Actions",
+                'Quick Actions',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 18,
@@ -207,8 +241,6 @@ class _HomeTabState extends State<_HomeTab> {
                 ),
               ),
             ),
-
-            // 3 Quick Action Buttons
             Expanded(
               child: GridView.count(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -222,28 +254,28 @@ class _HomeTabState extends State<_HomeTab> {
                     subtitle: 'Post a request',
                     icon: Icons.swap_horiz_rounded,
                     onTapRoute: '/swapping',
-                    accent: const Color(0xFF4ECDC4),
+                    accent: _kAccent,
                   ),
                   _FeatureCard(
                     title: 'GPA Calculator',
                     subtitle: 'Plan your term',
                     icon: Icons.calculate_rounded,
                     onTapRoute: '/calculator',
-                    accent: const Color(0xFF95E1D3),
+                    accent: _kTopBar,
                   ),
                   _FeatureCard(
                     title: 'Absence',
                     subtitle: 'Track attendance',
                     icon: Icons.assignment_turned_in_rounded,
                     onTapRoute: '/absence',
-                    accent: const Color(0xFF0097B2),
+                    accent: const Color(0xFF356FD2),
                   ),
                   _FeatureCard(
                     title: 'My Courses',
                     subtitle: 'Manage sections',
                     icon: Icons.menu_book_rounded,
                     onTapRoute: '/my-courses',
-                    accent: const Color(0xFF4E8FFF),
+                    accent: Color(0xFF7199FF),
                   ),
                 ],
               ),
@@ -313,7 +345,7 @@ class _FeatureCard extends StatelessWidget {
               style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF0E0259),
+                color: _kTopBar,
               ),
             ),
             const SizedBox(height: 4),
@@ -322,7 +354,7 @@ class _FeatureCard extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 12,
-                color: const Color(0xFF0E0259).withOpacity(0.7),
+                color: _kTopBar.withOpacity(0.6),
               ),
             ),
           ],

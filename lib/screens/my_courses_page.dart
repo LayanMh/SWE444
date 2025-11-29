@@ -3,6 +3,11 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../providers/schedule_provider.dart';
 import '../services/schedule_service.dart';
+import 'home_page.dart';
+
+const _kBgColor = Color(0xFFE6F3FF);
+const _kTopBarColor = Color(0xFF0D4F94);
+const _kAccentColor = Color(0xFF4A98E9);
 
 class MyCoursesPage extends StatefulWidget {
   const MyCoursesPage({super.key});
@@ -16,8 +21,20 @@ class _MyCoursesPageState extends State<MyCoursesPage> {
   bool _bulkDeleting = false;
   final DateFormat _timeFormatter = DateFormat('hh:mm a');
 
-  Map<String, List<ScheduleEntry>> _buildConflictMap(List<ScheduleEntry> entries) {
-    final Map<String, List<ScheduleEntry>> conflicts = <String, List<ScheduleEntry>>{};
+  static const List<String> _weekdays = [
+    'Sunday',
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+  ];
+
+  Map<String, List<ScheduleEntry>> _buildConflictMap(
+      List<ScheduleEntry> entries) {
+    final Map<String, List<ScheduleEntry>> conflicts =
+        <String, List<ScheduleEntry>>{};
     final Map<int, List<ScheduleEntry>> byDay = <int, List<ScheduleEntry>>{};
     for (final entry in entries) {
       byDay.putIfAbsent(entry.dayOfWeek, () => <ScheduleEntry>[]).add(entry);
@@ -43,10 +60,6 @@ class _MyCoursesPageState extends State<MyCoursesPage> {
     return conflicts;
   }
 
-  static const List<String> _weekdays = [
-    'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
-  ];
-
   Future<void> _refreshProviderSchedule() async {
     if (!mounted) return;
     final provider = context.read<ScheduleProvider>();
@@ -63,8 +76,8 @@ class _MyCoursesPageState extends State<MyCoursesPage> {
       stream: ScheduleService.watchSchedule(), // Firestore stream
       builder: (context, snapshot) {
         final entries = snapshot.data ?? <ScheduleEntry>[];
-        final waiting =
-            snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData;
+        final waiting = snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData;
         final conflictMap = _buildConflictMap(entries);
 
         Widget body;
@@ -89,46 +102,93 @@ class _MyCoursesPageState extends State<MyCoursesPage> {
             children: grouped.entries.map((entry) {
               final section = entry.key;
               final sessions = entry.value;
+              final isDeletingSection =
+                  sessions.any((session) => _deletingIds.contains(session.id));
               final first = sessions.first;
               sessions.sort((a, b) => a.dayOfWeek.compareTo(b.dayOfWeek));
-              final hasConflict = sessions.any((s) => conflictMap.containsKey(s.id));
+              final hasConflict =
+                  sessions.any((s) => conflictMap.containsKey(s.id));
 
-              return Card(
+              return Container(
                 margin: const EdgeInsets.only(bottom: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  side: BorderSide(
-                    color: hasConflict ? Colors.redAccent : Colors.transparent,
-                    width: hasConflict ? 1.5 : 0,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: hasConflict
+                        ? Colors.redAccent
+                        : _kTopBarColor.withOpacity(0.08),
+                    width: hasConflict ? 1.5 : 1,
                   ),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Colors.black12,
+                      blurRadius: 10,
+                      offset: Offset(0, 5),
+                    ),
+                  ],
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(18),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      Row(
+                        children: [
+                          Text(
+                            '${first.courseCode} - Section $section',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: _kTopBarColor,
+                            ),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.delete_outline_rounded,
+                              color: Colors.redAccent,
+                            ),
+                            onPressed: isDeletingSection || _bulkDeleting
+                                ? null
+                                : () => _confirmDeleteGroup(section, sessions),
+                            tooltip: (isDeletingSection || _bulkDeleting)
+                                ? 'Deleting...'
+                                : null,
+                          ),
+                        ],
+                      ),
                       Text(
-                        '${first.courseCode} - Section $section',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
+                        first.courseName,
+                        style: TextStyle(
+                          color: Colors.black.withOpacity(0.75),
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Text(first.courseName),
                       if (first.classroom.isNotEmpty)
-                        Text('Room ${first.classroom}'),
-                      const SizedBox(height: 8),
+                        Text(
+                          'Room ${first.classroom}',
+                          style: TextStyle(
+                            color: Colors.black.withOpacity(0.6),
+                          ),
+                        ),
+                      const SizedBox(height: 12),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: sessions.map((s) {
-                          final conflicts = conflictMap[s.id] ?? const <ScheduleEntry>[];
+                          final conflicts =
+                              conflictMap[s.id] ?? const <ScheduleEntry>[];
                           return Padding(
-                            padding: const EdgeInsets.only(bottom: 4),
+                            padding: const EdgeInsets.only(bottom: 6),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(_formatSchedule(s)),
+                                Text(
+                                  _formatSchedule(s),
+                                  style: const TextStyle(
+                                    color: _kTopBarColor,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
                                 if (conflicts.isNotEmpty)
                                   Text(
                                     'Conflict with ${_formatConflictTargets(conflicts)}',
@@ -142,34 +202,6 @@ class _MyCoursesPageState extends State<MyCoursesPage> {
                           );
                         }).toList(),
                       ),
-                      const SizedBox(height: 12),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: Builder(
-                          builder: (context) {
-                            final isDeletingSection = sessions.any((s) => _deletingIds.contains(s.id));
-                            return IconButton(
-                              icon: isDeletingSection
-                                  ? const SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.redAccent,
-                                      ),
-                                    )
-                                  : const Icon(
-                                      Icons.delete_outline_rounded,
-                                      color: Colors.redAccent,
-                                    ),
-                              onPressed: isDeletingSection
-                                  ? null
-                                  : () => _confirmDeleteGroup(section, sessions),
-                              tooltip: isDeletingSection ? 'Deleting…' : 'Remove section',
-                            );
-                          },
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -179,39 +211,90 @@ class _MyCoursesPageState extends State<MyCoursesPage> {
         }
 
         return Scaffold(
-  appBar: AppBar(
-    title: const Text('My Courses'),
-    actions: [
-      if (entries.isNotEmpty && !_bulkDeleting)
-        TextButton(
-          onPressed: _confirmBulkDelete,
-          child: const Text(
-            'Clear All',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      if (_bulkDeleting)
-        const Padding(
-          padding: EdgeInsets.only(right: 16),
-          child: Center(
-            child: SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                color: Colors.white,
-                strokeWidth: 2,
+          backgroundColor: _kBgColor,
+          appBar: PreferredSize(
+            preferredSize: const Size.fromHeight(110),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
+              decoration: const BoxDecoration(
+                color: _kTopBarColor,
+                borderRadius: BorderRadius.only(
+                  bottomRight: Radius.circular(32),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 10,
+                    offset: Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Spacer(),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                      SizedBox(width: 8),
+                      Text(
+                        'My Courses',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      if (entries.isNotEmpty && !_bulkDeleting)
+                        TextButton(
+                          onPressed: _confirmBulkDelete,
+                          child: const Text(
+                            'Clear All',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      if (_bulkDeleting)
+                        const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                ],
               ),
             ),
           ),
-        ),
-    ],
-  ),
-  body: body,
-);
-
+          body: body,
+          bottomNavigationBar: BottomNavigationBar(
+            type: BottomNavigationBarType.fixed,
+            currentIndex: 2,
+            onTap: _onNavTap,
+            items: const [
+              BottomNavigationBarItem(icon: Icon(Icons.person_rounded), label: 'Profile'),
+              BottomNavigationBarItem(icon: Icon(Icons.calendar_today_rounded), label: 'Schedule'),
+              BottomNavigationBarItem(icon: ImageIcon(AssetImage('assets/images/logo.png')), label: 'Home'),
+              BottomNavigationBarItem(icon: Icon(Icons.school_rounded), label: 'Experience'),
+              BottomNavigationBarItem(icon: Icon(Icons.people_alt_rounded), label: 'Community'),
+            ],
+          ),
+        );
       },
     );
   }
@@ -223,8 +306,11 @@ class _MyCoursesPageState extends State<MyCoursesPage> {
     String fmt(int m) {
       final h = m ~/ 60, min = m % 60;
       final now = DateTime.now();
-      return _timeFormatter.format(DateTime(now.year, now.month, now.day, h, min));
+      return _timeFormatter.format(
+        DateTime(now.year, now.month, now.day, h, min),
+      );
     }
+
     return '$day: ${fmt(e.startTime)} - ${fmt(e.endTime)}';
   }
 
@@ -233,25 +319,36 @@ class _MyCoursesPageState extends State<MyCoursesPage> {
     for (final entry in conflicts) {
       final sectionLabel =
           entry.section.isNotEmpty ? 'section ${entry.section}' : '';
-      labels.add(sectionLabel.isEmpty
-          ? entry.courseCode
-          : '${entry.courseCode} ($sectionLabel)');
+      labels.add(
+        sectionLabel.isEmpty
+            ? entry.courseCode
+            : '${entry.courseCode} ($sectionLabel)',
+      );
     }
     return labels.join(', ');
   }
 
-  Future<void> _confirmDeleteGroup(String section, List<ScheduleEntry> sessions) async {
+  Future<void> _confirmDeleteGroup(
+      String section, List<ScheduleEntry> sessions) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Remove section $section?'),
-        content: Text('This will delete ${sessions.length} class${sessions.length > 1 ? 'es' : ''} '
-            'from your schedule and Microsoft Calendar.'),
+        content: Text(
+          'This will delete ${sessions.length} class${sessions.length > 1 ? 'es' : ''} '
+          'from your schedule and Microsoft Calendar.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.redAccent)),
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: Colors.redAccent),
+            ),
           ),
         ],
       ),
@@ -266,12 +363,30 @@ class _MyCoursesPageState extends State<MyCoursesPage> {
       }
     });
 
+    final messenger = ScaffoldMessenger.of(context);
+    var allSucceeded = true;
+
     for (final s in sessions) {
-      await _deleteEntry(s);
+      final success = await _deleteEntry(s, showSuccessMessage: false);
+      if (!success) {
+        allSucceeded = false;
+      }
     }
+
+    if (!mounted || !allSucceeded) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          '${sessions.first.courseCode} - Section $section removed from your schedule.',
+        ),
+      ),
+    );
   }
 
-  Future<void> _deleteEntry(ScheduleEntry entry) async {
+  Future<bool> _deleteEntry(
+    ScheduleEntry entry, {
+    bool showSuccessMessage = true,
+  }) async {
     final messenger = ScaffoldMessenger.of(context);
 
     // Optimistic removal
@@ -281,61 +396,82 @@ class _MyCoursesPageState extends State<MyCoursesPage> {
 
     try {
       await ScheduleService.deleteEntry(entry);
-      messenger.showSnackBar(
-        SnackBar(content: Text('${entry.courseCode} removed from your schedule.')),
-      );
+      if (showSuccessMessage) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              '${entry.courseCode} removed from your schedule.',
+            ),
+          ),
+        );
+      }
+      return true;
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Error deleting: $e')));
+      messenger.showSnackBar(
+        SnackBar(content: Text('Error deleting: $e')),
+      );
+      return false;
     } finally {
       setState(() {
         _deletingIds.remove(entry.id);
       });
     }
   }
+
   Future<void> _confirmBulkDelete() async {
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Remove all courses?'),
-      content: const Text(
-        'This will delete your entire schedule and remove all linked Microsoft Calendar entries.',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: const Text('Cancel'),
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove all courses?'),
+        content: const Text(
+          'This will delete your entire schedule and remove all linked Microsoft Calendar entries.',
         ),
-        TextButton(
-          onPressed: () => Navigator.pop(context, true),
-          child: const Text(
-            'Clear All',
-            style: TextStyle(color: Colors.redAccent),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
           ),
-        ),
-      ],
-    ),
-  );
-
-  if (confirmed != true || !mounted) return;
-
-  setState(() => _bulkDeleting = true);
-  try {
-    final result = await ScheduleService.deleteAllEntries();
-    if (!mounted) return;
-    final msg = result.failedCount == 0
-        ? 'Removed ${result.deletedCount} courses.'
-        : 'Removed ${result.deletedCount}, failed ${result.failedCount}.';
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-  } catch (e) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Error clearing courses: $e')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              'Clear All',
+              style: TextStyle(color: Colors.redAccent),
+            ),
+          ),
+        ],
+      ),
     );
-  } finally {
-    if (mounted) setState(() => _bulkDeleting = false);
-  }
-}
 
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _bulkDeleting = true);
+    try {
+      final result = await ScheduleService.deleteAllEntries();
+      if (!mounted) return;
+      final msg = result.failedCount == 0
+          ? 'Removed ${result.deletedCount} courses.'
+          : 'Removed ${result.deletedCount}, failed ${result.failedCount}.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error clearing courses: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _bulkDeleting = false);
+    }
+  }
+
+  void _onNavTap(int index) {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => HomePage(initialIndex: index),
+      ),
+    );
+  }
 }
 
 class _EmptyView extends StatelessWidget {
@@ -343,12 +479,16 @@ class _EmptyView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    return Center(
       child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: 24),
+        padding: const EdgeInsets.symmetric(horizontal: 24),
         child: Text(
-          'No courses yet\n Add sections from the Schedule tab',
-        textAlign: TextAlign.center,
+          'No courses yet\nAdd sections from the Schedule tab',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: _kTopBarColor.withOpacity(0.7),
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
     );
@@ -366,9 +506,20 @@ class _ErrorView extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(message, textAlign: TextAlign.center),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: _kTopBarColor.withOpacity(0.8)),
+          ),
           const SizedBox(height: 12),
-          ElevatedButton(onPressed: onRetry, child: const Text('Try again')),
+          ElevatedButton(
+            onPressed: onRetry,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _kAccentColor,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Try again'),
+          ),
         ],
       ),
     );

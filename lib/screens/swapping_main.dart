@@ -283,23 +283,11 @@ class _SwapRequestPageState extends State<SwapRequestPage> {
 
   // ✅ NEW: Handle bottom navigation
   void _onNavTap(int index) {
-    if (index == 2) return; // Already on swapping
     setState(() => _selectedIndex = index);
-    
-    switch (index) {
-      case 0:
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomePage()));
-        break;
-      case 1:
-        Navigator.pushReplacementNamed(context, '/calendar');
-        break;
-      case 3:
-        Navigator.pushReplacementNamed(context, '/experience');
-        break;
-      case 4:
-        Navigator.pushReplacementNamed(context, '/community');
-        break;
-    }
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => HomePage(initialIndex: index)),
+    );
   }
 
   @override
