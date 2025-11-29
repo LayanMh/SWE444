@@ -11,6 +11,11 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+const _kBgColor = Color(0xFFE6F3FF);
+const _kTopBarColor = Color(0xFF0D4F94);
+const _kAccentColor = Color(0xFF4A98E9);
+const _kCardColor = Color(0xFFFFFFFF);
+
 Future<void> linkMicrosoftAccount({
   required String microsoftAccessToken,
   required String microsoftIdToken,
@@ -1030,44 +1035,74 @@ class _AppBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Row(
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 28),
+      decoration: const BoxDecoration(
+        color: _kTopBarColor,
+        borderRadius: BorderRadius.only(
+          bottomRight: Radius.circular(32),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black26,
+            blurRadius: 12,
+            offset: Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
         children: [
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-            ),
-            child: IconButton(
-              onPressed: () {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (context) => const WelcomeScreen()),
-                  (route) => false,
-                );
-              },
-              icon: const Icon(
-                Icons.arrow_back_ios_rounded,
-                color: Colors.white,
-                size: 20,
+          Row(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 8,
+                      offset: Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: IconButton(
+                  onPressed: () {
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(builder: (context) => const WelcomeScreen()),
+                      (route) => false,
+                    );
+                  },
+                  icon: const Icon(
+                    Icons.arrow_back_ios_new,
+                    color: _kTopBarColor,
+                    size: 20,
+                  ),
+                ),
               ),
-            ),
+              const Spacer(),
+            ],
           ),
-          const Expanded(
-            child: Text(
-              'Welcome Back',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-                letterSpacing: 0.5,
+          const SizedBox(height: 18),
+          const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+              SizedBox(width: 8),
+              Text(
+                'Sign In',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-              textAlign: TextAlign.center,
-            ),
+              SizedBox(width: 8),
+              Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+            ],
           ),
-          const SizedBox(width: 48),
         ],
       ),
     );
@@ -1108,14 +1143,14 @@ class _SignInCard extends StatelessWidget {
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.95),
+        color: _kCardColor,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+        border: Border.all(color: _kTopBarColor.withOpacity(0.08)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0e0259).withValues(alpha: 0.1),
-            blurRadius: 30,
-            offset: const Offset(0, 15),
+            color: _kTopBarColor.withOpacity(0.12),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
           ),
         ],
       ),
@@ -1160,26 +1195,24 @@ class _SignInCard extends StatelessWidget {
           validator: _Validators.email,
           decoration: InputDecoration(
             hintText: 'student@student.ksu.edu.sa',
-            hintStyle: TextStyle(
-  color: const Color(0xFF006B7A).withOpacity(0.4), // Much lighter
-),
+            hintStyle: TextStyle(color: _kTopBarColor.withOpacity(0.4)),
             prefixIcon: const Icon(
               Icons.alternate_email_rounded,
-              color: Color(0xFF006B7A),
+              color: _kTopBarColor,
               size: 20,
             ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(
-                color: const Color(0xFF4ECDC4).withValues(alpha: 0.5),
+                color: _kTopBarColor.withOpacity(0.15),
               ),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF0097b2), width: 2),
+              borderSide: const BorderSide(color: _kAccentColor, width: 2),
             ),
             filled: true,
-            fillColor: const Color(0xFF95E1D3).withValues(alpha: 0.1),
+            fillColor: Colors.white,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
               vertical: 12,
@@ -1202,12 +1235,10 @@ class _SignInCard extends StatelessWidget {
           validator: _Validators.password,
           decoration: InputDecoration(
             hintText: '••••••••••',
-            hintStyle: TextStyle(
-  color: const Color(0xFF006B7A).withOpacity(0.4), // Much lighter
-),
+            hintStyle: TextStyle(color: _kTopBarColor.withOpacity(0.4)),
             prefixIcon: const Icon(
               Icons.lock_outline_rounded,
-              color: Color(0xFF006B7A),
+              color: _kTopBarColor,
               size: 20,
             ),
             suffixIcon: IconButton(
@@ -1215,7 +1246,7 @@ class _SignInCard extends StatelessWidget {
                 obscurePassword
                     ? Icons.visibility_off_rounded
                     : Icons.visibility_rounded,
-                color: const Color(0xFF006B7A),
+                color: _kTopBarColor,
                 size: 20,
               ),
               onPressed: onTogglePassword,
@@ -1223,15 +1254,15 @@ class _SignInCard extends StatelessWidget {
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(
-                color: const Color(0xFF4ECDC4).withValues(alpha: 0.5),
+                color: _kTopBarColor.withOpacity(0.15),
               ),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF0097b2), width: 2),
+              borderSide: const BorderSide(color: _kAccentColor, width: 2),
             ),
             filled: true,
-            fillColor: const Color(0xFF95E1D3).withValues(alpha: 0.1),
+            fillColor: Colors.white,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
               vertical: 12,
@@ -1253,7 +1284,7 @@ class _SignInCard extends StatelessWidget {
               child: Checkbox(
                 value: rememberMe,
                 onChanged: onRememberMeChanged,
-                activeColor: const Color(0xFF4ECDC4),
+                activeColor: _kAccentColor,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(4),
                 ),
@@ -1263,7 +1294,7 @@ class _SignInCard extends StatelessWidget {
               'Remember me',
               style: TextStyle(
                 fontSize: 14,
-                color: Color(0xFF0e0259),
+                color: _kTopBarColor,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -1279,7 +1310,7 @@ class _SignInCard extends StatelessWidget {
             'Forgot password?',
             style: TextStyle(
               fontSize: 14,
-              color: Color(0xFF0097b2),
+              color: _kAccentColor,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -1294,12 +1325,12 @@ class _SignInCard extends StatelessWidget {
       height: 48,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF0097b2), Color(0xFF006B7A)],
+          colors: [_kAccentColor, _kTopBarColor],
         ),
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0097b2).withValues(alpha: 0.3),
+            color: _kAccentColor.withOpacity(0.4),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -1353,7 +1384,7 @@ class _SignInCard extends StatelessWidget {
             'or continue with',
             style: TextStyle(
               fontSize: 12,
-              color: const Color(0xFF0e0259).withValues(alpha: 0.6),
+              color: _kTopBarColor.withOpacity(0.6),
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -1384,47 +1415,53 @@ class _Header extends StatelessWidget {
     return Column(
       children: [
         Container(
-          width: 64,
-          height: 64,
+          width: 72,
+          height: 72,
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF0097b2), Color(0xFF006B7A), Color(0xFF0e0259)],
-            ),
-            borderRadius: BorderRadius.circular(16),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: _kAccentColor.withOpacity(0.3)),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF0097b2).withValues(alpha: 0.3),
+                color: _kTopBarColor.withOpacity(0.15),
                 blurRadius: 20,
-                offset: const Offset(0, 8),
+                offset: const Offset(0, 10),
               ),
             ],
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(8.0),
             child: Image.asset(
               'assets/images/logo.png',
-              width: 32,
-              height: 32,
-              fit: BoxFit.cover,
+              fit: BoxFit.contain,
             ),
           ),
         ),
         const SizedBox(height: 12),
-        const Text(
-          'Welcome Back',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w800,
-            color: Color(0xFF0e0259),
-            letterSpacing: -0.5,
-          ),
+        const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.auto_awesome, color: _kTopBarColor, size: 18),
+            SizedBox(width: 8),
+            Text(
+              'Welcome Back',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                color: _kTopBarColor,
+                letterSpacing: -0.5,
+              ),
+            ),
+            SizedBox(width: 8),
+            Icon(Icons.auto_awesome, color: _kTopBarColor, size: 18),
+          ],
         ),
         const SizedBox(height: 4),
         Text(
           'Sign in to continue your academic journey',
           style: TextStyle(
             fontSize: 14,
-            color: const Color(0xFF0e0259).withValues(alpha: 0.7),
+            color: _kTopBarColor.withOpacity(0.7),
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -1445,7 +1482,7 @@ class _FieldLabel extends StatelessWidget {
       style: const TextStyle(
         fontSize: 14,
         fontWeight: FontWeight.w600,
-        color: Color(0xFF0e0259),
+        color: _kTopBarColor,
       ),
     );
   }
@@ -1463,10 +1500,10 @@ class _SocialButton extends StatelessWidget {
       width: 56,
       height: 56,
       decoration: BoxDecoration(
-        color: const Color(0xFF95E1D3).withValues(alpha: 0.1),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: const Color(0xFF4ECDC4).withValues(alpha: 0.3),
+          color: _kAccentColor.withOpacity(0.3),
         ),
       ),
       child: IconButton(
@@ -1475,7 +1512,7 @@ class _SocialButton extends StatelessWidget {
             ? Image.asset(imagePath!, width: 24, height: 24)
             : const Icon(
                 Icons.handshake_rounded,
-                color: Color(0xFF006B7A),
+                color: _kTopBarColor,
                 size: 24,
               ),
       ),
@@ -1494,7 +1531,7 @@ class _SignUpPrompt extends StatelessWidget {
         Text(
           "Don't have an account? ",
           style: TextStyle(
-            color: const Color(0xFF0e0259).withValues(alpha: 0.7),
+            color: _kTopBarColor.withOpacity(0.7),
             fontSize: 14,
           ),
         ),
@@ -1529,7 +1566,7 @@ class _SignUpPrompt extends StatelessWidget {
           child: const Text(
             'Sign Up',
             style: TextStyle(
-              color: Color(0xFF0097b2),
+              color: _kAccentColor,
               fontWeight: FontWeight.w600,
               fontSize: 14,
             ),
@@ -1564,7 +1601,7 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
           Text(
             'Reset Password',
             style: TextStyle(
-              color: Color(0xFF0e0259),
+              color: _kTopBarColor,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -1572,7 +1609,7 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
       ),
       content: Text(
         'Send a password reset link to:\n${widget.email}',
-        style: TextStyle(color: const Color(0xFF0e0259).withValues(alpha: 0.8)),
+        style: TextStyle(color: _kTopBarColor.withOpacity(0.8)),
       ),
       actions: [
         TextButton(
@@ -1582,7 +1619,7 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
         ElevatedButton(
           onPressed: _isLoading ? null : _sendResetEmail,
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF0097b2),
+            backgroundColor: _kAccentColor,
             foregroundColor: Colors.white,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
@@ -1693,16 +1730,5 @@ class _Validators {
 
 /// App theme constants
 class _AppTheme {
-  static const gradientBackground = BoxDecoration(
-    gradient: LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [
-        Color(0xFF006B7A), // Deep ocean teal
-        Color(0xFF0097b2), // Bright teal
-        Color(0xFF0e0259), // Deep navy depths
-      ],
-      stops: [0.0, 0.6, 1.0],
-    ),
-  );
+  static const gradientBackground = BoxDecoration(color: _kBgColor);
 }

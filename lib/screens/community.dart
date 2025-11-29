@@ -1,13 +1,15 @@
-import 'dart:io';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
+
+import 'home_page.dart';
 
 class CommunityPage extends StatefulWidget {
   const CommunityPage({super.key});
@@ -24,6 +26,13 @@ class _CommunityPageState extends State<CommunityPage>
     'Course',
     'Certificate',
   ];
+
+  // Palette similar to GPA / Absence pages
+  static const Color _kTopBarColor = Color(0xFF0D4F94);
+  static const Color _kPageBackground = Color(0xFFF2F6FF);
+  static const Color _kTabContainer = Color(0xFF0A3E82);
+  static const Color _kActiveTab = Colors.white;
+  static const Color _kInactiveTab = Color(0xFFD0E2FF);
 
   late final TabController _tabController;
   bool _isLoadingProfile = true;
@@ -111,45 +120,138 @@ class _CommunityPageState extends State<CommunityPage>
 
   bool get _canCreatePost => !_isLoadingProfile && _currentUserId != null;
 
+  void _onNavTap(int index) {
+    // Same navigation behavior as Absence / GPA pages
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => HomePage(initialIndex: index)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        centerTitle: true,
-        title: const Text('Community'),
-        actions: [_buildProfileAction()],
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: Colors.white,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-          tabs: _categories.map((category) => Tab(text: category)).toList(),
+      // Top bar styled like GPA page
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(140),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: _kTopBarColor,
+            borderRadius: BorderRadius.only(
+              bottomRight: Radius.circular(32),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black26,
+                blurRadius: 10,
+                offset: Offset(0, 6),
+              ),
+            ],
+          ),
+          child: SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  child: Row(
+                    children: [
+                      const Spacer(),
+                      const Icon(Icons.auto_awesome,
+                          color: Colors.white, size: 18),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Community',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Icon(Icons.auto_awesome,
+                          color: Colors.white, size: 18),
+                      const Spacer(),
+                      _buildProfileAction(),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Padding(
+                  padding:
+                      const EdgeInsets.only(left: 16, right: 16, bottom: 14),
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _kTabContainer,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: TabBar(
+                      controller: _tabController,
+                      labelColor: _kActiveTab,
+                      unselectedLabelColor: _kInactiveTab,
+                      indicator: BoxDecoration(
+                        color: Colors.white.withOpacity(0.18),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      labelStyle: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                      unselectedLabelStyle: const TextStyle(
+                        fontWeight: FontWeight.w500,
+                        fontSize: 13,
+                      ),
+                      indicatorSize: TabBarIndicatorSize.tab,
+                      dividerColor: Colors.transparent,
+                      tabs: _categories
+                          .map((category) => Tab(text: category))
+                          .toList(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
+
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _canCreatePost ? _openCreatePostSheet : null,
+        backgroundColor: const Color(0xFF1E88E5),
         icon: const Icon(Icons.edit),
         label: const Text('New post'),
         tooltip: _canCreatePost
             ? 'Share something new'
             : 'Sign in to add a community post',
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: _categories.map(_buildCategoryFeed).toList(),
+
+      body: Container(
+        color: _kPageBackground,
+        child: TabBarView(
+          controller: _tabController,
+          children: _categories.map(_buildCategoryFeed).toList(),
+        ),
       ),
+
+     
     );
   }
 
   Widget _buildProfileAction() {
     if (_isLoadingProfile) {
       return const Padding(
-        padding: EdgeInsets.only(right: 16),
+        padding: EdgeInsets.only(right: 8),
         child: SizedBox(
           width: 28,
           height: 28,
-          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: Colors.white,
+          ),
         ),
       );
     }
@@ -157,7 +259,7 @@ class _CommunityPageState extends State<CommunityPage>
     if (_currentUserId == null) {
       return IconButton(
         tooltip: 'Sign in to view your community profile',
-        icon: const Icon(Icons.person_outline),
+        icon: const Icon(Icons.person_outline, color: Colors.white),
         onPressed: () => _showAuthRequiredSnack('view your profile'),
       );
     }
@@ -171,7 +273,7 @@ class _CommunityPageState extends State<CommunityPage>
         onTap: _openProfileSheet,
         child: CircleAvatar(
           radius: 18,
-          backgroundColor: avatarColor.withValues(alpha: 0.2),
+          backgroundColor: avatarColor.withOpacity(0.2),
           child: Text(
             initials,
             style: const TextStyle(
@@ -195,6 +297,7 @@ class _CommunityPageState extends State<CommunityPage>
       SnackBar(
         content: Text(message),
         backgroundColor: backgroundColor,
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }
@@ -283,6 +386,7 @@ class _CommunityPageState extends State<CommunityPage>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Row(
@@ -293,7 +397,7 @@ class _CommunityPageState extends State<CommunityPage>
                   borderRadius: BorderRadius.circular(24),
                   child: CircleAvatar(
                     radius: 24,
-                    backgroundColor: color.withValues(alpha: 0.25),
+                    backgroundColor: color.withOpacity(0.25),
                     child: Text(
                       _initialsFromName(post.studentName),
                       style: const TextStyle(
@@ -316,7 +420,7 @@ class _CommunityPageState extends State<CommunityPage>
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.15),
+                    color: color.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
@@ -349,6 +453,8 @@ class _CommunityPageState extends State<CommunityPage>
               ],
             ),
           ),
+
+          // Image
           if (hasImage)
             AspectRatio(
               aspectRatio: 4 / 5,
@@ -370,6 +476,8 @@ class _CommunityPageState extends State<CommunityPage>
                 ),
               ),
             ),
+
+          // Actions
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: Row(
@@ -402,6 +510,8 @@ class _CommunityPageState extends State<CommunityPage>
               ],
             ),
           ),
+
+          // Content
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Column(
@@ -460,6 +570,7 @@ class _CommunityPageState extends State<CommunityPage>
       ),
     );
   }
+
   Future<void> _toggleLike(CommunityPost post, bool currentlyLiked) async {
     final userId = _currentUserId;
     if (userId == null) {
@@ -704,6 +815,8 @@ class _CommunityPageState extends State<CommunityPage>
   }
 }
 
+/* ─────────────────────────  Composer Sheet  ───────────────────────── */
+
 class _PostComposerSheet extends StatefulWidget {
   const _PostComposerSheet({
     required this.categories,
@@ -823,7 +936,7 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
       final response = await http.post(
         Uri.parse('https://api.imgbb.com/1/upload'),
         body: {
-          // ⚠️ same key you used in ClubFormPage
+          // same key used elsewhere in app
           'key': '0b411c63631d14df85c76a6cdbcf1667',
           'image': base64Image,
           'name':
@@ -1055,17 +1168,17 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
                   );
                 },
               ),
-               const SizedBox(height: 20),
-               TextFormField(
-                 controller: _captionController,
-                 minLines: 4,
-                 maxLines: 8,
-                 maxLength: 300,
-                 textCapitalization: TextCapitalization.sentences,
-                 decoration: const InputDecoration(
-                   labelText: 'Caption',
-                   hintText: 'Describe the story behind this photo.',
-                   border: OutlineInputBorder(),
+              const SizedBox(height: 20),
+              TextFormField(
+                controller: _captionController,
+                minLines: 4,
+                maxLines: 8,
+                maxLength: 300,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                  labelText: 'Caption',
+                  hintText: 'Describe the story behind this photo.',
+                  border: OutlineInputBorder(),
                 ),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
@@ -1160,6 +1273,8 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
   }
 }
 
+/* ─────────────────────────  Profile Sheet  ───────────────────────── */
+
 class _ProfileSheet extends StatelessWidget {
   const _ProfileSheet({
     required this.userName,
@@ -1211,7 +1326,7 @@ class _ProfileSheet extends StatelessWidget {
                   ListTile(
                     leading: CircleAvatar(
                       radius: 28,
-                      backgroundColor: avatarColor.withValues(alpha: 0.15),
+                      backgroundColor: avatarColor.withOpacity(0.15),
                       child: Text(
                         userInitials,
                         style: const TextStyle(
@@ -1376,6 +1491,8 @@ class _ProfileEmptyState extends StatelessWidget {
   }
 }
 
+/* ─────────────────────────  Models & States  ───────────────────────── */
+
 enum _PostAction { delete }
 
 class CommunityPost {
@@ -1519,5 +1636,3 @@ class _ErrorState extends StatelessWidget {
     );
   }
 }
-
-
