@@ -227,23 +227,23 @@ class _CalendarScreenState extends State<CalendarScreen> {
           child: SafeArea(
             bottom: false,
             child: Row(
-              children: [
-                const SizedBox(width: 48),
-                const Spacer(),
-                const Text(
-                  'My Schedule',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
+              children: const [
+                Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      'My Schedule',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.auto_awesome, color: Colors.white),
-                  onPressed: () {},
-                ),
-                const SizedBox(width: 48),
+                SizedBox(width: 12),
+                Icon(Icons.auto_awesome, color: Colors.white, size: 18),
               ],
             ),
           ),
