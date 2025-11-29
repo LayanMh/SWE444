@@ -752,7 +752,7 @@ class _CVPageState extends State<CVPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-       backgroundColor: Color(0xFF01509B),
+        backgroundColor: Color(0xFF01509B),
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 4),
       ),
@@ -764,7 +764,7 @@ class _CVPageState extends State<CVPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: Colors.red[400],
+        backgroundColor: Colors.red[600],
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 4),
       ),
@@ -773,155 +773,157 @@ class _CVPageState extends State<CVPage> {
 
   @override
   Widget build(BuildContext context) {
+    const Color kBg = Color(0xFFE6F3FF);
+    const Color kTopBar = Color(0xFF0D4F94);
+
     return Scaffold(
-      backgroundColor: Colors.grey[50],
-      body: Container(
-        decoration: const BoxDecoration(
-         gradient: const LinearGradient(
-  begin: Alignment.topCenter,
-  end: Alignment.bottomCenter,
-  colors: [
-    Color(0xFF01509B),
-    Color(0xFF0571C5),
-    Color(0xFF83C8EF),
-  ],
-  stops: [0.0, 0.5, 1.0],
-),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Header with Print and Share icons only
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back, color: Colors.white),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    const Expanded(
-                      child: Text(
-                        'My CV',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                          letterSpacing: 0.5,
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Header - matching Club form style
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              decoration: BoxDecoration(
+                color: kTopBar,
+                borderRadius: const BorderRadius.only(
+                  bottomRight: Radius.circular(32),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 8,
+                    offset: Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  Expanded(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                        SizedBox(width: 8),
+                        Text(
+                          'My CV',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                            letterSpacing: 0.5,
+                          ),
                         ),
-                        textAlign: TextAlign.center,
-                      ),
+                        SizedBox(width: 8),
+                        Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                      ],
                     ),
-                    // Print button
-                    if (_pdfDocument != null)
-                      IconButton(
-                        icon: const Icon(Icons.print, color: Colors.white),
-                        onPressed: _printPDF,
-                        tooltip: 'Print',
+                  ),
+                  // Print button
+                  if (_pdfDocument != null)
+                    IconButton(
+                      icon: const Icon(Icons.print, color: Colors.white),
+                      onPressed: _printPDF,
+                      tooltip: 'Print',
+                    ),
+                  // Share button
+                  if (_pdfDocument != null)
+                    IconButton(
+                      icon: const Icon(Icons.share, color: Colors.white),
+                      onPressed: _sharePDF,
+                      tooltip: 'Share',
+                    ),
+                  if (_pdfDocument == null)
+                    const SizedBox(width: 96), // Space when buttons not shown
+                ],
+              ),
+            ),
+            
+            // Content
+            Expanded(
+              child: _isLoading
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        color: Color(0xFF01509B),
                       ),
-                    // Share button
-                    if (_pdfDocument != null)
-                      IconButton(
-                        icon: const Icon(Icons.share, color: Colors.white),
-                        onPressed: _sharePDF,
-                        tooltip: 'Share',
-                      ),
-                    if (_pdfDocument == null)
-                      const SizedBox(width: 96), // Space when buttons not shown
+                    )
+                  : _pdfDocument == null
+                      ? _buildEmptyState()
+                      : _buildPDFPreview(),
+            ),
+            
+            // Download PDF button at bottom
+            if (_pdfDocument != null)
+              Container(
+                padding: const EdgeInsets.all(16.0),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.grey.withOpacity(0.2),
+                      spreadRadius: 1,
+                      blurRadius: 4,
+                      offset: const Offset(0, -2),
+                    ),
                   ],
                 ),
-              ),
-              
-              // Content
-              Expanded(
-                child: Container(
-                  decoration: const BoxDecoration(
-  color: Color(0xFFF5F8FA),
-  borderRadius: BorderRadius.only(
-    topLeft: Radius.circular(30),
-    topRight: Radius.circular(30),
-  ),
-),
-                  child: _isLoading
-                      ? const Center(
-                          child: CircularProgressIndicator(
-                            color: Color(0xFF01509B),
+                child: SafeArea(
+                  top: false,
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: GestureDetector(
+                      onTap: _isDownloading ? null : _downloadPDF,
+                      child: Container(
+                        height: 50,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [
+                              Color(0xFF01509B),
+                              Color(0xFF83C8EF),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
                           ),
-                        )
-                      : _pdfDocument == null
-                          ? _buildEmptyState()
-                          : _buildPDFPreview(),
-                ),
-              ),
-              
-              // Download PDF button at bottom
-              if (_pdfDocument != null)
-                Container(
-                  padding: const EdgeInsets.all(16.0),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.grey.withOpacity(0.2),
-                        spreadRadius: 1,
-                        blurRadius: 4,
-                        offset: const Offset(0, -2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Center(
+                          child: _isDownloading
+                              ? const SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.download, color: Colors.white),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'Download PDF',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                        ),
                       ),
-                    ],
-                  ),
-                  child: SafeArea(
-                    top: false,
-                    child: SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child:GestureDetector(
-  onTap: _isDownloading ? null : _downloadPDF,
-  child: Container(
-    height: 50,
-    decoration: BoxDecoration(
-      gradient: const LinearGradient(
-        colors: [
-          Color(0xFF01509B),
-          Color(0xFF83C8EF),
-        ],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ),
-      borderRadius: BorderRadius.circular(12),
-    ),
-    child: Center(
-      child: _isDownloading
-          ? const SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Colors.white,
-              ),
-            )
-          : const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.download, color: Colors.white),
-                SizedBox(width: 8),
-                Text(
-                  'Download PDF',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-                ),
-              ],
-            ),
-    ),
-  ),
-),
                     ),
                   ),
                 ),
-            ],
-          ),
+              ),
+          ],
         ),
       ),
     );
@@ -1010,45 +1012,44 @@ class _CVPageState extends State<CVPage> {
     return Column(
       children: [
         // Info banner with regenerate button
-      Container(
-  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-  decoration: BoxDecoration(
-    color: const Color(0xFF01509B).withOpacity(0.10),
-    border: Border(
-      bottom: BorderSide(
-        color: const Color(0xFF01509B).withOpacity(0.2),
-        width: 1,
-      ),
-    ),
-  ),
-  child: Row(
-    children: [
-      const Icon(Icons.check_circle, color: Color(0xFF01509B), size: 20),
-      const SizedBox(width: 12),
-      Expanded(
-        child: Text(
-          'CV and PDF ready for download',
-          style: TextStyle(
-            fontSize: 13,
-            color: Colors.grey[700],
-            fontWeight: FontWeight.w600,
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF01509B).withOpacity(0.10),
+            border: Border(
+              bottom: BorderSide(
+                color: const Color(0xFF01509B).withOpacity(0.2),
+                width: 1,
+              ),
+            ),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Color(0xFF01509B), size: 20),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'CV and PDF ready for download',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey[700],
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: _generateCV,
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('Regenerate'),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF01509B),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+              ),
+            ],
           ),
         ),
-      ),
-      TextButton.icon(
-        onPressed: _generateCV,
-        icon: const Icon(Icons.refresh, size: 18),
-        label: const Text('Regenerate'),
-        style: TextButton.styleFrom(
-          foregroundColor: const Color(0xFF01509B),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        ),
-      ),
-    ],
-  ),
-),
 
-        
         // PDF Preview with zoom controls
         Expanded(
           child: Container(

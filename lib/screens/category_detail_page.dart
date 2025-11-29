@@ -138,80 +138,82 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
       if (mounted) _showErrorMessage('Failed to delete item');
     }
   }
-Future<void> _deleteAll() async {
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Delete All Items'),
-      content: Text('Are you sure you want to delete all ${items.length} items? This action cannot be undone.'),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: const Text('Cancel'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(context, true),
-          style: TextButton.styleFrom(foregroundColor: Colors.red),
-          child: const Text('Delete All'),
-        ),
-      ],
-    ),
-  );
 
-  if (confirmed != true) return;
+  Future<void> _deleteAll() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete All Items'),
+        content: Text('Are you sure you want to delete all ${items.length} items? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete All'),
+          ),
+        ],
+      ),
+    );
 
-  try {
-    final docId = await _getUserDocId();
-    if (docId == null) return;
+    if (confirmed != true) return;
 
-    // Show loading indicator
-    if (mounted) {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
-    }
+    try {
+      final docId = await _getUserDocId();
+      if (docId == null) return;
 
-    // Delete all certificates in background
-    for (var item in items) {
-      if (item['certificateUrl'] != null && 
-          item['certificateUrl'].toString().isNotEmpty &&
-          item['certificateUrl'].toString().startsWith('https://')) {
-        try {
-          await FirebaseStorage.instance.refFromURL(item['certificateUrl']).delete();
-        } catch (e) {
-          debugPrint('Certificate deletion skipped: $e');
+      // Show loading indicator
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(
+            child: CircularProgressIndicator(),
+          ),
+        );
+      }
+
+      // Delete all certificates in background
+      for (var item in items) {
+        if (item['certificateUrl'] != null && 
+            item['certificateUrl'].toString().isNotEmpty &&
+            item['certificateUrl'].toString().startsWith('https://')) {
+          try {
+            await FirebaseStorage.instance.refFromURL(item['certificateUrl']).delete();
+          } catch (e) {
+            debugPrint('Certificate deletion skipped: $e');
+          }
         }
       }
+
+      // Clear the array in Firestore
+      await _firestore.collection('users').doc(docId).update({
+        widget.category: [],
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      // Close loading dialog
+      if (mounted) Navigator.pop(context);
+
+      // Pop back since list is empty
+      if (mounted) {
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      // Close loading dialog if open
+      if (mounted) Navigator.pop(context);
+      
+      debugPrint('Error deleting all items: $e');
+      if (mounted) _showErrorMessage('Failed to delete all items');
+      
+      // Reload on error
+      await _loadData();
     }
-
-    // Clear the array in Firestore
-    await _firestore.collection('users').doc(docId).update({
-      widget.category: [],
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-
-    // Close loading dialog
-    if (mounted) Navigator.pop(context);
-
-    // Pop back since list is empty
-    if (mounted) {
-      Navigator.pop(context, true);
-    }
-  } catch (e) {
-    // Close loading dialog if open
-    if (mounted) Navigator.pop(context);
-    
-    debugPrint('Error deleting all items: $e');
-    if (mounted) _showErrorMessage('Failed to delete all items');
-    
-    // Reload on error
-    await _loadData();
   }
-}
+
   String _getItemKey(int index) {
     return '${widget.category}-$index';
   }
@@ -290,7 +292,7 @@ Future<void> _deleteAll() async {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: Colors.red[400],
+        backgroundColor: Colors.red[600],
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 2),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -300,6 +302,9 @@ Future<void> _deleteAll() async {
 
   @override
   Widget build(BuildContext context) {
+    const Color kBg = Color(0xFFE6F3FF);
+    const Color kTopBar = Color(0xFF0D4F94);
+
     return WillPopScope(
       onWillPop: () async {
         // Always return true to indicate data may have changed
@@ -307,104 +312,99 @@ Future<void> _deleteAll() async {
         return false;
       },
       child: Scaffold(
-        backgroundColor: Colors.grey[50],
-        body: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-              Color(0xFF01509B),
-    Color(0xFF0571C5),
-    Color(0xFF83C8EF),
-
-              ],
-              stops: [0.0, 0.6, 1.0],
-            ),
-          ),
-          child: SafeArea(
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(
-                    top: 16.0,
-                    left: 16.0,
-                    right: 16.0,
-                    bottom: 8.0,
+        backgroundColor: kBg,
+        body: SafeArea(
+          child: Column(
+            children: [
+              // Header section - matching Club form style
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                decoration: BoxDecoration(
+                  color: kTopBar,
+                  borderRadius: const BorderRadius.only(
+                    bottomRight: Radius.circular(32),
                   ),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.arrow_back, color: Colors.white),
-                        onPressed: () => Navigator.pop(context, true),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 8,
+                      offset: Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back, color: Colors.white),
+                      onPressed: () => Navigator.pop(context, true),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.all(8.0),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.25),
+                        borderRadius: BorderRadius.circular(10.0),
                       ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.all(8.0),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.25),
-                          borderRadius: BorderRadius.circular(10.0),
-                        ),
-                        child: Icon(widget.icon, color: Colors.white, size: 20.0),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          widget.title,
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                            letterSpacing: 0.5,
+                      child: Icon(widget.icon, color: Colors.white, size: 20.0),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                          const SizedBox(width: 8),
+                          Text(
+                            widget.title,
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                              letterSpacing: 0.5,
+                            ),
                           ),
-                        ),
+                          const SizedBox(width: 8),
+                          const Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                        ],
                       ),
-                      // Delete All button - only shows when items exist
-                      if (items.isNotEmpty)
-                        IconButton(
-                          icon: const Icon(Icons.delete_sweep, color: Colors.white),
-                          onPressed: _deleteAll,
-                          tooltip: 'Delete All',
-                        ),
-                    ],
-                  ),
+                    ),
+                    // Delete All button - only shows when items exist
+                    if (items.isNotEmpty)
+                      IconButton(
+                        icon: const Icon(Icons.delete_sweep, color: Colors.white),
+                        onPressed: _deleteAll,
+                        tooltip: 'Delete All',
+                      ),
+                  ],
                 ),
-                Expanded(
-                  child: Container(
-                   decoration: const BoxDecoration(
-  color: Color(0xFFF5F8FA),
-  borderRadius: BorderRadius.only(
-    topLeft: Radius.circular(30),
-    topRight: Radius.circular(30),
-  ),
-),
-                    child: isLoading
-                        ? const Center(child: CircularProgressIndicator())
-                        : items.isEmpty
-                            ? Center(
-                                child: Text(
-                                  'No items to display',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    color: Colors.grey[600],
-                                  ),
-                                ),
-                              )
-                            : RefreshIndicator(
-                                onRefresh: _loadData,
-                                child: ListView.builder(
-                                  padding: const EdgeInsets.all(16.0),
-                                  itemCount: items.length,
-                                  itemBuilder: (context, index) {
-                                    final item = items[index];
-                                    return _buildDetailItem(item, index);
-                                  },
-                                ),
+              ),
+              Expanded(
+                child: isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : items.isEmpty
+                        ? Center(
+                            child: Text(
+                              'No items to display',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.grey[600],
                               ),
-                  ),
-                ),
-              ],
-            ),
+                            ),
+                          )
+                        : RefreshIndicator(
+                            onRefresh: _loadData,
+                            child: ListView.builder(
+                              padding: const EdgeInsets.all(20.0),
+                              itemCount: items.length,
+                              itemBuilder: (context, index) {
+                                final item = items[index];
+                                return _buildDetailItem(item, index);
+                              },
+                            ),
+                          ),
+              ),
+            ],
           ),
         ),
       ),
@@ -420,10 +420,18 @@ Future<void> _deleteAll() async {
       margin: const EdgeInsets.only(bottom: 12.0),
       decoration: BoxDecoration(
         color: Colors.white,
-border: Border.all(
-  color: const Color(0xFF01509B).withOpacity(0.15),
-),
-
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFF01509B).withOpacity(0.15),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF01509B).withOpacity(0.05),
+            spreadRadius: 0,
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Material(
         color: Colors.transparent,

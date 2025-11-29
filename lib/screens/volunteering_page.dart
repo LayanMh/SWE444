@@ -371,115 +371,118 @@ class _VolunteeringFormPageState extends State<VolunteeringFormPage> {
 
   @override
   Widget build(BuildContext context) {
+    const Color kBg = Color(0xFFE6F3FF);
+    const Color kTopBar = Color(0xFF0D4F94);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F8FA),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF01509B),  // Deep blue (matching mockup)
-              Color(0xFF0571C5),  // Medium blue
-              Color(0xFF83C8EF),  // Light blue (matching mockup)
-            ],
-            stops: [0.0, 0.5, 1.0],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    Expanded(
-                      child: Text(
-                        widget.existingItem != null ? 'Edit Volunteering' : 'Add Volunteering',
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                          letterSpacing: 0.5,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                    const SizedBox(width: 48),
-                  ],
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Header section - matching Club form style
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              decoration: BoxDecoration(
+                color: kTopBar,
+                borderRadius: const BorderRadius.only(
+                  bottomRight: Radius.circular(32),
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 8,
+                    offset: Offset(0, 4),
+                  ),
+                ],
               ),
-              Expanded(
-                child: Container(
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFF5F8FA),
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(30),
-                      topRight: Radius.circular(30),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  Expanded(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          widget.existingItem != null ? 'Edit Volunteering' : 'Add Volunteering',
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                      ],
                     ),
                   ),
-                  child: SingleChildScrollView(
-                    child: Padding(
-                      padding: const EdgeInsets.all(20.0),
-                      child: Form(
-                        key: _formKey,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            _buildTextFieldWithCounter(
-                              controller: _titleController,
-                              label: 'Title *',
-                              hint: 'e.g., Community Cleanup Volunteer',
-                              maxLength: 40,
-                              validator: _validateTitle,
-                            ),
-                            const SizedBox(height: 16.0),
-                            _buildTextFieldWithCounter(
-                              controller: _organizationController,
-                              label: 'Organization',
-                              hint: 'e.g., Red Crescent Society',
-                              maxLength: 40,
-                              validator: _validateOrganization,
-                            ),
-                            const SizedBox(height: 16.0),
-                            _buildTextField(
-                              controller: _hoursController,
-                              label: 'Hours *',
-                              hint: 'e.g., 25',
-                              keyboardType: TextInputType.number,
-                              validator: _validateHours,
-                            ),
-                            const SizedBox(height: 16.0),
-                            _buildTextFieldWithCharCounter(
-                              controller: _descriptionController,
-                              label: 'Description',
-                              hint: 'Describe your volunteering activities...',
-                              maxLines: 5,
-                              minChars: 200,
-                              validator: _validateDescription,
-                            ),
-                            const SizedBox(height: 16.0),
-                            _buildCertificatePicker(),
-                            const SizedBox(height: 24.0),
-                            _buildSaveButton(),
-                          ],
+                  const SizedBox(width: 48),
+                ],
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildTextFieldWithCounter(
+                          controller: _titleController,
+                          label: 'Title *',
+                          hint: 'e.g., Community Cleanup Volunteer',
+                          maxLength: 40,
+                          validator: _validateTitle,
                         ),
-                      ),
+                        const SizedBox(height: 16.0),
+                        _buildTextFieldWithCounter(
+                          controller: _organizationController,
+                          label: 'Organization',
+                          hint: 'e.g., Red Crescent Society',
+                          maxLength: 40,
+                          validator: _validateOrganization,
+                        ),
+                        const SizedBox(height: 16.0),
+                        _buildTextField(
+                          controller: _hoursController,
+                          label: 'Hours *',
+                          hint: 'e.g., 25',
+                          keyboardType: TextInputType.number,
+                          validator: _validateHours,
+                        ),
+                        const SizedBox(height: 16.0),
+                        _buildCertificatePicker(),
+                        const SizedBox(height: 16.0),
+                        _buildTextFieldWithCharCounter(
+                          controller: _descriptionController,
+                          label: 'Description',
+                          hint: 'Describe your volunteering activities...',
+                          maxLines: 5,
+                          minChars: 200,
+                          validator: _validateDescription,
+                        ),
+                        const SizedBox(height: 24.0),
+                        _buildSaveButton(),
+                      ],
                     ),
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
-  
+
   Widget _buildCertificatePicker() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -570,8 +573,8 @@ class _VolunteeringFormPageState extends State<VolunteeringFormPage> {
             padding: const EdgeInsets.only(top: 8.0, left: 12.0),
             child: Text(
               _certificateError!,
-              style: const TextStyle(
-                color: Colors.red,
+              style: TextStyle(
+                color: Colors.red[700],
                 fontSize: 12.0,
               ),
             ),
@@ -579,7 +582,7 @@ class _VolunteeringFormPageState extends State<VolunteeringFormPage> {
       ],
     );
   }
-  
+
   void _showCertificatePreview() {
     showDialog(
       context: context,
@@ -680,7 +683,7 @@ class _VolunteeringFormPageState extends State<VolunteeringFormPage> {
       ],
     );
   }
-  
+
   Widget _buildTextFieldWithCharCounter({
     required TextEditingController controller,
     required String label,
@@ -731,7 +734,7 @@ class _VolunteeringFormPageState extends State<VolunteeringFormPage> {
       ],
     );
   }
-  
+
   Widget _buildTextField({
     required TextEditingController controller,
     required String label,
