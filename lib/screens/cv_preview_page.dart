@@ -57,34 +57,35 @@ class CVPreviewPage extends StatelessWidget {
       );
     }
   }
+@override
+Widget build(BuildContext context) {
+  const Color kBg = Color(0xFFE6F3FF);
+  const Color kTopBar = Color(0xFF0D4F94);
 
-  @override
-  Widget build(BuildContext context) {
-    const Color kBg = Color(0xFFE6F3FF);
-    const Color kTopBar = Color(0xFF0D4F94);
-
-    return Scaffold(
-      backgroundColor: kBg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Header - matching Club form style
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-              decoration: BoxDecoration(
-                color: kTopBar,
-                borderRadius: const BorderRadius.only(
-                  bottomRight: Radius.circular(32),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black26,
-                    blurRadius: 8,
-                    offset: Offset(0, 4),
-                  ),
-                ],
+  return Scaffold(
+    backgroundColor: kBg,
+    body: Column(
+      children: [
+        // Header
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: kTopBar,
+            borderRadius: const BorderRadius.only(
+              bottomRight: Radius.circular(32),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black26,
+                blurRadius: 8,
+                offset: Offset(0, 4),
               ),
+            ],
+          ),
+          child: SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
               child: Row(
                 children: [
                   IconButton(
@@ -111,85 +112,75 @@ class CVPreviewPage extends StatelessWidget {
                 ],
               ),
             ),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24.0),
-                child: Container(
-                  padding: const EdgeInsets.all(20.0),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF01509B).withOpacity(0.05),
-                        spreadRadius: 0,
-                        blurRadius: 6,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: SelectableText(
-                    cvContent,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      height: 1.6,
-                      color: Color(0xFF01509B),
+          ),
+        ),
+        Expanded(
+          child: SafeArea(
+            top: false,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24.0),
+              child: Container(
+                padding: const EdgeInsets.all(20.0),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF01509B).withOpacity(0.05),
+                      spreadRadius: 0,
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
                     ),
+                  ],
+                ),
+                child: SelectableText(
+                  cvContent,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    height: 1.6,
+                    color: Color(0xFF01509B),
                   ),
                 ),
               ),
             ),
-            Container(
-              padding: const EdgeInsets.all(16.0),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.grey.withOpacity(0.2),
-                    spreadRadius: 1,
-                    blurRadius: 4,
-                    offset: const Offset(0, -2),
-                  ),
-                ],
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.all(16.0),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.grey.withOpacity(0.2),
+                spreadRadius: 1,
+                blurRadius: 4,
+                offset: const Offset(0, -2),
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      height: 48,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF01509B), Color(0xFF83C8EF)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(12),
+            ],
+          ),
+          child: SafeArea(
+            top: false,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    height: 48,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF01509B), Color(0xFF83C8EF)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                      child: ElevatedButton.icon(
-                        onPressed: () => _saveAsText(context),
-                        icon: const Icon(Icons.download),
-                        label: const Text('Save as Text'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.transparent,
-                          shadowColor: Colors.transparent,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => _copyToClipboard(context),
-                      icon: const Icon(Icons.copy),
-                      label: const Text('Copy'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF01509B),
-                        side: const BorderSide(color: Color(0xFF01509B)),
+                    child: ElevatedButton.icon(
+                      onPressed: () => _saveAsText(context),
+                      icon: const Icon(Icons.download),
+                      label: const Text('Save as Text'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -197,12 +188,28 @@ class CVPreviewPage extends StatelessWidget {
                       ),
                     ),
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _copyToClipboard(context),
+                    icon: const Icon(Icons.copy),
+                    label: const Text('Copy'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF01509B),
+                      side: const BorderSide(color: Color(0xFF01509B)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
-      ),
-    );
-  }
-}
+      ],
+    ),
+  );
+} }

@@ -688,34 +688,35 @@ class _ExperiencePageState extends State<ExperiencePage> {
       ),
     );
   }
+@override
+Widget build(BuildContext context) {
+  const Color kBg = Color(0xFFE6F3FF);
+  const Color kTopBar = Color(0xFF0D4F94);
 
-  @override
-  Widget build(BuildContext context) {
-    const Color kBg = Color(0xFFE6F3FF);
-    const Color kTopBar = Color(0xFF0D4F94);
-
-    return Scaffold(
-      backgroundColor: kBg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Header section - matching profile page style
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-              decoration: BoxDecoration(
-                color: kTopBar,
-                borderRadius: const BorderRadius.only(
-                  bottomRight: Radius.circular(32),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black26,
-                    blurRadius: 8,
-                    offset: Offset(0, 4),
-                  ),
-                ],
+  return Scaffold(
+    backgroundColor: kBg,
+    body: Column(  // ✅ Remove SafeArea wrapper from here
+      children: [
+        // Header section - matching profile page style
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: kTopBar,
+            borderRadius: const BorderRadius.only(
+              bottomRight: Radius.circular(32),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black26,
+                blurRadius: 8,
+                offset: Offset(0, 4),
               ),
+            ],
+          ),
+          child: SafeArea(  // ✅ Add SafeArea INSIDE the header container
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
               child: Row(
                 children: [
                   const SizedBox(width: 48), // Left spacing to match profile
@@ -761,138 +762,141 @@ class _ExperiencePageState extends State<ExperiencePage> {
                 ],
               ),
             ),
-            Expanded(
-              child: isLoading
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                        color: Color(0xFF01509B),
-                      ),
-                    )
-                  : RefreshIndicator(
-                      color: const Color(0xFF01509B),
-                      onRefresh: _loadExperienceData,
-                      child: SingleChildScrollView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 20.0, bottom: 80.0),
-                          child: Column(
-                            children: [
-                              _buildCategorySection(
-                                title: 'Projects',
-                                icon: Icons.work_outline,
-                                category: 'projects',
-                                items: experienceData['projects'],
-                              ),
-                              _buildCategorySection(
-                                title: 'Workshops',
-                                icon: Icons.school_outlined,
-                                category: 'workshops',
-                                items: experienceData['workshops'],
-                              ),
-                              _buildCategorySection(
-                                title: 'Student Clubs',
-                                icon: Icons.groups_outlined,
-                                category: 'clubs',
-                                items: experienceData['clubs'],
-                              ),
-                              _buildCategorySection(
-                                title: 'Volunteering',
-                                icon: Icons.volunteer_activism_outlined,
-                                category: 'volunteering',
-                                items: experienceData['volunteering'],
-                              ),
-                            ],
-                          ),
+          ),
+        ),
+        Expanded(
+          child: SafeArea(  // ✅ Add SafeArea for content area with top: false
+            top: false,
+            child: isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      color: Color(0xFF01509B),
+                    ),
+                  )
+                : RefreshIndicator(
+                    color: const Color(0xFF01509B),
+                    onRefresh: _loadExperienceData,
+                    child: SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 20.0, bottom: 80.0),
+                        child: Column(
+                          children: [
+                            _buildCategorySection(
+                              title: 'Projects',
+                              icon: Icons.work_outline,
+                              category: 'projects',
+                              items: experienceData['projects'],
+                            ),
+                            _buildCategorySection(
+                              title: 'Workshops',
+                              icon: Icons.school_outlined,
+                              category: 'workshops',
+                              items: experienceData['workshops'],
+                            ),
+                            _buildCategorySection(
+                              title: 'Student Clubs',
+                              icon: Icons.groups_outlined,
+                              category: 'clubs',
+                              items: experienceData['clubs'],
+                            ),
+                            _buildCategorySection(
+                              title: 'Volunteering',
+                              icon: Icons.volunteer_activism_outlined,
+                              category: 'volunteering',
+                              items: experienceData['volunteering'],
+                            ),
+                          ],
                         ),
                       ),
                     ),
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: Container(
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF01509B), Color(0xFF83C8EF)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(30),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF01509B).withOpacity(0.3),
-              spreadRadius: 0,
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: FloatingActionButton.extended(
-          onPressed: () async {
-            showDialog(
-              context: context,
-              barrierDismissible: false,
-              builder: (context) => const Center(
-                child: CircularProgressIndicator(color: Colors.white),
-              ),
-            );
-
-            try {
-              final docId = await _getUserDocId();
-              if (docId == null) {
-                if (mounted) Navigator.pop(context);
-                _showErrorMessage('Unable to identify user');
-                return;
-              }
-
-              final doc = await _firestore.collection('users').doc(docId).get();
-              
-              if (!doc.exists) {
-                if (mounted) Navigator.pop(context);
-                _showErrorMessage('User data not found');
-                return;
-              }
-
-              final data = doc.data();
-              final projects = data?['projects'] ?? [];
-              final workshops = data?['workshops'] ?? [];
-              final clubs = data?['clubs'] ?? [];
-              final volunteering = data?['volunteering'] ?? [];
-
-              if (projects.isEmpty && workshops.isEmpty && clubs.isEmpty && volunteering.isEmpty) {
-                if (mounted) Navigator.pop(context);
-                _showErrorMessage('Please add at least one project, workshop, club, or volunteering experience before generating CV');
-                return;
-              }
-
-              if (mounted) Navigator.pop(context);
-
-              if (mounted) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const CVPage(autoGenerate: true),
                   ),
-                );
-              }
-            } catch (e) {
-              if (mounted) Navigator.pop(context);
-              _showErrorMessage('Failed to check experiences: ${e.toString()}');
-            }
-          },
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          icon: const Icon(Icons.description, color: Colors.white),
-          label: const Text(
-            'Generate CV',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
-              fontSize: 16,
+          ),
+        ),
+      ],
+    ),
+    floatingActionButton: Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF01509B), Color(0xFF83C8EF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF01509B).withOpacity(0.3),
+            spreadRadius: 0,
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: FloatingActionButton.extended(
+        onPressed: () async {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => const Center(
+              child: CircularProgressIndicator(color: Colors.white),
             ),
+          );
+
+          try {
+            final docId = await _getUserDocId();
+            if (docId == null) {
+              if (mounted) Navigator.pop(context);
+              _showErrorMessage('Unable to identify user');
+              return;
+            }
+
+            final doc = await _firestore.collection('users').doc(docId).get();
+            
+            if (!doc.exists) {
+              if (mounted) Navigator.pop(context);
+              _showErrorMessage('User data not found');
+              return;
+            }
+
+            final data = doc.data();
+            final projects = data?['projects'] ?? [];
+            final workshops = data?['workshops'] ?? [];
+            final clubs = data?['clubs'] ?? [];
+            final volunteering = data?['volunteering'] ?? [];
+
+            if (projects.isEmpty && workshops.isEmpty && clubs.isEmpty && volunteering.isEmpty) {
+              if (mounted) Navigator.pop(context);
+              _showErrorMessage('Please add at least one project, workshop, club, or volunteering experience before generating CV');
+              return;
+            }
+
+            if (mounted) Navigator.pop(context);
+
+            if (mounted) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const CVPage(autoGenerate: true),
+                ),
+              );
+            }
+          } catch (e) {
+            if (mounted) Navigator.pop(context);
+            _showErrorMessage('Failed to check experiences: ${e.toString()}');
+          }
+        },
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        icon: const Icon(Icons.description, color: Colors.white),
+        label: const Text(
+          'Generate CV',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+            fontSize: 16,
           ),
         ),
       ),
-    );
-  }
-}
+    ),
+  );
+}}

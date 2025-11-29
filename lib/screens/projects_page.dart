@@ -385,34 +385,32 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
       ),
     );
   }
+@override
+Widget build(BuildContext context) {
+  const Color kBg = Color(0xFFE6F3FF);
+  const Color kTopBar = Color(0xFF0D4F94);
 
-  @override
-  Widget build(BuildContext context) {
-    const Color kBg = Color(0xFFE6F3FF);
-    const Color kTopBar = Color(0xFF0D4F94);
-
-    return Scaffold(
-      backgroundColor: kBg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Header section - matching Club form style
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-              decoration: BoxDecoration(
-                color: kTopBar,
-                borderRadius: const BorderRadius.only(
-                  bottomRight: Radius.circular(32),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black26,
-                    blurRadius: 8,
-                    offset: Offset(0, 4),
-                  ),
-                ],
+  return Scaffold(
+    backgroundColor: kBg,
+    body: Column(
+      children: [
+        // Header section
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: kTopBar,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black26,
+                blurRadius: 8,
+                offset: Offset(0, 4),
               ),
+            ],
+          ),
+          child: SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
               child: Row(
                 children: [
                   IconButton(
@@ -443,118 +441,121 @@ class _ProjectFormPageState extends State<ProjectFormPage> {
                 ],
               ),
             ),
-            Expanded(
-              child: SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _buildTextFieldWithCounter(
-                          controller: _titleController,
-                          label: 'Project Title *',
-                          hint: 'e.g., AI Research Project',
-                          maxLength:40,
-                          validator: _validateTitle,
-                        ),
-                        const SizedBox(height: 16.0),
-                        _buildTextFieldWithCounter(
-                          controller: _organizationController,
-                          label: 'Organization',
-                          hint: 'e.g., Google Developer Student Club',
-                          maxLength: 40,
-                          validator: _validateOrganization,
-                        ),
-                        const SizedBox(height: 16.0),
-                        _buildTextField(
-                          controller: _linkController,
-                          label: 'Link/Attachment',
-                          hint: 'e.g., https://github.com/yourproject',
-                          validator: _validateLink,
-                          maxLength: 150,
-                        ),
-                        const SizedBox(height: 16.0),
+          ),
+        ),
+        Expanded(
+          child: SafeArea(
+            top: false,
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildTextFieldWithCounter(
+                        controller: _titleController,
+                        label: 'Project Title *',
+                        hint: 'e.g., AI Research Project',
+                        maxLength: 40,
+                        validator: _validateTitle,
+                      ),
+                      const SizedBox(height: 16.0),
+                      _buildTextFieldWithCounter(
+                        controller: _organizationController,
+                        label: 'Organization',
+                        hint: 'e.g., Google Developer Student Club',
+                        maxLength: 40,
+                        validator: _validateOrganization,
+                      ),
+                      const SizedBox(height: 16.0),
+                      _buildTextField(
+                        controller: _linkController,
+                        label: 'Link/Attachment',
+                        hint: 'e.g., https://github.com/yourproject',
+                        validator: _validateLink,
+                        maxLength: 150,
+                      ),
+                      const SizedBox(height: 16.0),
+                      _buildDatePicker(
+                        label: 'Start Date',
+                        selectedMonth: _startMonth,
+                        selectedYear: _startYear,
+                        onMonthChanged: (month) {
+                          setState(() => _startMonth = month);
+                          _validateDates();
+                        },
+                        onYearChanged: (year) {
+                          setState(() => _startYear = year);
+                          _validateDates();
+                        },
+                      ),
+                      const SizedBox(height: 16.0),
+                      CheckboxListTile(
+                        title: const Text('Currently working on this'),
+                        value: _isCurrentlyActive,
+                        onChanged: (value) {
+                          setState(() {
+                            _isCurrentlyActive = value ?? false;
+                            if (_isCurrentlyActive) {
+                              _endMonth = null;
+                              _endYear = null;
+                            }
+                          });
+                          _validateDates();
+                        },
+                        activeColor: const Color(0xFF0097b2),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                      if (!_isCurrentlyActive) ...[
                         _buildDatePicker(
-                          label: 'Start Date',
-                          selectedMonth: _startMonth,
-                          selectedYear: _startYear,
+                          label: 'End Date',
+                          selectedMonth: _endMonth,
+                          selectedYear: _endYear,
                           onMonthChanged: (month) {
-                            setState(() => _startMonth = month);
+                            setState(() => _endMonth = month);
                             _validateDates();
                           },
                           onYearChanged: (year) {
-                            setState(() => _startYear = year);
+                            setState(() => _endYear = year);
                             _validateDates();
                           },
                         ),
-                        const SizedBox(height: 16.0),
-                        CheckboxListTile(
-                          title: const Text('Currently working on this'),
-                          value: _isCurrentlyActive,
-                          onChanged: (value) {
-                            setState(() {
-                              _isCurrentlyActive = value ?? false;
-                              if (_isCurrentlyActive) {
-                                _endMonth = null;
-                                _endYear = null;
-                              }
-                            });
-                            _validateDates();
-                          },
-                          activeColor: const Color(0xFF0097b2),
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                        if (!_isCurrentlyActive) ...[
-                          _buildDatePicker(
-                            label: 'End Date',
-                            selectedMonth: _endMonth,
-                            selectedYear: _endYear,
-                            onMonthChanged: (month) {
-                              setState(() => _endMonth = month);
-                              _validateDates();
-                            },
-                            onYearChanged: (year) {
-                              setState(() => _endYear = year);
-                              _validateDates();
-                            },
-                          ),
-                        ],
-                        if (_dateError != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8.0),
-                            child: Text(
-                              _dateError!,
-                              style: const TextStyle(
-                                color: Colors.red,
-                                fontSize: 12,
-                              ),
+                      ],
+                      if (_dateError != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8.0),
+                          child: Text(
+                            _dateError!,
+                            style: const TextStyle(
+                              color: Colors.red,
+                              fontSize: 12,
                             ),
                           ),
-                          const SizedBox(height: 16.0),
+                        ),
+                      const SizedBox(height: 16.0),
                       _buildTextFieldWithCharCounter(
-  controller: _descriptionController,
-  label: 'Description',
-  hint: 'Describe your project...',
-  maxLines: 5,
-  minChars: 200,
-  validator: _validateDescription,
-),
-                        const SizedBox(height: 24.0),
-                        _buildSaveButton(),
-                      ],
-                    ),
+                        controller: _descriptionController,
+                        label: 'Description',
+                        hint: 'Describe your project...',
+                        maxLines: 5,
+                        minChars: 200,
+                        validator: _validateDescription,
+                      ),
+                      const SizedBox(height: 24.0),
+                      _buildSaveButton(),
+                    ],
                   ),
                 ),
               ),
             ),
-          ],
+          ),
         ),
-      ),
-    );
-  }
-
+      ],
+    ),
+  );
+}
   Widget _buildDatePicker({
     required String label,
     required String? selectedMonth,

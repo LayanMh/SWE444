@@ -299,40 +299,40 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
       ),
     );
   }
+@override
+Widget build(BuildContext context) {
+  const Color kBg = Color(0xFFE6F3FF);
+  const Color kTopBar = Color(0xFF0D4F94);
 
-  @override
-  Widget build(BuildContext context) {
-    const Color kBg = Color(0xFFE6F3FF);
-    const Color kTopBar = Color(0xFF0D4F94);
-
-    return WillPopScope(
-      onWillPop: () async {
-        // Always return true to indicate data may have changed
-        Navigator.pop(context, true);
-        return false;
-      },
-      child: Scaffold(
-        backgroundColor: kBg,
-        body: SafeArea(
-          child: Column(
-            children: [
-              // Header section - matching Club form style
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                decoration: BoxDecoration(
-                  color: kTopBar,
-                  borderRadius: const BorderRadius.only(
-                    bottomRight: Radius.circular(32),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black26,
-                      blurRadius: 8,
-                      offset: Offset(0, 4),
-                    ),
-                  ],
+  return WillPopScope(
+    onWillPop: () async {
+      Navigator.pop(context, true);
+      return false;
+    },
+    child: Scaffold(
+      backgroundColor: kBg,
+      body: Column(  // ✅ Remove SafeArea wrapper
+        children: [
+          // Header section
+          Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: kTopBar,
+              borderRadius: const BorderRadius.only(
+                bottomRight: Radius.circular(32),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black26,
+                  blurRadius: 8,
+                  offset: Offset(0, 4),
                 ),
+              ],
+            ),
+            child: SafeArea(  // ✅ SafeArea INSIDE header
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
                 child: Row(
                   children: [
                     IconButton(
@@ -369,7 +369,6 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
                         ],
                       ),
                     ),
-                    // Delete All button - only shows when items exist
                     if (items.isNotEmpty)
                       IconButton(
                         icon: const Icon(Icons.delete_sweep, color: Colors.white),
@@ -379,37 +378,41 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
                   ],
                 ),
               ),
-              Expanded(
-                child: isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : items.isEmpty
-                        ? Center(
-                            child: Text(
-                              'No items to display',
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                          )
-                        : RefreshIndicator(
-                            onRefresh: _loadData,
-                            child: ListView.builder(
-                              padding: const EdgeInsets.all(20.0),
-                              itemCount: items.length,
-                              itemBuilder: (context, index) {
-                                final item = items[index];
-                                return _buildDetailItem(item, index);
-                              },
+            ),
+          ),
+          Expanded(
+            child: SafeArea(  // ✅ SafeArea for content with top: false
+              top: false,
+              child: isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : items.isEmpty
+                      ? Center(
+                          child: Text(
+                            'No items to display',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey[600],
                             ),
                           ),
-              ),
-            ],
+                        )
+                      : RefreshIndicator(
+                          onRefresh: _loadData,
+                          child: ListView.builder(
+                            padding: const EdgeInsets.all(20.0),
+                            itemCount: items.length,
+                            itemBuilder: (context, index) {
+                              final item = items[index];
+                              return _buildDetailItem(item, index);
+                            },
+                          ),
+                        ),
+            ),
           ),
-        ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildDetailItem(Map<String, dynamic> item, int index) {
     final itemKey = _getItemKey(index);

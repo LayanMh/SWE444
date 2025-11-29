@@ -770,34 +770,35 @@ class _CVPageState extends State<CVPage> {
       ),
     );
   }
+@override
+Widget build(BuildContext context) {
+  const Color kBg = Color(0xFFE6F3FF);
+  const Color kTopBar = Color(0xFF0D4F94);
 
-  @override
-  Widget build(BuildContext context) {
-    const Color kBg = Color(0xFFE6F3FF);
-    const Color kTopBar = Color(0xFF0D4F94);
-
-    return Scaffold(
-      backgroundColor: kBg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Header - matching Club form style
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-              decoration: BoxDecoration(
-                color: kTopBar,
-                borderRadius: const BorderRadius.only(
-                  bottomRight: Radius.circular(32),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black26,
-                    blurRadius: 8,
-                    offset: Offset(0, 4),
-                  ),
-                ],
+  return Scaffold(
+    backgroundColor: kBg,
+    body: Column(
+      children: [
+        // Header
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: kTopBar,
+            borderRadius: const BorderRadius.only(
+              bottomRight: Radius.circular(32),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black26,
+                blurRadius: 8,
+                offset: Offset(0, 4),
               ),
+            ],
+          ),
+          child: SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
               child: Row(
                 children: [
                   IconButton(
@@ -824,14 +825,12 @@ class _CVPageState extends State<CVPage> {
                       ],
                     ),
                   ),
-                  // Print button
                   if (_pdfDocument != null)
                     IconButton(
                       icon: const Icon(Icons.print, color: Colors.white),
                       onPressed: _printPDF,
                       tooltip: 'Print',
                     ),
-                  // Share button
                   if (_pdfDocument != null)
                     IconButton(
                       icon: const Icon(Icons.share, color: Colors.white),
@@ -839,95 +838,98 @@ class _CVPageState extends State<CVPage> {
                       tooltip: 'Share',
                     ),
                   if (_pdfDocument == null)
-                    const SizedBox(width: 96), // Space when buttons not shown
+                    const SizedBox(width: 96),
                 ],
               ),
             ),
-            
-            // Content
-            Expanded(
-              child: _isLoading
-                  ? const Center(
+          ),
+        ),
+        // Content
+        Expanded(
+          child: SafeArea(
+            top: false,
+            child: _isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      color: Color(0xFF01509B),
+                    ),
+                  )
+                : _pdfDocument == null
+                    ? _buildEmptyState()
+                    : _buildPDFPreview(),
+          ),
+        ),
+        // Download PDF button at bottom
+       // Download PDF button at bottom
+if (_pdfDocument != null)
+  Container(
+    padding: const EdgeInsets.all(16.0),
+    decoration: BoxDecoration(
+      color: kBg,  // ✅ Changed from Colors.white to kBg
+      boxShadow: [
+        BoxShadow(
+          color: Colors.grey.withOpacity(0.2),
+          spreadRadius: 1,
+          blurRadius: 4,
+          offset: const Offset(0, -2),
+        ),
+      ],
+    ),
+    child: SafeArea(
+      top: false,
+      child: SizedBox(
+        width: double.infinity,
+        height: 50,
+        child: GestureDetector(
+          onTap: _isDownloading ? null : _downloadPDF,
+          child: Container(
+            height: 50,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [
+                  Color(0xFF01509B),
+                  Color(0xFF83C8EF),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Center(
+              child: _isDownloading
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
                       child: CircularProgressIndicator(
-                        color: Color(0xFF01509B),
+                        strokeWidth: 2,
+                        color: Colors.white,
                       ),
                     )
-                  : _pdfDocument == null
-                      ? _buildEmptyState()
-                      : _buildPDFPreview(),
-            ),
-            
-            // Download PDF button at bottom
-            if (_pdfDocument != null)
-              Container(
-                padding: const EdgeInsets.all(16.0),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.grey.withOpacity(0.2),
-                      spreadRadius: 1,
-                      blurRadius: 4,
-                      offset: const Offset(0, -2),
-                    ),
-                  ],
-                ),
-                child: SafeArea(
-                  top: false,
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: GestureDetector(
-                      onTap: _isDownloading ? null : _downloadPDF,
-                      child: Container(
-                        height: 50,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [
-                              Color(0xFF01509B),
-                              Color(0xFF83C8EF),
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
+                  : const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.download, color: Colors.white),
+                        SizedBox(width: 8),
+                        Text(
+                          'Download PDF',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
                           ),
-                          borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Center(
-                          child: _isDownloading
-                              ? const SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.download, color: Colors.white),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      'Download PDF',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                        ),
-                      ),
+                      ],
                     ),
-                  ),
-                ),
-              ),
-          ],
+            ),
+          ),
         ),
       ),
-    );
-  }
+    ),
+  ),
+      ],
+    ),
+  );
+}
 
   Widget _buildEmptyState() {
     return Center(

@@ -28,14 +28,15 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment(-1, -1),
-            end: Alignment(1, 1),
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
             colors: [
-                  Color(0xFF006B7A),
-                      Color(0xFF0097B2),
-                        Color(0xFF0E0259),],
-                        stops: [0.0, 0.55, 1.0],
-                        ),
+              Color(0xFF0D4F94), // Matching experience page top bar color
+              Color(0xFF01509B), // Matching experience page primary color
+              Color(0xFF83C8EF), // Matching experience page accent color
+            ],
+            stops: [0.0, 0.5, 1.0],
+          ),
         ),
         child: SafeArea(
           child: Column(
@@ -58,55 +59,57 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       ),
     );
   }
-Future<void> _handleResetPassword() async {
-  if (!_formKey.currentState!.validate()) return;
 
-  setState(() => _isLoading = true);
+  Future<void> _handleResetPassword() async {
+    if (!_formKey.currentState!.validate()) return;
 
-  try {
-    final email = _emailController.text.trim();
-    
-    // **NEW: Check if email exists in Firestore**
-    final emailExists = await _checkIfEmailExists(email);
-    
-    if (!emailExists) {
-      _showErrorMessage('This email does not exist in our system. Please check your email or sign up for a new account.');
-      return;
-    }
+    setState(() => _isLoading = true);
 
-    await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+    try {
+      final email = _emailController.text.trim();
+      
+      // **NEW: Check if email exists in Firestore**
+      final emailExists = await _checkIfEmailExists(email);
+      
+      if (!emailExists) {
+        _showErrorMessage('This email does not exist in our system. Please check your email or sign up for a new account.');
+        return;
+      }
 
-    if (mounted) {
-      _showSuccessDialog();
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+
+      if (mounted) {
+        _showSuccessDialog();
+      }
+    } on FirebaseAuthException catch (e) {
+      if (mounted) {
+        _showErrorMessage(_getErrorMessage(e.code));
+      }
+    } catch (e) {
+      if (mounted) {
+        _showErrorMessage('An unexpected error occurred. Please try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-  } on FirebaseAuthException catch (e) {
-    if (mounted) {
-      _showErrorMessage(_getErrorMessage(e.code));
-    }
-  } catch (e) {
-    if (mounted) {
-      _showErrorMessage('An unexpected error occurred. Please try again.');
-    }
-  } finally {
-    if (mounted) setState(() => _isLoading = false);
   }
-}
+
   // **NEW: Check if email exists in Firestore**
-Future<bool> _checkIfEmailExists(String email) async {
-  try {
-    final querySnapshot = await FirebaseFirestore.instance
-        .collection('users')
-        .where('email', isEqualTo: email)
-        .limit(1)
-        .get();
-    
-    return querySnapshot.docs.isNotEmpty;
-  } catch (e) {
-    debugPrint('Error checking email existence: $e');
-    // In case of error, allow the reset to proceed rather than blocking the user
-    return true;
+  Future<bool> _checkIfEmailExists(String email) async {
+    try {
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('email', isEqualTo: email)
+          .limit(1)
+          .get();
+      
+      return querySnapshot.docs.isNotEmpty;
+    } catch (e) {
+      debugPrint('Error checking email existence: $e');
+      // In case of error, allow the reset to proceed rather than blocking the user
+      return true;
+    }
   }
-}
 
   void _showSuccessDialog() {
     showDialog(
@@ -116,12 +119,12 @@ Future<bool> _checkIfEmailExists(String email) async {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Row(
           children: [
-            Icon(Icons.mark_email_read_rounded, color: Color(0xFF4ECDC4), size: 24),
+            Icon(Icons.mark_email_read_rounded, color: Color(0xFF01509B), size: 24),
             SizedBox(width: 8),
             Text(
               'Email Sent!',
               style: TextStyle(
-                color: Color(0xFF0e0259),
+                color: Color(0xFF01509B),
                 fontWeight: FontWeight.w600,
                 fontSize: 18,
               ),
@@ -135,7 +138,7 @@ Future<bool> _checkIfEmailExists(String email) async {
             Text(
               'We\'ve sent a password reset link to:',
               style: TextStyle(
-                color: const Color(0xFF0e0259).withOpacity(0.8),
+                color: const Color(0xFF01509B).withOpacity(0.8),
                 fontSize: 14,
               ),
             ),
@@ -144,14 +147,14 @@ Future<bool> _checkIfEmailExists(String email) async {
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF95E1D3).withOpacity(0.1),
+                color: const Color(0xFF83C8EF).withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFF4ECDC4).withOpacity(0.3)),
+                border: Border.all(color: const Color(0xFF83C8EF).withOpacity(0.3)),
               ),
               child: Text(
                 _emailController.text.trim(),
                 style: const TextStyle(
-                  color: Color(0xFF0e0259),
+                  color: Color(0xFF01509B),
                   fontWeight: FontWeight.w600,
                   fontSize: 14,
                 ),
@@ -162,7 +165,7 @@ Future<bool> _checkIfEmailExists(String email) async {
             Text(
               '• Check your email inbox\n• Click the reset link in the email\n• Follow the instructions to create a new password\n• Return to the app to sign in',
               style: TextStyle(
-                color: const Color(0xFF0e0259).withOpacity(0.7),
+                color: const Color(0xFF01509B).withOpacity(0.7),
                 fontSize: 13,
                 height: 1.5,
               ),
@@ -171,7 +174,7 @@ Future<bool> _checkIfEmailExists(String email) async {
             Text(
               'Didn\'t receive the email? Check your spam folder.',
               style: TextStyle(
-                color: const Color(0xFF0097b2),
+                color: const Color(0xFF0D4F94),
                 fontSize: 12,
                 fontStyle: FontStyle.italic,
               ),
@@ -187,7 +190,7 @@ Future<bool> _checkIfEmailExists(String email) async {
             child: const Text(
               'Back to Sign In',
               style: TextStyle(
-                color: Color(0xFF0097b2),
+                color: Color(0xFF0D4F94),
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -198,7 +201,7 @@ Future<bool> _checkIfEmailExists(String email) async {
               _handleResetPassword(); // Resend email
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF4ECDC4),
+              backgroundColor: const Color(0xFF01509B),
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
@@ -300,7 +303,7 @@ class _ResetPasswordCard extends StatelessWidget {
         border: Border.all(color: Colors.white.withOpacity(0.2)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0e0259).withOpacity(0.1),
+            color: const Color(0xFF01509B).withOpacity(0.1),
             blurRadius: 30,
             offset: const Offset(0, 15),
           ),
@@ -339,17 +342,17 @@ class _ResetPasswordCard extends StatelessWidget {
           validator: _Validators.email,
           decoration: InputDecoration(
             hintText: 'student@student.ksu.edu.sa',
-            prefixIcon: const Icon(Icons.alternate_email_rounded, color: Color(0xFF006B7A), size: 20),
+            prefixIcon: const Icon(Icons.alternate_email_rounded, color: Color(0xFF01509B), size: 20),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: const Color(0xFF4ECDC4).withOpacity(0.5)),
+              borderSide: BorderSide(color: const Color(0xFF83C8EF).withOpacity(0.5)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF0097b2), width: 2),
+              borderSide: const BorderSide(color: Color(0xFF01509B), width: 2),
             ),
             filled: true,
-            fillColor: const Color(0xFF95E1D3).withOpacity(0.1),
+            fillColor: const Color(0xFF83C8EF).withOpacity(0.1),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           ),
         ),
@@ -363,12 +366,12 @@ class _ResetPasswordCard extends StatelessWidget {
       height: 48,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF0097b2), Color(0xFF006B7A)],
+          colors: [Color(0xFF01509B), Color(0xFF83C8EF)],
         ),
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0097b2).withOpacity(0.3),
+            color: const Color(0xFF01509B).withOpacity(0.3),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -415,21 +418,21 @@ class _ResetPasswordCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF95E1D3).withOpacity(0.1),
+        color: const Color(0xFF83C8EF).withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF4ECDC4).withOpacity(0.3)),
+        border: Border.all(color: const Color(0xFF83C8EF).withOpacity(0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Row(
             children: [
-              Icon(Icons.info_outline_rounded, color: Color(0xFF0097b2), size: 20),
+              Icon(Icons.info_outline_rounded, color: Color(0xFF01509B), size: 20),
               SizedBox(width: 8),
               Text(
                 'How it works',
                 style: TextStyle(
-                  color: Color(0xFF0e0259),
+                  color: Color(0xFF01509B),
                   fontWeight: FontWeight.w600,
                   fontSize: 14,
                 ),
@@ -440,7 +443,7 @@ class _ResetPasswordCard extends StatelessWidget {
           Text(
             '1. Enter your university email address\n2. Check your email for the reset link\n3. Click the link to create a new password\n4. Return to the app and sign in',
             style: TextStyle(
-              color: const Color(0xFF0e0259).withOpacity(0.8),
+              color: const Color(0xFF01509B).withOpacity(0.8),
               fontSize: 13,
               height: 1.5,
             ),
@@ -459,28 +462,25 @@ class _Header extends StatelessWidget {
     return Column(
       children: [
         Container(
-          width: 64,
-          height: 64,
+          width: 72,
+          height: 72,
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF0097b2), Color(0xFF006B7A), Color(0xFF0e0259)],
-            ),
-            borderRadius: BorderRadius.circular(16),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFF4A98E9).withOpacity(0.3)),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF0097b2).withOpacity(0.3),
+                color: const Color(0xFF0D4F94).withOpacity(0.15),
                 blurRadius: 20,
-                offset: const Offset(0, 8),
+                offset: const Offset(0, 10),
               ),
             ],
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(8.0),
             child: Image.asset(
               'assets/images/logo.png',
-              width: 32,
-              height: 32,
-              fit: BoxFit.cover,
+              fit: BoxFit.contain,
             ),
           ),
         ),
@@ -490,7 +490,7 @@ class _Header extends StatelessWidget {
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.w800,
-            color: Color(0xFF0e0259),
+            color: Color(0xFF01509B),
             letterSpacing: -0.5,
           ),
         ),
@@ -499,7 +499,7 @@ class _Header extends StatelessWidget {
           'We\'ll send you a password reset link',
           style: TextStyle(
             fontSize: 14,
-            color: const Color(0xFF0e0259).withOpacity(0.7),
+            color: const Color(0xFF01509B).withOpacity(0.7),
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -520,7 +520,7 @@ class _FieldLabel extends StatelessWidget {
       style: const TextStyle(
         fontSize: 14,
         fontWeight: FontWeight.w600,
-        color: Color(0xFF0e0259),
+        color: Color(0xFF01509B),
       ),
     );
   }

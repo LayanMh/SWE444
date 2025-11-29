@@ -390,34 +390,35 @@ class _ClubFormPageState extends State<ClubFormPage> {
       },
     );
   }
+@override
+Widget build(BuildContext context) {
+  const Color kBg = Color(0xFFE6F3FF);
+  const Color kTopBar = Color(0xFF0D4F94);
 
-  @override
-  Widget build(BuildContext context) {
-    const Color kBg = Color(0xFFE6F3FF);
-    const Color kTopBar = Color(0xFF0D4F94);
-
-    return Scaffold(
-      backgroundColor: kBg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Header section - matching GPA Calculator style
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-              decoration: BoxDecoration(
-                color: kTopBar,
-                borderRadius: const BorderRadius.only(
-                  bottomRight: Radius.circular(32),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black26,
-                    blurRadius: 8,
-                    offset: Offset(0, 4),
-                  ),
-                ],
+  return Scaffold(
+    backgroundColor: kBg,
+    body: Column(  // ✅ No SafeArea here
+      children: [
+        // Header section
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: kTopBar,
+            borderRadius: const BorderRadius.only(
+              bottomRight: Radius.circular(32),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black26,
+                blurRadius: 8,
+                offset: Offset(0, 4),
               ),
+            ],
+          ),
+          child: SafeArea(  // ✅ SafeArea INSIDE header
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
               child: Row(
                 children: [
                   IconButton(
@@ -448,71 +449,74 @@ class _ClubFormPageState extends State<ClubFormPage> {
                 ],
               ),
             ),
-            Expanded(
-              child: SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _buildTextFieldWithCounter(
-                          controller: _titleController,
-                          label: 'Student Club Name *',
-                          hint: 'e.g., Robotics Club',
-                          maxLength: 40,
-                          validator: _validateTitle,
-                        ),
-                        const SizedBox(height: 16.0),
-                        _buildTextFieldWithCounter(
-                          controller: _organizationController,
-                          label: 'Organization',
-                          hint: 'e.g., University Engineering Department',
-                          maxLength: 40,
-                          validator: _validateOrganization,
-                        ),
-                        const SizedBox(height: 16.0),
-                        _buildTextFieldWithCounter(
-                          controller: _roleController,
-                          label: 'Role *',
-                          hint: 'e.g., President, Member, Volunteer',
-                          maxLength: 40,
-                          validator: _validateRole,
-                        ),
-                        const SizedBox(height: 16.0),
-                        _buildTextField(
-                          controller: _hoursController,
-                          label: 'Participation Hours',
-                          hint: 'e.g., 50',
-                          keyboardType: TextInputType.number,
-                          validator: _validateHours,
-                        ),
-                        const SizedBox(height: 16.0),
-                        _buildCertificatePicker(),
-                        const SizedBox(height: 16.0),
-                        _buildTextFieldWithCharCounter(
-                          controller: _descriptionController,
-                          label: 'Description',
-                          hint: 'Describe your activities and contributions...',
-                          maxLines: 5,
-                          minChars: 200,
-                          validator: _validateDescription,
-                        ),
-                        const SizedBox(height: 24.0),
-                        _buildSaveButton(),
-                      ],
-                    ),
+          ),
+        ),
+        Expanded(
+          child: SafeArea(  // ✅ SafeArea for content with top: false
+            top: false,
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildTextFieldWithCounter(
+                        controller: _titleController,
+                        label: 'Student Club Name *',
+                        hint: 'e.g., Robotics Club',
+                        maxLength: 40,
+                        validator: _validateTitle,
+                      ),
+                      const SizedBox(height: 16.0),
+                      _buildTextFieldWithCounter(
+                        controller: _organizationController,
+                        label: 'Organization',
+                        hint: 'e.g., University Engineering Department',
+                        maxLength: 40,
+                        validator: _validateOrganization,
+                      ),
+                      const SizedBox(height: 16.0),
+                      _buildTextFieldWithCounter(
+                        controller: _roleController,
+                        label: 'Role *',
+                        hint: 'e.g., President, Member, Volunteer',
+                        maxLength: 40,
+                        validator: _validateRole,
+                      ),
+                      const SizedBox(height: 16.0),
+                      _buildTextField(
+                        controller: _hoursController,
+                        label: 'Participation Hours',
+                        hint: 'e.g., 50',
+                        keyboardType: TextInputType.number,
+                        validator: _validateHours,
+                      ),
+                      const SizedBox(height: 16.0),
+                      _buildCertificatePicker(),
+                      const SizedBox(height: 16.0),
+                      _buildTextFieldWithCharCounter(
+                        controller: _descriptionController,
+                        label: 'Description',
+                        hint: 'Describe your activities and contributions...',
+                        maxLines: 5,
+                        minChars: 200,
+                        validator: _validateDescription,
+                      ),
+                      const SizedBox(height: 24.0),
+                      _buildSaveButton(),
+                    ],
                   ),
                 ),
               ),
             ),
-          ],
+          ),
         ),
-      ),
-    );
-  }
-  
+      ],
+    ),
+  );
+}
   Widget _buildCertificatePicker() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
