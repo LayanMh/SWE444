@@ -56,8 +56,8 @@ _loadDropdownOptions();
 @override
 void dispose() {
   _controllers.forEach((key, controller) => controller.dispose());
-  _focusNodes.forEach((key, node) => node.dispose()); // ADD THIS
-  _scrollController.dispose(); // ADD THIS
+  _focusNodes.forEach((key, node) => node.dispose());
+  _scrollController.dispose();
   super.dispose();
 }
 
@@ -232,7 +232,7 @@ if (mounted) {
 ScaffoldMessenger.of(context).showSnackBar(
 SnackBar(
 content: const Text('Account deletion cancelled'),
-backgroundColor: Colors.red[400],
+backgroundColor: Colors.red[600],
 ),
 );
 }
@@ -292,7 +292,7 @@ if (mounted) {
 ScaffoldMessenger.of(context).showSnackBar(
 SnackBar(
 content: const Text('Account deleted successfully'),
-backgroundColor: const Color(0xFF4ECDC4),
+backgroundColor: const Color(0xFF01509B),
 behavior: SnackBarBehavior.floating,
 shape:
 RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -306,7 +306,7 @@ if (mounted) {
 ScaffoldMessenger.of(context).showSnackBar(
 SnackBar(
 content: Text('Error deleting account: $e'),
-backgroundColor: Colors.red[400],
+backgroundColor: Colors.red[600],
 behavior: SnackBarBehavior.floating,
 shape:
 RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -368,7 +368,7 @@ if (mounted) {
 ScaffoldMessenger.of(context).showSnackBar(
 SnackBar(
 content: const Text('Incorrect password'),
-backgroundColor: Colors.red[400],
+backgroundColor: Colors.red[600],
 ),
 );
 }
@@ -419,7 +419,7 @@ void _showSuccessMessage(String message) {
 ScaffoldMessenger.of(context).showSnackBar(
 SnackBar(
 content: Text(message),
-backgroundColor: const Color(0xFF4ECDC4),
+backgroundColor: const Color(0xFF01509B),
 behavior: SnackBarBehavior.floating,
 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
 ),
@@ -430,7 +430,7 @@ void _showErrorMessage(String message) {
 ScaffoldMessenger.of(context).showSnackBar(
 SnackBar(
 content: Text(message),
-backgroundColor: Colors.red[400],
+backgroundColor: Colors.red[600],
 behavior: SnackBarBehavior.floating,
 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
 ),
@@ -558,7 +558,7 @@ Widget _buildEditableTextField({
   _fieldKeys[fieldName] ??= GlobalKey();
 
   return Container(
-    key: _fieldKeys[fieldName], // ADD THIS
+    key: _fieldKeys[fieldName],
     margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
     padding: const EdgeInsets.all(16.0),
     decoration: BoxDecoration(
@@ -566,9 +566,9 @@ Widget _buildEditableTextField({
       borderRadius: BorderRadius.circular(12.0),
       boxShadow: [
         BoxShadow(
-          color: Colors.grey.withOpacity(0.1),
-          spreadRadius: 1,
-          blurRadius: 5,
+          color: const Color(0xFF01509B).withOpacity(0.05),
+          spreadRadius: 0,
+          blurRadius: 6,
           offset: const Offset(0, 2),
         ),
       ],
@@ -581,7 +581,7 @@ Widget _buildEditableTextField({
             Icon(
               icon,
               color: isEditable && _isEditMode
-                  ? const Color(0xFF0097b2)
+                  ? const Color(0xFF01509B)
                   : Colors.grey[400],
               size: 24.0,
             ),
@@ -600,7 +600,7 @@ Widget _buildEditableTextField({
         if (_isEditMode && isEditable)
           TextFormField(
             controller: _controllers[fieldName],
-            focusNode: _focusNodes[fieldName], // ADD THIS
+            focusNode: _focusNodes[fieldName],
             keyboardType: keyboardType,
             autovalidateMode: AutovalidateMode.onUserInteraction,
             validator: validator,
@@ -610,7 +610,7 @@ Widget _buildEditableTextField({
               errorMaxLines: 2,
               hintText: hint,
               hintStyle: TextStyle(
-                color: const Color(0xFF006B7A).withOpacity(0.4),
+                color: const Color(0xFF01509B).withOpacity(0.4),
               ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -622,8 +622,8 @@ Widget _buildEditableTextField({
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(
-                  color: Color(0xFF0097b2),
+                borderSide: BorderSide(
+                  color: const Color(0xFF01509B).withOpacity(0.3),
                   width: 1,
                 ),
               ),
@@ -646,7 +646,7 @@ Widget _buildEditableTextField({
                 vertical: 12,
               ),
               filled: true,
-              fillColor: const Color(0xFF95E1D3).withOpacity(0.1),
+              fillColor: const Color(0xFFE6F3FF).withOpacity(0.5),
             ),
           )
         else
@@ -657,7 +657,7 @@ Widget _buildEditableTextField({
               fontSize: 16.0,
               fontWeight: FontWeight.w600,
               color: isEditable
-                  ? const Color(0xFF0e0259)
+                  ? const Color(0xFF01509B)
                   : Colors.grey[600],
             ),
           ),
@@ -685,9 +685,9 @@ color: Colors.white,
 borderRadius: BorderRadius.circular(12.0),
 boxShadow: [
 BoxShadow(
-color: Colors.grey.withOpacity(0.1),
-spreadRadius: 1,
-blurRadius: 5,
+color: const Color(0xFF01509B).withOpacity(0.05),
+spreadRadius: 0,
+blurRadius: 6,
 offset: const Offset(0, 2),
 ),
 ],
@@ -700,7 +700,7 @@ children: [
 Icon(
 icon,
 color: isEditable && _isEditMode
-? const Color(0xFF0097b2)
+? const Color(0xFF01509B)
 : Colors.grey[400],
 size: 24.0,
 ),
@@ -739,7 +739,7 @@ horizontal: 12,
 vertical: 12,
 ),
 filled: true,
-fillColor: const Color(0xFF95E1D3).withOpacity(0.1),
+fillColor: const Color(0xFFE6F3FF).withOpacity(0.5),
 ),
 items: options.map((item) {
 return DropdownMenuItem<T>(
@@ -767,7 +767,7 @@ style: TextStyle(
 fontSize: 16.0,
 fontWeight: FontWeight.w600,
 color: isEditable
-? const Color(0xFF0e0259)
+? const Color(0xFF01509B)
 : Colors.grey[600],
 ),
 ),
@@ -979,6 +979,9 @@ return null;
 }
 @override
 Widget build(BuildContext context) {
+  const Color kBg = Color(0xFFE6F3FF);
+  const Color kTopBar = Color(0xFF0D4F94);
+
   return WillPopScope(
     onWillPop: () async {
       if (_isEditMode) {
@@ -1011,224 +1014,225 @@ Widget build(BuildContext context) {
       return true;
     },
     child: Scaffold(
-      backgroundColor: Colors.grey[50],
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF006B7A),
-              Color(0xFF0097b2),
-              Color(0xFF0e0259),
-            ],
-            stops: [0.0, 0.6, 1.0],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Custom App Bar
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
-                  children: [
-                    const SizedBox(width: 48),
-                    const Expanded(
-                      child: Text(
-                        'My Profile',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                          letterSpacing: 0.5,
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Header - matching Club form style with decorative stars
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              decoration: BoxDecoration(
+                color: kTopBar,
+                borderRadius: const BorderRadius.only(
+                  bottomRight: Radius.circular(32),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 8,
+                    offset: Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  const SizedBox(width: 48),
+                  Expanded(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                        SizedBox(width: 8),
+                        Text(
+                          'My Profile',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                            letterSpacing: 0.5,
+                          ),
                         ),
-                        textAlign: TextAlign.center,
+                        SizedBox(width: 8),
+                        Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                      ],
+                    ),
+                  ),
+                  PopupMenuButton<String>(
+                    onSelected: (value) {
+                      if (value == 'edit') {
+                        setState(() => _isEditMode = true);
+                      } else if (value == 'delete') {
+                        _deleteAccount();
+                      }
+                    },
+                    icon: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white.withOpacity(0.2)),
+                      ),
+                      child: const Padding(
+                        padding: EdgeInsets.all(12.0),
+                        child: Icon(
+                          Icons.more_vert,
+                          color: Colors.white,
+                          size: 20,
+                        ),
                       ),
                     ),
-                    PopupMenuButton<String>(
-                      onSelected: (value) {
-                        if (value == 'edit') {
-                          setState(() => _isEditMode = true);
-                        } else if (value == 'delete') {
-                          _deleteAccount();
-                        }
-                      },
-                      icon: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.white.withOpacity(0.2)),
-                        ),
-                        child: const Padding(
-                          padding: EdgeInsets.all(12.0),
-                          child: Icon(
-                            Icons.more_vert,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                        ),
-                      ),
-                      itemBuilder: (BuildContext context) => [
-                        if (!_isEditMode)
-                          const PopupMenuItem<String>(
-                            value: 'edit',
-                            child: Row(
-                              children: [
-                                Icon(Icons.edit, color: Color(0xFF0097b2)),
-                                SizedBox(width: 8),
-                                Text('Edit Profile'),
-                              ],
-                            ),
-                          ),
+                    itemBuilder: (BuildContext context) => [
+                      if (!_isEditMode)
                         const PopupMenuItem<String>(
-                          value: 'delete',
+                          value: 'edit',
                           child: Row(
                             children: [
-                              Icon(Icons.delete_forever, color: Colors.red),
+                              Icon(Icons.edit, color: Color(0xFF01509B)),
                               SizedBox(width: 8),
-                              Text('Delete Account'),
+                              Text('Edit Profile'),
                             ],
                           ),
                         ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              // Profile Content
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.grey[50],
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(24),
-                      topRight: Radius.circular(24),
-                    ),
+                      const PopupMenuItem<String>(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete_forever, color: Colors.red),
+                            SizedBox(width: 8),
+                            Text('Delete Account'),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  child: RefreshIndicator(
-                    onRefresh: _loadUserData,
-                    child: isLoading
-                        ? const Center(child: CircularProgressIndicator())
-                        : errorMessage != null
-                            ? Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.error_outline,
-                                      size: 64.0,
-                                      color: Colors.grey[400],
-                                    ),
-                                    const SizedBox(height: 16.0),
-                                    Text(
-                                      errorMessage!,
-                                      style: TextStyle(
-                                        fontSize: 16.0,
-                                        color: Colors.grey[600],
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                    const SizedBox(height: 16.0),
-                                    ElevatedButton(
-                                      onPressed: _loadUserData,
-                                      child: const Text('Retry'),
-                                    ),
-                                  ],
+                ],
+              ),
+            ),
+            // Profile Content
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _loadUserData,
+                child: isLoading
+                    ? const Center(child: CircularProgressIndicator(color: Color(0xFF01509B)))
+                    : errorMessage != null
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.error_outline,
+                                  size: 64.0,
+                                  color: Colors.grey[400],
                                 ),
-                              )
-                            : SingleChildScrollView(
-                                controller: _scrollController,
-                                physics: const AlwaysScrollableScrollPhysics(),
-                                child: Form(
-                                  key: _formKey,
-                                  child: Column(
-                                    children: [
-                                      // Profile Header
-                                      Container(
-                                        width: double.infinity,
-                                        padding: const EdgeInsets.all(24.0),
-                                        child: Column(
-                                          children: [
-                                            CircleAvatar(
-                                              radius: 50.0,
-                                              backgroundColor: const Color(0xFF0097b2),
-                                              child: Text(
-                                                _getInitials(),
-                                                style: const TextStyle(
-                                                  fontSize: 36.0,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: Colors.white,
-                                                ),
-                                              ),
+                                const SizedBox(height: 16.0),
+                                Text(
+                                  errorMessage!,
+                                  style: TextStyle(
+                                    fontSize: 16.0,
+                                    color: Colors.grey[600],
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 16.0),
+                                ElevatedButton(
+                                  onPressed: _loadUserData,
+                                  child: const Text('Retry'),
+                                ),
+                              ],
+                            ),
+                          )
+                        : SingleChildScrollView(
+                            controller: _scrollController,
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            child: Form(
+                              key: _formKey,
+                              child: Column(
+                                children: [
+                                  // Profile Header
+                                  Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.all(24.0),
+                                    child: Column(
+                                      children: [
+                                        CircleAvatar(
+                                          radius: 50.0,
+                                          backgroundColor: const Color(0xFF01509B),
+                                          child: Text(
+                                            _getInitials(),
+                                            style: const TextStyle(
+                                              fontSize: 36.0,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.white,
                                             ),
-                                            const SizedBox(height: 16.0),
-                                            Text(
-                                              _getDisplayName(),
-                                              style: const TextStyle(
-                                                fontSize: 24.0,
-                                                fontWeight: FontWeight.bold,
-                                                color: Color(0xFF0e0259),
-                                              ),
-                                            ),
-                                            const SizedBox(height: 8.0),
-                                            Text(
-                                              currentUserEmail ??
-                                                  _auth.currentUser?.email ??
-                                                  'No email',
-                                              style: TextStyle(
-                                                fontSize: 16.0,
-                                                color: Colors.grey[600],
-                                              ),
-                                            ),
-                                            const SizedBox(height: 8.0),
-                                          ],
+                                          ),
                                         ),
-                                      ),
-                                      // Personal Information
-                                      if (userData?['FName'] != null)
-                                        _buildEditableTextField(
-                                          icon: Icons.person,
-                                          title: 'First Name',
-                                          fieldName: 'FName',
-                                          validator: (value) => _validateName(value, 'first name'),
+                                        const SizedBox(height: 16.0),
+                                        Text(
+                                          _getDisplayName(),
+                                          style: const TextStyle(
+                                            fontSize: 24.0,
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFF01509B),
+                                          ),
                                         ),
-                                      if (userData?['LName'] != null)
-                                        _buildEditableTextField(
-                                          icon: Icons.person_outline,
-                                          title: 'Last Name',
-                                          fieldName: 'LName',
-                                          validator: (value) => _validateName(value, 'last name'),
+                                        const SizedBox(height: 8.0),
+                                        Text(
+                                          currentUserEmail ??
+                                              _auth.currentUser?.email ??
+                                              'No email',
+                                          style: TextStyle(
+                                            fontSize: 16.0,
+                                            color: Colors.grey[600],
+                                          ),
                                         ),
-                                      
-                                      // Academic Information
-                                      _buildEditableDropdown<String>(
-                                        icon: Icons.school,
-                                        title: 'Major',
-                                        fieldName: 'major',
-                                        options: _majorOptions,
-                                        getCurrentValue: _getCurrentMajor,
-                                        displayValue: (value) => value ?? 'Not specified',
-                                        validator: (value) => value == null ? 'Please select your major' : null,
-                                      ),
-                                      _buildEditableDropdown<int>(
-                                        icon: Icons.trending_up,
-                                        title: 'Academic Level',
-                                        fieldName: 'level',
-                                        options: _levelOptions,
-                                        getCurrentValue: _getCurrentLevel,
-                                        displayValue: (value) => value != null ? 'Level $value' : 'Not specified',
-                                        validator: (value) => value == null ? 'Please select your level' : null,
-                                      ),
-                                      _buildEditableTextField(
-                                        icon: Icons.grade,
-                                        title: 'Current GPA',
-                                        fieldName: 'GPA',
-                                        hint: 'e.g., 3.75',
-                                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                        validator: _validateGPA,
-                                      ),
-                                     _buildEditableDropdown<String>(
+                                        const SizedBox(height: 8.0),
+                                      ],
+                                    ),
+                                  ),
+                                  // Personal Information
+                                  if (userData?['FName'] != null)
+                                    _buildEditableTextField(
+                                      icon: Icons.person,
+                                      title: 'First Name',
+                                      fieldName: 'FName',
+                                      validator: (value) => _validateName(value, 'first name'),
+                                    ),
+                                  if (userData?['LName'] != null)
+                                    _buildEditableTextField(
+                                      icon: Icons.person_outline,
+                                      title: 'Last Name',
+                                      fieldName: 'LName',
+                                      validator: (value) => _validateName(value, 'last name'),
+                                    ),
+                                  
+                                  // Academic Information
+                                  _buildEditableDropdown<String>(
+                                    icon: Icons.school,
+                                    title: 'Major',
+                                    fieldName: 'major',
+                                    options: _majorOptions,
+                                    getCurrentValue: _getCurrentMajor,
+                                    displayValue: (value) => value ?? 'Not specified',
+                                    validator: (value) => value == null ? 'Please select your major' : null,
+                                  ),
+                                  _buildEditableDropdown<int>(
+                                    icon: Icons.trending_up,
+                                    title: 'Academic Level',
+                                    fieldName: 'level',
+                                    options: _levelOptions,
+                                    getCurrentValue: _getCurrentLevel,
+                                    displayValue: (value) => value != null ? 'Level $value' : 'Not specified',
+                                    validator: (value) => value == null ? 'Please select your level' : null,
+                                  ),
+                                  _buildEditableTextField(
+                                    icon: Icons.grade,
+                                    title: 'Current GPA',
+                                    fieldName: 'GPA',
+                                    hint: 'e.g., 3.75',
+                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                    validator: _validateGPA,
+                                  ),
+                                 _buildEditableDropdown<String>(
   icon: Icons.person_pin,
   title: 'Gender',
   fieldName: 'gender',
@@ -1237,136 +1241,137 @@ Widget build(BuildContext context) {
   displayValue: (value) => value ?? 'Not specified',
   validator: (value) => value == null ? 'Please select your gender' : null,
 ),
-                                      const SizedBox(height: 30.0),
-                                      // Edit Mode: Save/Cancel Buttons OR Sign Out Button
-                                      Padding(
-                                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                                        child: _isEditMode
-                                            ? Row(
-                                                children: [
-                                                  Expanded(
-                                                    child: Container(
-                                                      height: 48,
-                                                      decoration: BoxDecoration(
+                                  const SizedBox(height: 30.0),
+                                  // Edit Mode: Save/Cancel Buttons OR Sign Out Button
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                                    child: _isEditMode
+                                        ? Row(
+                                            children: [
+                                              Expanded(
+                                                child: Container(
+                                                  height: 48,
+                                                  decoration: BoxDecoration(
+                                                    borderRadius: BorderRadius.circular(12),
+                                                    border: Border.all(
+                                                      color: const Color(0xFF01509B),
+                                                      width: 2,
+                                                    ),
+                                                  ),
+                                                  child: ElevatedButton.icon(
+                                                    onPressed: () {
+                                                      _cancelEdit();
+                                                    },
+                                                    icon: const Icon(Icons.close),
+                                                    label: const Text(
+                                                      'Cancel',
+                                                      style: TextStyle(
+                                                        fontSize: 16,
+                                                        fontWeight: FontWeight.w600,
+                                                        letterSpacing: 0.5,
+                                                      ),
+                                                    ),
+                                                    style: ElevatedButton.styleFrom(
+                                                      backgroundColor: Colors.white,
+                                                      foregroundColor: const Color(0xFF01509B),
+                                                      elevation: 0,
+                                                      shape: RoundedRectangleBorder(
                                                         borderRadius: BorderRadius.circular(12),
-                                                        border: Border.all(
-                                                          color: const Color(0xFF0097b2),
-                                                          width: 2,
-                                                        ),
                                                       ),
-                                                      child: ElevatedButton.icon(
-                                                        onPressed: () {
-                                                          _cancelEdit();
-                                                        },
-                                                        icon: const Icon(Icons.close),
-                                                        label: const Text(
-                                                          'Cancel',
-                                                          style: TextStyle(
-                                                            fontSize: 16,
-                                                            fontWeight: FontWeight.w600,
-                                                            letterSpacing: 0.5,
-                                                          ),
-                                                        ),
-                                                        style: ElevatedButton.styleFrom(
-                                                          backgroundColor: Colors.white,
-                                                          foregroundColor: const Color(0xFF0097b2),
-                                                          elevation: 0,
-                                                          shape: RoundedRectangleBorder(
-                                                            borderRadius: BorderRadius.circular(12),
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  const SizedBox(width: 12),
-                                                  Expanded(
-                                                    child: Container(
-                                                      height: 48,
-                                                      decoration: BoxDecoration(
-                                                        gradient: const LinearGradient(
-                                                          colors: [Color(0xFF0097b2), Color(0xFF006B7A)],
-                                                        ),
-                                                        borderRadius: BorderRadius.circular(12),
-                                                        boxShadow: [
-                                                          BoxShadow(
-                                                            color: const Color(0xFF0097b2).withOpacity(0.3),
-                                                            blurRadius: 20,
-                                                            offset: const Offset(0, 8),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                      child: ElevatedButton.icon(
-                                                        onPressed: _saveAllChanges,
-                                                        icon: const Icon(Icons.check),
-                                                        label: const Text(
-                                                          'Save',
-                                                          style: TextStyle(
-                                                            fontSize: 16,
-                                                            fontWeight: FontWeight.w600,
-                                                            letterSpacing: 0.5,
-                                                          ),
-                                                        ),
-                                                        style: ElevatedButton.styleFrom(
-                                                          backgroundColor: Colors.transparent,
-                                                          shadowColor: Colors.transparent,
-                                                          foregroundColor: Colors.white,
-                                                          shape: RoundedRectangleBorder(
-                                                            borderRadius: BorderRadius.circular(12),
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
-                                              )
-                                            : Container(
-                                                width: double.infinity,
-                                                height: 48,
-                                                decoration: BoxDecoration(
-                                                  gradient: const LinearGradient(
-                                                    colors: [Colors.red, Color(0xFFD32F2F)],
-                                                  ),
-                                                  borderRadius: BorderRadius.circular(12),
-                                                  boxShadow: [
-                                                    BoxShadow(
-                                                      color: Colors.red.withOpacity(0.3),
-                                                      blurRadius: 20,
-                                                      offset: const Offset(0, 8),
-                                                    ),
-                                                  ],
-                                                ),
-                                                child: ElevatedButton.icon(
-                                                  onPressed: _signOut,
-                                                  icon: const Icon(Icons.logout),
-                                                  label: const Text(
-                                                    'Sign Out',
-                                                    style: TextStyle(
-                                                      fontSize: 16,
-                                                      fontWeight: FontWeight.w600,
-                                                      letterSpacing: 0.5,
-                                                    ),
-                                                  ),
-                                                  style: ElevatedButton.styleFrom(
-                                                    backgroundColor: Colors.transparent,
-                                                    shadowColor: Colors.transparent,
-                                                    foregroundColor: Colors.white,
-                                                    shape: RoundedRectangleBorder(
-                                                      borderRadius: BorderRadius.circular(12),
                                                     ),
                                                   ),
                                                 ),
                                               ),
-                                      ),
-                                      const SizedBox(height: 30.0),
-                                    ],
+                                              const SizedBox(width: 12),
+                                              Expanded(
+                                                child: Container(
+                                                  height: 48,
+                                                  decoration: BoxDecoration(
+                                                    gradient: const LinearGradient(
+                                                      colors: [Color(0xFF01509B), Color(0xFF83C8EF)],
+                                                      begin: Alignment.topLeft,
+                                                      end: Alignment.bottomRight,
+                                                    ),
+                                                    borderRadius: BorderRadius.circular(12),
+                                                    boxShadow: [
+                                                      BoxShadow(
+                                                        color: const Color(0xFF01509B).withOpacity(0.3),
+                                                        spreadRadius: 0,
+                                                        blurRadius: 8,
+                                                        offset: const Offset(0, 4),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  child: ElevatedButton.icon(
+                                                    onPressed: _saveAllChanges,
+                                                    icon: const Icon(Icons.check),
+                                                    label: const Text(
+                                                      'Save',
+                                                      style: TextStyle(
+                                                        fontSize: 16,
+                                                        fontWeight: FontWeight.w600,
+                                                        letterSpacing: 0.5,
+                                                      ),
+                                                    ),
+                                                    style: ElevatedButton.styleFrom(
+                                                      backgroundColor: Colors.transparent,
+                                                      shadowColor: Colors.transparent,
+                                                      foregroundColor: Colors.white,
+                                                      shape: RoundedRectangleBorder(
+                                                        borderRadius: BorderRadius.circular(12),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          )
+                                        : Container(
+                                            width: double.infinity,
+                                            height: 48,
+                                            decoration: BoxDecoration(
+                                              gradient: const LinearGradient(
+                                                colors: [Colors.red, Color(0xFFD32F2F)],
+                                              ),
+                                              borderRadius: BorderRadius.circular(12),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.red.withOpacity(0.3),
+                                                  blurRadius: 8,
+                                                  offset: const Offset(0, 4),
+                                                ),
+                                              ],
+                                            ),
+                                            child: ElevatedButton.icon(
+                                              onPressed: _signOut,
+                                              icon: const Icon(Icons.logout),
+                                              label: const Text(
+                                                'Sign Out',
+                                                style: TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w600,
+                                                  letterSpacing: 0.5,
+                                                ),
+                                              ),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: Colors.transparent,
+                                                shadowColor: Colors.transparent,
+                                                foregroundColor: Colors.white,
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius: BorderRadius.circular(12),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
                                   ),
-                                ),
+                                  const SizedBox(height: 30.0),
+                                ],
                               ),
-                  ),
-                ),
+                            ),
+                          ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     ),

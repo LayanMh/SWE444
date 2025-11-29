@@ -266,12 +266,52 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Add Section')),
+      backgroundColor: const Color(0xFFDFF5FF),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(72),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFF2E5D9F),
+            borderRadius: BorderRadius.only(
+              bottomLeft: Radius.circular(20),
+              bottomRight: Radius.circular(20),
+            ),
+          ),
+          padding: const EdgeInsets.only(top: 10),
+          child: SafeArea(
+            bottom: false,
+            child: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Colors.white),
+                  onPressed: () => Navigator.pop(context),
+                ),
+                const Spacer(),
+                const Text(
+                  'Add Section',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.auto_awesome, color: Colors.white),
+                  onPressed: () {},
+                ),
+                const SizedBox(width: 8),
+              ],
+            ),
+          ),
+        ),
+      ),
       body: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(20, 32, 20, 12),
         child: Form(
           key: _formKey,
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               TextFormField(
                 controller: _controller,
@@ -281,8 +321,25 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
                   FilteringTextInputFormatter.digitsOnly,
                   LengthLimitingTextInputFormatter(5),
                 ],
-                decoration: const InputDecoration(
-                  labelText: 'Enter Section Number',
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: Colors.white,
+                  hintText: 'Enter Section Number',
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 14,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Color(0xFF6FA8DC)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(
+                      color: Color(0xFF2E5D9F),
+                      width: 1.4,
+                    ),
+                  ),
                 ),
                 validator: (value) {
                   final trimmed = value?.trim() ?? '';
@@ -295,12 +352,38 @@ class _AddLectureScreenState extends State<AddLectureScreen> {
                   return null;
                 },
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 18),
               _isLoading
                   ? const CircularProgressIndicator()
-                  : ElevatedButton(
-                      onPressed: _addLecture,
-                      child: const Text('Add Lecture'),
+                  : Material(
+                      color: Colors.transparent,
+                      elevation: 8,
+                      borderRadius: BorderRadius.circular(18),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(18),
+                        onTap: _addLecture,
+                        child: Ink(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
+                          decoration: const BoxDecoration(
+                            borderRadius: BorderRadius.all(Radius.circular(18)),
+                            gradient: LinearGradient(
+                              colors: [Color(0xFF6FA8DC), Color(0xFF2E5D9F)],
+                              begin: Alignment.centerLeft,
+                              end: Alignment.centerRight,
+                            ),
+                          ),
+                          child: const Text(
+                            'Add Lecture',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
             ],
           ),
