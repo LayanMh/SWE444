@@ -328,13 +328,10 @@ class _CommunityPageState extends State<CommunityPage>
   }
 
   Widget _buildCategoryFeed(String category) {
-    final baseQuery = FirebaseFirestore.instance
+    final stream = FirebaseFirestore.instance
         .collection('community_posts')
-        .orderBy('createdAt', descending: true);
-
-    final stream = category == 'All'
-        ? baseQuery.snapshots()
-        : baseQuery.where('category', isEqualTo: category).snapshots();
+        .orderBy('createdAt', descending: true)
+        .snapshots();
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: stream,
@@ -348,7 +345,13 @@ class _CommunityPageState extends State<CommunityPage>
         }
 
         final docs = snapshot.data?.docs ?? [];
-        final posts = docs.map(CommunityPost.fromDoc).toList();
+        final posts = docs
+            .map(CommunityPost.fromDoc)
+            .where((post) => category == 'All'
+                ? true
+                : _normalizeCategory(post.category) ==
+                    _normalizeCategory(category))
+            .toList();
 
         if (posts.isEmpty) {
           return _EmptyCategoryState(category: category);
@@ -720,6 +723,11 @@ class _CommunityPageState extends State<CommunityPage>
 
     final avatarColor = _avatarColorFor(_currentUserId!);
     final initials = _initialsFromName(_currentUserName ?? 'Student');
+    final creationCategories =
+        _categories.where((category) => category != 'All').toList();
+    final initialCategory = _tabController.index == 0
+        ? creationCategories.first
+        : _categories[_tabController.index];
 
     showModalBottomSheet<void>(
       context: context,
@@ -729,8 +737,8 @@ class _CommunityPageState extends State<CommunityPage>
       ),
       builder: (_) {
         return _PostComposerSheet(
-          categories: _categories,
-          initialCategory: _categories[_tabController.index],
+          categories: creationCategories,
+          initialCategory: initialCategory,
           currentUserId: _currentUserId!,
           currentUserName: _currentUserName ?? 'Student',
           currentUserMajor: _currentUserMajor,
@@ -760,16 +768,20 @@ class _CommunityPageState extends State<CommunityPage>
   }
 
   Color _categoryColor(String category) {
-    switch (category) {
-      case 'Hackathon':
+    switch (_normalizeCategory(category)) {
+      case 'hackathon':
         return const Color(0xFF00796B);
-      case 'Course':
+      case 'course':
         return const Color(0xFF3949AB);
-      case 'Certificate':
+      case 'certificate':
         return const Color(0xFFEF6C00);
       default:
         return const Color(0xFF546E7A);
     }
+  }
+
+  String _normalizeCategory(String category) {
+    return category.trim().toLowerCase();
   }
 
   String _initialsFromName(String name) {
@@ -985,7 +997,7 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
             ? null
             : _linkController.text.trim(),
         'imageUrl': imageUrl,
-        'category': _selectedCategory,
+        'category': _selectedCategory.trim(),
         'studentId': widget.currentUserId,
         'studentName': widget.currentUserName,
         'studentMajor': widget.currentUserMajor,
@@ -1239,7 +1251,7 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
                 decoration: const InputDecoration(
                   labelText: 'Resource link (optional)',
                   hintText:
-                      'Share a registration form, slides, or documentation link.',
+                      'Share a form, slides, link.',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.link_outlined),
                 ),
