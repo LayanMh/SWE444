@@ -30,6 +30,9 @@ class MySwapRequestPage extends StatefulWidget {
 }
 
 class _MySwapRequestPageState extends State<MySwapRequestPage> {
+  // Design colors matching profile page
+  static const Color kBg = Color(0xFFE6F3FF);
+  static const Color kTopBar = Color(0xFF0D4F94);
   static const Color kTeal = Color(0xFF0097B2);
   static const Color kIndigo = Color(0xFF0E0259);
 
@@ -372,48 +375,123 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 22),
-          onPressed: () => Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const HomePage()),
-          ),
+      backgroundColor: kBg,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            // Header with stars - matching profile page
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              decoration: BoxDecoration(
+                color: kTopBar,
+                borderRadius: const BorderRadius.only(
+                  bottomRight: Radius.circular(32),
+                ),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 8,
+                    offset: Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
+                    onPressed: () => Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(builder: (_) => const HomePage()),
+                    ),
+                  ),
+                  Expanded(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                        SizedBox(width: 8),
+                        Text(
+                          'My Swap Request',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 48),
+                ],
+              ),
+            ),
+            Expanded(
+              child: _loading
+                  ? Center(child: CircularProgressIndicator(color: kTopBar))
+                  : _data == null
+                      ? const Center(child: Text("No request found."))
+                      : _buildContent(),
+            ),
+          ],
         ),
       ),
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [kTeal, kIndigo],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
+      bottomNavigationBar: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xF2EAF3FF), // light tinted background with slight opacity
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x22000000),
+              blurRadius: 10,
+              offset: Offset(0, -2),
+            ),
+          ],
         ),
         child: SafeArea(
-          bottom: false,
-          child: _loading
-              ? const Center(child: CircularProgressIndicator(color: Colors.white))
-              : _data == null
-                  ? const Center(child: Text("No request found.", style: TextStyle(color: Colors.white)))
-                  : _buildContent(),
+          top: false,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _NavItem(
+                icon: Icons.person_outline,
+                label: 'Profile',
+                active: _selectedIndex == 0,
+                onTap: () => _onNavTap(0),
+              ),
+              _NavItem(
+                icon: Icons.event_available_outlined,
+                label: 'Schedule',
+                active: _selectedIndex == 1,
+                onTap: () => _onNavTap(1),
+              ),
+              _NavItem(
+                icon: Icons.home_outlined,
+                label: 'Home',
+                active: _selectedIndex == 2,
+                onTap: () => _onNavTap(2),
+              ),
+              _NavItem(
+                icon: Icons.school_outlined,
+                label: 'Experience',
+                active: _selectedIndex == 3,
+                onTap: () => _onNavTap(3),
+              ),
+              _NavItem(
+                icon: Icons.people_outline,
+                label: 'Community',
+                active: _selectedIndex == 4,
+                onTap: () => _onNavTap(4),
+              ),
+            ],
+          ),
         ),
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        currentIndex: _selectedIndex,
-        onTap: _onNavTap,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.person_rounded), label: 'Profile'),
-          BottomNavigationBarItem(icon: Icon(Icons.calendar_today_rounded), label: 'Schedule'),
-          BottomNavigationBarItem(icon: ImageIcon(AssetImage('assets/images/logo.png')), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.school_rounded), label: 'Experience'),
-          BottomNavigationBarItem(icon: Icon(Icons.people_alt_rounded), label: 'Community'),
-        ],
       ),
     );
   }
@@ -462,7 +540,7 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
         );
         break;
       default:
-        statusColor = const Color.fromARGB(255, 14, 2, 89);
+        statusColor = kTopBar;
         statusText = "Open";
     }
 
@@ -472,17 +550,6 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SizedBox(height: 10),
-          const Center(
-            child: Text(
-              "My Swap Request",
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          const SizedBox(height: 25),
           _statusCard(statusText, statusColor, statusSubtitle),
           const SizedBox(height: 30),
           _detailsCard(fromGroup, toGroup, major, level, gender, canEdit),
@@ -572,7 +639,7 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
                 Text(
                   "Request Details",
                   style: TextStyle(
-                    color: kIndigo,
+                    color: kTopBar,
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                     decoration: TextDecoration.underline,
@@ -585,11 +652,11 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
                     if (canEdit)
                       Container(
                         decoration: BoxDecoration(
-                          color: kIndigo.withOpacity(0.08),
+                          color: kTopBar.withOpacity(0.08),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: IconButton(
-                          icon: const Icon(Icons.edit, color: kIndigo, size: 22),
+                          icon: Icon(Icons.edit, color: kTopBar, size: 22),
                           tooltip: "Edit Request",
                           onPressed: _openEditRequest,
                         ),
@@ -638,7 +705,7 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
             
             if (wantCourses.isNotEmpty) ...[
               const SizedBox(height: 20),
-              _sectionTitle("Additional Courses I Want", const Color(0xFF0E0259)),
+              _sectionTitle("Additional Courses I Want", kTopBar),
               ...wantCourses.map((course) {
                 final priority = course["priority"] ?? "Optional";
                 final isRequired = priority == "Must";
@@ -648,7 +715,7 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
                     children: [
                       Icon(
                         isRequired ? Icons.star : Icons.star_border, 
-                        color: isRequired ? Colors.amber : const Color(0xFF0E0259), 
+                        color: isRequired ? Colors.amber : kTopBar, 
                         size: 16
                       ),
                       const SizedBox(width: 8),
@@ -780,7 +847,7 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
         padding: const EdgeInsets.only(bottom: 8),
         child: Row(
           children: [
-            Icon(icon, color: kIndigo, size: 22),
+            Icon(icon, color: kTopBar, size: 22),
             const SizedBox(width: 10),
             Text("$label: ",
                 style:
@@ -825,12 +892,12 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
         width: double.infinity,
         margin: const EdgeInsets.symmetric(vertical: 5),
         child: OutlinedButton.icon(
-          icon: Icon(icon, color: kTeal, size: 22),
+          icon: Icon(icon, color: kTopBar, size: 22),
           label: Text(label,
               style:
-                  const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: kTeal)),
+                  TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: kTopBar)),
           style: OutlinedButton.styleFrom(
-            side: const BorderSide(color: kTeal, width: 1.8),
+            side: BorderSide(color: kTopBar, width: 1.8),
             backgroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 16),
             shape:
@@ -1259,7 +1326,6 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
     );
   }
 
-  // ✅ SIMPLIFIED: Clean version with one loading spinner and one success message
   Future<void> _addCoursesToSchedule(
   List<Lecture> groupLectures,
   List<Lecture> additionalLectures,
@@ -1286,7 +1352,6 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
 
     final allLectures = [...groupLectures, ...additionalLectures];
 
-    // Simple loading dialog
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -1295,10 +1360,8 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
       ),
     );
 
-    // ===== DELETION PHASE =====
     debugPrint("🗑️ STARTING DELETION PHASE");
     
-    // Get existing schedule
     debugPrint("📋 Fetching existing schedule from Firestore...");
     final existingSchedule = await FirebaseFirestore.instance
         .collection('users')
@@ -1308,7 +1371,6 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
 
     debugPrint("📋 Found ${existingSchedule.docs.length} existing courses");
 
-    // Delete calendar events FIRST
     if (existingSchedule.docs.isNotEmpty) {
       debugPrint("🗑️ Deleting ${existingSchedule.docs.length} calendar events...");
       
@@ -1332,7 +1394,6 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
                 deletedCount++;
                 debugPrint("✅ Deleted calendar event $deletedCount/${existingSchedule.docs.length}");
                 
-                // Add small delay to avoid rate limiting
                 await Future.delayed(const Duration(milliseconds: 100));
               } catch (e) {
                 debugPrint("⚠️ Failed to delete calendar event $eventId: $e");
@@ -1347,7 +1408,6 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
         debugPrint("❌ Error during calendar deletion: $e");
       }
 
-      // Delete Firestore entries
       debugPrint("🗑️ Deleting ${existingSchedule.docs.length} Firestore entries...");
       try {
         final batch = FirebaseFirestore.instance.batch();
@@ -1365,7 +1425,6 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
 
     debugPrint("✅ DELETION PHASE COMPLETE");
 
-    // ===== ADDITION PHASE =====
     debugPrint("➕ STARTING ADDITION PHASE");
     debugPrint("📝 Adding ${allLectures.length} new courses to Firestore...");
 
@@ -1401,7 +1460,6 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
 
     debugPrint("✅ Successfully added ${addedLectures.length} courses to Firestore");
 
-    // ===== CALENDAR SYNC PHASE =====
     debugPrint("📅 STARTING CALENDAR SYNC PHASE");
     
     try {
@@ -1433,12 +1491,10 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
             syncedCount++;
             debugPrint("✅ Synced ${lecture.courseCode} to calendar");
             
-            // Add delay to avoid rate limiting (429 error)
             await Future.delayed(const Duration(milliseconds: 500));
             
           } catch (error) {
             debugPrint("⚠️ Calendar sync error for ${lecture.courseCode}: $error");
-            // Continue with other lectures even if one fails
           }
         }
         debugPrint("✅ Successfully synced $syncedCount/${addedLectures.length} events to calendar");
@@ -1453,9 +1509,8 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
     debugPrint("📊 Summary: Deleted ${existingSchedule.docs.length}, Added ${addedLectures.length}");
 
     if (!mounted) return;
-    Navigator.pop(context); // Close loading dialog
+    Navigator.pop(context);
 
-    // Simple success message
     messenger.showSnackBar(
       const SnackBar(
         content: Text('✅ Schedule updated successfully!'),
@@ -1464,7 +1519,6 @@ class _MySwapRequestPageState extends State<MySwapRequestPage> {
       ),
     );
 
-    // Navigate back to the main shell (Schedule tab) so nav bar is visible
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => HomePage(initialIndex: 1)),
@@ -1651,5 +1705,60 @@ void stopSwapNotificationRelay([String? requestId]) {
     _SwapNotificationRelay.instance.stop();
   } else {
     _SwapNotificationRelay.instance.stopIfMatches(requestId);
+  }
+}
+
+class _NavItem extends StatelessWidget {
+  const _NavItem({
+    required this.icon,
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    const inactiveColor = Color(0xFF7A8DA8);
+    const activeColor = Color(0xFF2E5D9F);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: active ? activeColor : inactiveColor, size: 24),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  color: active ? activeColor : inactiveColor,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 4),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                height: 3,
+                width: active ? 26 : 0,
+                decoration: BoxDecoration(
+                  color: active ? activeColor : Colors.transparent,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

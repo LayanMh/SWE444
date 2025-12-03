@@ -19,11 +19,15 @@ class SwapMatchesPage extends StatefulWidget {
 }
 
 class _SwapMatchesPageState extends State<SwapMatchesPage> {
+  // Design colors matching profile page
+  static const Color kBg = Color(0xFFE6F3FF);
+  static const Color kTopBar = Color(0xFF0D4F94);
+  
   bool _loading = true;
   List<Map<String, dynamic>> matches = [];
   bool _hasMustPriorityMatch = false;
   String? _missingMustCourseMessage;
-  int _selectedIndex = 2; // ✅ NEW: For bottom navigation
+  int _selectedIndex = 2;
 
   @override
   void initState() {
@@ -43,7 +47,7 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
 
       // Extract user's additional course preferences
       final specialRequests = userData["specialRequests"] ?? {};
-      final myWantCourses = (specialRequests["want"] as List?)?.map((item) => Map<String, dynamic>.from(item as Map)).toList() ?? []; // ✅ FIXED: Type conversion
+      final myWantCourses = (specialRequests["want"] as List?)?.map((item) => Map<String, dynamic>.from(item as Map)).toList() ?? [];
 
       // Step 1: Fetch base matches (gender, major, level, reverse groups, open status)
       final snapshot = await FirebaseFirestore.instance
@@ -62,7 +66,7 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
         return data;
       }).toList();
 
-      // ✅ IMPROVEMENT: Filter out the user's own request
+      // Filter out the user's own request
       final filteredMatches = allMatches.where((match) => match["id"] != widget.userRequestId).toList();
 
       // Step 2: Calculate match scores based on additional courses
@@ -104,7 +108,6 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
   }
 
   /// 🔹 Calculate match score based on additional courses
-  /// ✅ FIXED: Matches by COURSE CODE only (sections don't matter)
   Map<String, dynamic> _calculateMatchScore(
     Map<String, dynamic> match,
     List<Map<String, dynamic>> myWantCourses,
@@ -122,58 +125,45 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
     final mySpecialRequests = widget.userRequestData["specialRequests"] ?? {};
     final myHaveCourses = (mySpecialRequests["have"] as List?)?.map((item) => Map<String, dynamic>.from(item as Map)).toList() ?? [];
 
-    // ✅ DIRECTION 1: Check if THEY HAVE what I WANT
+    // DIRECTION 1: Check if THEY HAVE what I WANT
     for (final wantCourse in myWantCourses) {
       final wantCourseCode = wantCourse["course"];
       final priority = wantCourse["priority"] ?? "Optional";
 
-      // ✅ FIXED: Only check course code, ignore section
       final hasMatch = matchHaveCourses.any((haveCourse) {
-        return haveCourse["course"] == wantCourseCode;  // ← NO section check!
+        return haveCourse["course"] == wantCourseCode;
       });
 
       if (hasMatch) {
         if (priority == "Must") {
           score += 1000;
           matchedMustCourses++;
-          print("   ✓ They HAVE my MUST: $wantCourseCode (+1000)");
         } else {
           score += 10;
           matchedOptionalCourses++;
-          print("   ✓ They HAVE my Optional: $wantCourseCode (+10)");
         }
       }
     }
 
-    // ✅ DIRECTION 2: Check if I HAVE what THEY WANT
+    // DIRECTION 2: Check if I HAVE what THEY WANT
     for (final theirWant in matchWantCourses) {
       final theirWantCourse = theirWant["course"];
       final theirPriority = theirWant["priority"] ?? "Optional";
 
-      // ✅ FIXED: Only check course code, ignore section
       final iHaveIt = myHaveCourses.any((myHave) {
-        return myHave["course"] == theirWantCourse;  // ← NO section check!
+        return myHave["course"] == theirWantCourse;
       });
 
       if (iHaveIt) {
         if (theirPriority == "Must") {
           mutualBenefitScore += 1000;
-          print("   ✓ I HAVE their MUST: $theirWantCourse (+1000)");
         } else {
           mutualBenefitScore += 10;
-          print("   ✓ I HAVE their Optional: $theirWantCourse (+10)");
         }
       }
     }
 
     final totalScore = score + mutualBenefitScore;
-    
-    // 🔍 DEBUG OUTPUT
-    print("🔍 Match: ${match["studentName"] ?? "Unknown"}");
-    print("   Direction 1 (they have what I want): $score points");
-    print("   Direction 2 (I have what they want): $mutualBenefitScore points");
-    print("   TOTAL SCORE: $totalScore points");
-    print("---");
 
     return {
       "score": totalScore,
@@ -190,9 +180,8 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
     List<Map<String, dynamic>> myWantCourses,
   ) {
     final mustCourses = myWantCourses.where((c) => c["priority"] == "Must").toList();
-    if (mustCourses.isEmpty) return true; // No "Must" courses required
+    if (mustCourses.isEmpty) return true;
 
-    // Check if at least one match has all "Must" courses
     return matches.any((match) {
       final matchedMust = match["matchedMustCourses"] as int;
       return matchedMust == mustCourses.length;
@@ -230,7 +219,7 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
         return;
       }
 
-      // 🔹 Reserve both requests for 6 hours
+      // Reserve both requests for 6 hours
       final now = DateTime.now();
       final expiresAt = Timestamp.fromDate(now.add(const Duration(hours: 6)));
 
@@ -253,7 +242,6 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
         Navigator.pop(context);
         _showSnack("Confirmation sent successfully ✅");
         
-        // ✅ IMPROVED: Navigate to home instead of waiting page
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const HomePage()),
@@ -280,7 +268,6 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
     );
   }
 
-  // ✅ NEW: Handle bottom navigation
   void _onNavTap(int index) {
     setState(() => _selectedIndex = index);
     _navigateToMainTab(index);
@@ -289,35 +276,118 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFF0097B2), Color(0xFF0E0259)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: SafeArea(
-          bottom: false, // ✅ NEW: For bottom navigation
-          child: _loading
-              ? const Center(
-                  child: CircularProgressIndicator(color: Colors.white),
-                )
-              : _buildContent(),
+      backgroundColor: kBg,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            // Header with stars - matching profile page
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              decoration: BoxDecoration(
+                color: kTopBar,
+                borderRadius: const BorderRadius.only(
+                  bottomRight: Radius.circular(32),
+                ),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 8,
+                    offset: Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  Expanded(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                        SizedBox(width: 8),
+                        Text(
+                          'Matching Offers',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 48),
+                ],
+              ),
+            ),
+            Expanded(
+              child: _loading
+                  ? Center(child: CircularProgressIndicator(color: kTopBar))
+                  : _buildContent(),
+            ),
+          ],
         ),
       ),
-      // ✅ NEW: Bottom Navigation Bar
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        currentIndex: _selectedIndex,
-        onTap: _onNavTap,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.person_rounded), label: 'Profile'),
-          BottomNavigationBarItem(icon: Icon(Icons.calendar_today_rounded), label: 'Schedule'),
-          BottomNavigationBarItem(icon: ImageIcon(AssetImage('assets/images/logo.png')), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.school_rounded), label: 'Experience'),
-          BottomNavigationBarItem(icon: Icon(Icons.people_alt_rounded), label: 'Community'),
-        ],
+      bottomNavigationBar: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xF2EAF3FF),
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x22000000),
+              blurRadius: 10,
+              offset: Offset(0, -2),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          top: false,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _NavItem(
+                icon: Icons.person_outline,
+                label: 'Profile',
+                active: _selectedIndex == 0,
+                onTap: () => _onNavTap(0),
+              ),
+              _NavItem(
+                icon: Icons.event_available_outlined,
+                label: 'Schedule',
+                active: _selectedIndex == 1,
+                onTap: () => _onNavTap(1),
+              ),
+              _NavItem(
+                icon: Icons.home_outlined,
+                label: 'Home',
+                active: _selectedIndex == 2,
+                onTap: () => _onNavTap(2),
+              ),
+              _NavItem(
+                icon: Icons.school_outlined,
+                label: 'Experience',
+                active: _selectedIndex == 3,
+                onTap: () => _onNavTap(3),
+              ),
+              _NavItem(
+                icon: Icons.people_outline,
+                label: 'Community',
+                active: _selectedIndex == 4,
+                onTap: () => _onNavTap(4),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -325,22 +395,21 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
   Widget _buildContent() {
     return Column(
       children: [
-        _buildAppBar(),
         if (_missingMustCourseMessage != null) _buildWarningBanner(),
         Expanded(
           child: matches.isEmpty
-              ? const Center(
+              ? Center(
                   child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 25),
+                    padding: const EdgeInsets.symmetric(horizontal: 25),
                     child: Text(
                       "No matching offers found yet.\nCheck back later or adjust your requirements.",
-                      style: TextStyle(color: Colors.white70, fontSize: 16),
+                      style: TextStyle(color: kTopBar.withOpacity(0.6), fontSize: 16),
                       textAlign: TextAlign.center,
                     ),
                   ),
                 )
               : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 100), // ✅ CHANGED: Extra padding for nav bar
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
                   itemCount: matches.length,
                   itemBuilder: (context, index) =>
                       _buildMatchCard(context, matches[index], index),
@@ -350,49 +419,24 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
     );
   }
 
-  Widget _buildAppBar() => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        child: Row(
-          children: [
-            IconButton(
-              icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
-              onPressed: () => Navigator.pop(context),
-            ),
-            const Expanded(
-              child: Center(
-                child: Text(
-                  "Matching Offers",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 40), // for symmetry
-          ],
-        ),
-      );
-
   Widget _buildWarningBanner() => Container(
         margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         padding: const EdgeInsets.all(15),
         decoration: BoxDecoration(
-          color: const Color(0xFFFFF3E0), // ✅ IMPROVED: Light orange
+          color: const Color(0xFFFFF3E0),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFFF9800), width: 2), // ✅ IMPROVED: Material orange
+          border: Border.all(color: const Color(0xFFFF9800), width: 2),
         ),
         child: Row(
           children: [
             const Icon(Icons.warning_amber_rounded,
-                color: Color(0xFFFF9800), size: 30), // ✅ IMPROVED
+                color: Color(0xFFFF9800), size: 30),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 _missingMustCourseMessage!,
                 style: const TextStyle(
-                  color: Color(0xFFE65100), // ✅ IMPROVED: Dark orange text
+                  color: Color(0xFFE65100),
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
@@ -406,24 +450,23 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
       BuildContext context, Map<String, dynamic> match, int index) {
     final from = match["fromGroup"]?.toString() ?? "-";
     final to = match["toGroup"]?.toString() ?? "-";
-    final name = match["studentName"] ?? "Student"; // ✅ Uses new field
+    final name = match["studentName"] ?? "Student";
     final matchScore = match["matchScore"] as int;
     final matchedMust = match["matchedMustCourses"] as int;
     final matchedOptional = match["matchedOptionalCourses"] as int;
     final totalMatched = match["totalMatchedCourses"] as int;
 
-    // ✅ IMPROVED: Better badge logic
     String badgeText = "";
     Color badgeColor = Colors.grey;
     if (matchedMust > 0) {
       badgeText = "⭐ PERFECT MATCH";
-      badgeColor = const Color(0xFF4CAF50); // Green
+      badgeColor = const Color(0xFF4CAF50);
     } else if (matchedOptional > 0) {
       badgeText = "✓ Good Match";
-      badgeColor = const Color(0xFF2196F3); // Blue
+      badgeColor = const Color(0xFF2196F3);
     } else {
       badgeText = "Basic Match";
-      badgeColor = const Color(0xFF9E9E9E); // Grey
+      badgeColor = const Color(0xFF9E9E9E);
     }
 
     return Card(
@@ -436,7 +479,6 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Match rank badge
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -476,7 +518,7 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
             ),
             const SizedBox(height: 12),
             Row(children: [
-              const Icon(Icons.person, color: Colors.teal),
+              Icon(Icons.person, color: kTopBar),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -496,19 +538,19 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.teal.shade50,
+                  color: kTopBar.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.teal.shade200),
+                  border: Border.all(color: kTopBar.withOpacity(0.3)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       "Matched Courses:",
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
-                        color: Colors.teal,
+                        color: kTopBar,
                       ),
                     ),
                     const SizedBox(height: 5),
@@ -541,7 +583,7 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
                   icon: const Icon(Icons.info_outline, size: 18),
                   label: const Text("View Details"),
                   style: TextButton.styleFrom(
-                    foregroundColor: Colors.teal,
+                    foregroundColor: kTopBar,
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -550,7 +592,7 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
                   icon: const Icon(Icons.check_circle_outline, size: 18),
                   label: const Text("Select"),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.teal,
+                    backgroundColor: kTopBar,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -567,8 +609,8 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
 
   void _viewMatchDetails(Map<String, dynamic> match) {
     final specialRequests = match["specialRequests"] ?? {};
-    final haveCourses = (specialRequests["have"] as List?)?.map((item) => Map<String, dynamic>.from(item as Map)).toList() ?? []; // ✅ FIXED
-    final wantCourses = (specialRequests["want"] as List?)?.map((item) => Map<String, dynamic>.from(item as Map)).toList() ?? []; // ✅ FIXED
+    final haveCourses = (specialRequests["have"] as List?)?.map((item) => Map<String, dynamic>.from(item as Map)).toList() ?? [];
+    final wantCourses = (specialRequests["want"] as List?)?.map((item) => Map<String, dynamic>.from(item as Map)).toList() ?? [];
 
     showModalBottomSheet(
       context: context,
@@ -576,7 +618,7 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
       backgroundColor: Colors.transparent,
       builder: (ctx) {
         final media = MediaQuery.of(ctx);
-        final bool isTallDevice = media.size.height >= 820; // Pixel 7 ≈ 851 logical px
+        final bool isTallDevice = media.size.height >= 820;
         final double heightFactor = isTallDevice ? 0.78 : 0.9;
         final double sheetHeight = media.size.height * heightFactor;
         final double horizontalPadding = media.size.width > 500 ? 32 : 20;
@@ -610,12 +652,12 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
                         horizontal: horizontalPadding,
                       ).copyWith(bottom: 24),
                       children: [
-                        const Text(
+                        Text(
                           "Match Details",
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
-                            color: Colors.teal,
+                            color: kTopBar,
                           ),
                         ),
                         const SizedBox(height: 15),
@@ -631,12 +673,12 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
                         _buildDetailRow("Gender", match["gender"] ?? "N/A"),
                         const SizedBox(height: 20),
                         if (haveCourses.isNotEmpty) ...[
-                          const Text(
+                          Text(
                             "Additional Courses They Have:",
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
-                              color: Colors.teal,
+                              color: kTopBar,
                             ),
                           ),
                           const SizedBox(height: 8),
@@ -678,7 +720,7 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
                             icon: const Icon(Icons.check_circle_outline),
                             label: const Text("Send Confirmation"),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.teal,
+                              backgroundColor: kTopBar,
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 24, vertical: 14),
@@ -727,5 +769,59 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
       ),
     );
   }
+}
 
+class _NavItem extends StatelessWidget {
+  const _NavItem({
+    required this.icon,
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    const inactiveColor = Color(0xFF7A8DA8);
+    const activeColor = Color(0xFF2E5D9F);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: active ? activeColor : inactiveColor, size: 24),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  color: active ? activeColor : inactiveColor,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 4),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                height: 3,
+                width: active ? 26 : 0,
+                decoration: BoxDecoration(
+                  color: active ? activeColor : Colors.transparent,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

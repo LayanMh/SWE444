@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // ✅ NEW
+import 'package:shared_preferences/shared_preferences.dart';
 import 'home_page.dart';
-import 'MySwapRequestPage.dart'; // ✅ NEW: For navigation from edit mode
+import 'MySwapRequestPage.dart';
 
 class SwapRequestPage extends StatefulWidget {
   final String? existingRequestId;
@@ -16,6 +16,10 @@ class SwapRequestPage extends StatefulWidget {
 }
 
 class _SwapRequestPageState extends State<SwapRequestPage> {
+  // Design colors matching profile page
+  static const Color kBg = Color(0xFFE6F3FF);
+  static const Color kTopBar = Color(0xFF0D4F94);
+  
   final _formKey = GlobalKey<FormState>();
 
   String? fromGroup;
@@ -23,33 +27,32 @@ class _SwapRequestPageState extends State<SwapRequestPage> {
   String? userMajor;
   String? userGender;
   int? userLevel;
-  String? userId; // ✅ NEW
-  String? studentName; // ✅ NEW
-  String? studentEmail; // ✅ NEW
+  String? userId;
+  String? studentName;
+  String? studentEmail;
 
   final List<Map<String, String>> haveCourses = [];
   final List<Map<String, String>> wantCourses = [];
-  final List<String> deletedCourses = []; // ✅ KEEPING: field name stays as deletedCourses for database compatibility
+  final List<String> deletedCourses = [];
 
   final haveCourseCodeController = TextEditingController();
   final haveSectionController = TextEditingController();
   final wantCourseCodeController = TextEditingController();
   final wantSectionController = TextEditingController();
-  final deletedCourseController = TextEditingController(); // ✅ KEEPING: controller name stays same
+  final deletedCourseController = TextEditingController();
 
   String priority = "Must";
   bool _loadingUser = true;
   bool _loadingGroups = false;
   List<int> availableGroups = [];
 
-  // for collapsible sections
   bool showHave = false;
   bool showWant = false;
-  bool showDelete = false; // ✅ KEEPING: internal variable name (only UI text changes)
-  bool _addingHaveCourse = false; // Controls showing have-course form
-  bool _addingWantCourse = false; // Controls showing want-course form
+  bool showDelete = false;
+  bool _addingHaveCourse = false;
+  bool _addingWantCourse = false;
 
-  int _selectedIndex = 2; // ✅ NEW: Default to home tab
+  int _selectedIndex = 2;
 
   @override
   void initState() {
@@ -64,7 +67,6 @@ class _SwapRequestPageState extends State<SwapRequestPage> {
       toGroup = data["toGroup"]?.toString();
       final special = data["specialRequests"] ?? {};
       
-      // ✅ FIXED: Properly convert from Map<String, dynamic> to Map<String, String>
       if (special["have"] != null) {
         for (var item in special["have"]) {
           haveCourses.add(Map<String, String>.from(item as Map));
@@ -83,7 +85,6 @@ class _SwapRequestPageState extends State<SwapRequestPage> {
 
   Future<void> _fetchUserData() async {
     try {
-      // ✅ NEW: Get userId from either Firebase Auth or SharedPreferences
       userId = await _getUserId();
       if (userId == null) throw Exception("User not logged in");
 
@@ -95,7 +96,6 @@ class _SwapRequestPageState extends State<SwapRequestPage> {
       userGender = _extractValue(data["gender"]);
       userLevel = _extractIntValue(data["level"]);
       
-      // ✅ NEW: Extract student name and email
       final fName = _extractValue(data["FName"]) ?? "";
       final lName = _extractValue(data["LName"]) ?? "";
       studentName = "$fName $lName".trim();
@@ -109,7 +109,6 @@ class _SwapRequestPageState extends State<SwapRequestPage> {
     }
   }
 
-  // ✅ NEW: Get user ID from either Firebase Auth or SharedPreferences
   Future<String?> _getUserId() async {
     final prefs = await SharedPreferences.getInstance();
     final microsoftDocId = prefs.getString('microsoft_user_doc_id');
@@ -157,13 +156,13 @@ class _SwapRequestPageState extends State<SwapRequestPage> {
   }
 
   bool _isValidCourseCode(String code) => RegExp(r'^[A-Z]{2,4}[0-9]{3}$').hasMatch(code);
-  bool _isValidSection(String section) => RegExp(r'^[0-9]{5}$').hasMatch(section); // ✅ CHANGED: Exactly 5 digits
+  bool _isValidSection(String section) => RegExp(r'^[0-9]{5}$').hasMatch(section);
 
   void _addHaveCourse() {
     final code = haveCourseCodeController.text.trim().toUpperCase();
     final section = haveSectionController.text.trim();
     if (!_isValidCourseCode(code)) return _showMsg("Invalid course code (e.g., CSC111)", true);
-    if (!_isValidSection(section)) return _showMsg("Section must be exactly 5 digits", true); // ✅ CHANGED message
+    if (!_isValidSection(section)) return _showMsg("Section must be exactly 5 digits", true);
     setState(() {
       haveCourses.add({"course": code, "section": section});
       _addingHaveCourse = false;
@@ -176,7 +175,7 @@ class _SwapRequestPageState extends State<SwapRequestPage> {
     final code = wantCourseCodeController.text.trim().toUpperCase();
     final section = wantSectionController.text.trim();
     if (!_isValidCourseCode(code)) return _showMsg("Invalid course code (e.g., SWE486)", true);
-    if (!_isValidSection(section)) return _showMsg("Section must be exactly 5 digits", true); // ✅ CHANGED message
+    if (!_isValidSection(section)) return _showMsg("Section must be exactly 5 digits", true);
     setState(() {
       wantCourses.add({"course": code, "section": section, "priority": priority});
       _addingWantCourse = false;
@@ -220,7 +219,7 @@ class _SwapRequestPageState extends State<SwapRequestPage> {
     wantSectionController.clear();
   }
 
-  void _addDeletedCourse() { // ✅ KEEPING: function name stays same
+  void _addDeletedCourse() {
     final code = deletedCourseController.text.trim().toUpperCase();
     if (!_isValidCourseCode(code)) return _showMsg("Invalid course code (e.g., MATH101)", true);
     setState(() {
@@ -234,19 +233,19 @@ class _SwapRequestPageState extends State<SwapRequestPage> {
     
     try {
       final data = {
-        "userId": userId, // ✅ CHANGED: Use stored userId
-        "studentName": studentName, // ✅ NEW: For matching page and PDF
-        "studentEmail": studentEmail, // ✅ NEW: For matching page and PDF
+        "userId": userId,
+        "studentName": studentName,
+        "studentEmail": studentEmail,
         "major": userMajor,
         "gender": userGender,
         "level": userLevel,
         "fromGroup": int.parse(fromGroup!),
         "toGroup": int.parse(toGroup!),
         "specialRequests": {"have": haveCourses, "want": wantCourses},
-        "deletedCourses": deletedCourses, // ✅ KEEPING: database field name stays same
+        "deletedCourses": deletedCourses,
         "status": "open",
         "createdAt": FieldValue.serverTimestamp(),
-        "updatedAt": FieldValue.serverTimestamp(), // ✅ NEW
+        "updatedAt": FieldValue.serverTimestamp(),
       };
 
       String requestId;
@@ -281,7 +280,6 @@ class _SwapRequestPageState extends State<SwapRequestPage> {
     ));
   }
 
-  // ✅ NEW: Handle bottom navigation
   void _onNavTap(int index) {
     setState(() => _selectedIndex = index);
     Navigator.pushReplacement(
@@ -290,196 +288,192 @@ class _SwapRequestPageState extends State<SwapRequestPage> {
     );
   }
 
-  Widget _buildNavBar({required int currentIndex}) {
-    const inactiveColor = Color(0xFF7A8DA8);
-    const activeColor = Color(0xFF2E5D9F);
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xF2EAF3FF),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x22000000),
-            blurRadius: 10,
-            offset: Offset(0, -2),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        top: false,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
           children: [
-            _navItem(Icons.person_outline, 'Profile', currentIndex == 0, () => _onNavTap(0), activeColor, inactiveColor),
-            _navItem(Icons.event_available_outlined, 'Schedule', currentIndex == 1, () => _onNavTap(1), activeColor, inactiveColor),
-            _navItem(Icons.home_outlined, 'Home', currentIndex == 2, () => _onNavTap(2), activeColor, inactiveColor),
-            _navItem(Icons.school_outlined, 'Experience', currentIndex == 3, () => _onNavTap(3), activeColor, inactiveColor),
-            _navItem(Icons.people_outline, 'Community', currentIndex == 4, () => _onNavTap(4), activeColor, inactiveColor),
+            // Header with stars - matching profile page
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              decoration: BoxDecoration(
+                color: kTopBar,
+                borderRadius: const BorderRadius.only(
+                  bottomRight: Radius.circular(32),
+                ),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 8,
+                    offset: Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
+                    onPressed: () {
+                      if (widget.existingRequestId != null) {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => MySwapRequestPage(requestId: widget.existingRequestId!),
+                          ),
+                        );
+                      } else {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(builder: (_) => const HomePage()),
+                        );
+                      }
+                    },
+                  ),
+                  Expanded(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                        SizedBox(width: 8),
+                        Text(
+                          'Swapping Request',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 48),
+                ],
+              ),
+            ),
+            Expanded(
+              child: _loadingUser
+                  ? Center(child: CircularProgressIndicator(color: kTopBar))
+                  : SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Card(
+                            color: Colors.white,
+                            elevation: 8,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                            child: Padding(
+                              padding: const EdgeInsets.all(20),
+                              child: Form(
+                                key: _formKey,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _buildSectionTitle("Group Information", kTopBar),
+                                    _loadingGroups
+                                        ? const Center(child: CircularProgressIndicator())
+                                        : _buildGroupCard(),
+                                    const SizedBox(height: 20),
+
+                                    _buildExpandableSection(
+                                      "Additional Courses I Have",
+                                      const Color(0xFF0097B2),
+                                      showHave,
+                                      () => setState(() => showHave = !showHave),
+                                      _buildHaveSection(),
+                                    ),
+                                    const SizedBox(height: 10),
+
+                                    _buildExpandableSection(
+                                      "Additional Courses I Want",
+                                      kTopBar,
+                                      showWant,
+                                      () => setState(() => showWant = !showWant),
+                                      _buildWantSection(),
+                                    ),
+                                    const SizedBox(height: 10),
+
+                                    _buildExpandableSection(
+                                      "Completed Main Courses",
+                                      Colors.green,
+                                      showDelete,
+                                      () => setState(() => showDelete = !showDelete),
+                                      _buildDeleteSection(),
+                                    ),
+                                    const SizedBox(height: 30),
+                                    _buildSubmitButton(),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+            ),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _navItem(IconData icon, String label, bool active, VoidCallback onTap,
-      Color activeColor, Color inactiveColor) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+      bottomNavigationBar: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xF2EAF3FF),
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x22000000),
+              blurRadius: 10,
+              offset: Offset(0, -2),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          top: false,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Icon(icon, color: active ? activeColor : inactiveColor, size: 24),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  color: active ? activeColor : inactiveColor,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                ),
+              _NavItem(
+                icon: Icons.person_outline,
+                label: 'Profile',
+                active: _selectedIndex == 0,
+                onTap: () => _onNavTap(0),
               ),
-              const SizedBox(height: 4),
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                height: 3,
-                width: active ? 26 : 0,
-                decoration: BoxDecoration(
-                  color: active ? activeColor : Colors.transparent,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+              _NavItem(
+                icon: Icons.event_available_outlined,
+                label: 'Schedule',
+                active: _selectedIndex == 1,
+                onTap: () => _onNavTap(1),
+              ),
+              _NavItem(
+                icon: Icons.home_outlined,
+                label: 'Home',
+                active: _selectedIndex == 2,
+                onTap: () => _onNavTap(2),
+              ),
+              _NavItem(
+                icon: Icons.school_outlined,
+                label: 'Experience',
+                active: _selectedIndex == 3,
+                onTap: () => _onNavTap(3),
+              ),
+              _NavItem(
+                icon: Icons.people_outline,
+                label: 'Community',
+                active: _selectedIndex == 4,
+                onTap: () => _onNavTap(4),
               ),
             ],
           ),
         ),
       ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      extendBody: true,
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF0097B2), Color(0xFF0E0259)],
-          ),
-        ),
-        child: SafeArea(
-          bottom: false, // ✅ NEW: Don't apply safe area to bottom for nav bar
-          child: _loadingUser
-              ? const Center(child: CircularProgressIndicator(color: Colors.white))
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(20, 30, 20, 100), // ✅ CHANGED: Extra bottom padding for nav bar
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Header with centered title
-                      Row(
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
-                            onPressed: () {
-                              // ✅ FIXED: If editing, go back to details page, not home
-                              if (widget.existingRequestId != null) {
-                                Navigator.pushReplacement(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => MySwapRequestPage(requestId: widget.existingRequestId!),
-                                  ),
-                                );
-                              } else {
-                                Navigator.pushReplacement(
-                                  context,
-                                  MaterialPageRoute(builder: (_) => const HomePage()),
-                                );
-                              }
-                            },
-                          ),
-                          const Expanded(
-                            child: Text(
-                              "Swapping Request",
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 26,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                          const SizedBox(width: 48), // For symmetry
-                        ],
-                      ),
-                      const SizedBox(height: 25),
-
-                      // Main card
-                      Card(
-                        color: Colors.white,
-                        elevation: 8,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Form(
-                            key: _formKey,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _buildSectionTitle("Group Information", const Color(0xFF0E0259)),
-                                _loadingGroups
-                                    ? const Center(child: CircularProgressIndicator())
-                                    : _buildGroupCard(),
-                                const SizedBox(height: 20),
-
-                                _buildExpandableSection(
-                                  "Additional Courses I Have",
-                                  const Color(0xFF0097B2),
-                                  showHave,
-                                  () => setState(() => showHave = !showHave),
-                                  _buildHaveSection(),
-                                ),
-                                const SizedBox(height: 10),
-
-                                _buildExpandableSection(
-                                  "Additional Courses I Want",
-                                  const Color(0xFF0E0259),
-                                  showWant,
-                                  () => setState(() => showWant = !showWant),
-                                  _buildWantSection(),
-                                ),
-                                const SizedBox(height: 10),
-
-                                _buildExpandableSection(
-                                  "Completed Main Courses", // ✅ ONLY UI TEXT CHANGED - field name stays "deletedCourses"
-                                  Colors.green, // ✅ Color changed to green
-                                  showDelete, // ✅ KEEPING: variable name stays same
-                                  () => setState(() => showDelete = !showDelete),
-                                  _buildDeleteSection(), // ✅ KEEPING: function name stays same
-                                ),
-                                const SizedBox(height: 30),
-                                _buildSubmitButton(),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-        ),
-      ),
-      // ✅ NEW: Bottom Navigation Bar
-      bottomNavigationBar: _buildNavBar(currentIndex: _selectedIndex),
     );
   }
 
@@ -609,7 +603,7 @@ class _SwapRequestPageState extends State<SwapRequestPage> {
                     icon: const Icon(Icons.check),
                     label: const Text("Save Course"),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0E0259),
+                      backgroundColor: kTopBar,
                       foregroundColor: Colors.white,
                     ),
                   ),
@@ -631,8 +625,8 @@ class _SwapRequestPageState extends State<SwapRequestPage> {
                 icon: const Icon(Icons.add),
                 label: const Text("Add Course"),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF0E0259),
-                  side: const BorderSide(color: Color(0xFF0E0259), width: 1.5),
+                  foregroundColor: kTopBar,
+                  side: BorderSide(color: kTopBar, width: 1.5),
                 ),
               ),
             ),
@@ -641,7 +635,6 @@ class _SwapRequestPageState extends State<SwapRequestPage> {
         ],
       );
 
-  // ✅ KEEPING: function name stays same, only UI text changes
   Widget _buildDeleteSection() => Column(
         children: [
           TextFormField(
@@ -653,16 +646,16 @@ class _SwapRequestPageState extends State<SwapRequestPage> {
           ),
           const SizedBox(height: 10),
           ElevatedButton.icon(
-            onPressed: _addDeletedCourse, // ✅ KEEPING: function name
-            icon: const Icon(Icons.check_circle_outline), // ✅ Icon changed to checkmark
-            label: const Text("Add Completed Course"), // ✅ UI TEXT changed
+            onPressed: _addDeletedCourse,
+            icon: const Icon(Icons.check_circle_outline),
+            label: const Text("Add Completed Course"),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green, // ✅ Color changed to green
+              backgroundColor: Colors.green,
               foregroundColor: Colors.white,
             ),
           ),
           const SizedBox(height: 10),
-          _buildDeletedList(), // ✅ KEEPING: function name
+          _buildDeletedList(),
         ],
       );
 
@@ -675,11 +668,11 @@ class _SwapRequestPageState extends State<SwapRequestPage> {
         TextFormField(
           controller: sectionCtrl,
           decoration: const InputDecoration(
-            labelText: "Section Number (5 digits)", // ✅ CHANGED: "4–7 digits" → "5 digits"
+            labelText: "Section Number (5 digits)",
             border: OutlineInputBorder(),
           ),
           keyboardType: TextInputType.number,
-          maxLength: 5, // ✅ NEW: Limit input to 5 characters
+          maxLength: 5,
         ),
       ]);
 
@@ -701,9 +694,8 @@ class _SwapRequestPageState extends State<SwapRequestPage> {
           }).toList(),
         );
 
-  // ✅ KEEPING: function name stays same, only UI text changes
   Widget _buildDeletedList() => deletedCourses.isEmpty
-      ? const Text("No completed courses added yet.") // ✅ UI TEXT changed
+      ? const Text("No completed courses added yet.")
       : Column(
           children: deletedCourses.asMap().entries.map((entry) {
             final i = entry.key;
@@ -725,7 +717,7 @@ class _SwapRequestPageState extends State<SwapRequestPage> {
         child: ElevatedButton(
           onPressed: _submitRequest,
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF0E0259),
+            backgroundColor: kTopBar,
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 16),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -743,7 +735,62 @@ class _SwapRequestPageState extends State<SwapRequestPage> {
     haveSectionController.dispose();
     wantCourseCodeController.dispose();
     wantSectionController.dispose();
-    deletedCourseController.dispose(); // ✅ KEEPING: controller name
+    deletedCourseController.dispose();
     super.dispose();
+  }
+}
+
+class _NavItem extends StatelessWidget {
+  const _NavItem({
+    required this.icon,
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    const inactiveColor = Color(0xFF7A8DA8);
+    const activeColor = Color(0xFF2E5D9F);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: active ? activeColor : inactiveColor, size: 24),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  color: active ? activeColor : inactiveColor,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 4),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                height: 3,
+                width: active ? 26 : 0,
+                decoration: BoxDecoration(
+                  color: active ? activeColor : Colors.transparent,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
