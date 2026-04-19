@@ -366,6 +366,15 @@ Future<Map<String, dynamic>?> _findExistingUserByEmail(String email) async {
     );
   }
 
+// ============================================================
+// REFACTORING APPLIED: Extract Method
+// Code Smell: Long Method
+// The original _handleSignIn() had multiple responsibilities:
+// form validation, loading state, Firebase sign-in,
+// credential saving, success handling, and error handling.
+// It has been split into 5 focused extracted methods below.
+// ============================================================
+
   Future<void> _handleSignIn() async {
   if (!_isFormValid()) return;
   _setLoading(true);
