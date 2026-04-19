@@ -27,7 +27,6 @@ class _CommunityPageState extends State<CommunityPage>
     'Certificate',
   ];
 
-  // Palette similar to GPA / Absence pages
   static const Color _kTopBarColor = Color(0xFF0D4F94);
   static const Color _kPageBackground = Color(0xFFF2F6FF);
   static const Color _kTabContainer = Color(0xFF0A3E82);
@@ -121,7 +120,6 @@ class _CommunityPageState extends State<CommunityPage>
   bool get _canCreatePost => !_isLoadingProfile && _currentUserId != null;
 
   void _onNavTap(int index) {
-    // Same navigation behavior as Absence / GPA pages
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => HomePage(initialIndex: index)),
@@ -131,7 +129,6 @@ class _CommunityPageState extends State<CommunityPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // Top bar styled like GPA page
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(140),
         child: Container(
@@ -236,8 +233,6 @@ class _CommunityPageState extends State<CommunityPage>
           children: _categories.map(_buildCategoryFeed).toList(),
         ),
       ),
-
-     
     );
   }
 
@@ -389,7 +384,6 @@ class _CommunityPageState extends State<CommunityPage>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Row(
@@ -457,7 +451,6 @@ class _CommunityPageState extends State<CommunityPage>
             ),
           ),
 
-          // Image
           if (hasImage)
             AspectRatio(
               aspectRatio: 4 / 5,
@@ -480,7 +473,6 @@ class _CommunityPageState extends State<CommunityPage>
               ),
             ),
 
-          // Actions
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: Row(
@@ -514,7 +506,6 @@ class _CommunityPageState extends State<CommunityPage>
             ),
           ),
 
-          // Content
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Column(
@@ -786,34 +777,23 @@ class _CommunityPageState extends State<CommunityPage>
 
   String _initialsFromName(String name) {
     final parts = name.trim().split(RegExp(r'\s+'));
-    if (parts.isEmpty) {
-      return 'ST';
-    }
+    if (parts.isEmpty) return 'ST';
     if (parts.length == 1) {
       final value = parts.first;
-      if (value.length >= 2) {
-        return value.substring(0, 2).toUpperCase();
-      }
+      if (value.length >= 2) return value.substring(0, 2).toUpperCase();
       return value.toUpperCase();
     }
     final first = parts[0].isNotEmpty ? parts[0][0] : '';
     final second = parts[1].isNotEmpty ? parts[1][0] : '';
-    final combined = '$first$second';
-    return combined.toUpperCase();
+    return '$first$second'.toUpperCase();
   }
 
   String _timeAgo(DateTime dateTime) {
     final difference = DateTime.now().difference(dateTime);
     if (difference.inMinutes < 1) return 'just now';
-    if (difference.inMinutes < 60) {
-      return '${difference.inMinutes}m ago';
-    }
-    if (difference.inHours < 24) {
-      return '${difference.inHours}h ago';
-    }
-    if (difference.inDays < 7) {
-      return '${difference.inDays}d ago';
-    }
+    if (difference.inMinutes < 60) return '${difference.inMinutes}m ago';
+    if (difference.inHours < 24) return '${difference.inHours}h ago';
+    if (difference.inDays < 7) return '${difference.inDays}d ago';
     if (difference.inDays < 30) {
       final weeks = (difference.inDays / 7).floor();
       return '${weeks}w ago';
@@ -880,6 +860,43 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
     super.dispose();
   }
 
+  //Decompose Conditional
+  bool _isValidLength(String text) => text.length >= 5 && text.length <= 2000;
+
+  bool _containsSpaces(String text) => text.contains(RegExp(r'\s'));
+
+  String? _extractScheme(String text) {
+    if (text.startsWith('https://')) return 'https://';
+    if (text.startsWith('http://')) return 'http://';
+    return null;
+  }
+
+  bool _hasInvalidSlashAfterScheme(String text, String scheme) {
+    final remainder = text.substring(scheme.length);
+    return remainder.startsWith('/');
+  }
+
+  String? _validateResourceLink(String? value) {
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) return null;
+    if (!_isValidLength(text)) {
+      return 'Link must be between 5 and 2000 characters.';
+    }
+    if (_containsSpaces(text)) {
+      return 'Link cannot contain spaces.';
+    }
+    final scheme = _extractScheme(text);
+    if (scheme == null) {
+      return 'Link must start with http:// or https://';
+    }
+    if (_hasInvalidSlashAfterScheme(text, scheme)) {
+      return 'Use only two slashes after the scheme (e.g., https://example.com).';
+    }
+    return null;
+  }
+
+  // ──────────────────────────────────────────────────────────────────
+
   Future<void> _pickImage() async {
     try {
       final result = await _picker.pickImage(
@@ -929,17 +946,12 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
     _photoFieldKey.currentState?.didChange(null);
   }
 
-  /// Uploads selected image to ImgBB and returns the public URL.
   Future<String> _uploadSelectedImage() async {
     final image = _selectedImage;
-    if (image == null) {
-      throw StateError('No image selected');
-    }
+    if (image == null) throw StateError('No image selected');
 
     final file = File(image.path);
-    if (!await file.exists()) {
-      throw StateError('Selected image file is missing');
-    }
+    if (!await file.exists()) throw StateError('Selected image file is missing');
 
     try {
       final bytes = await file.readAsBytes();
@@ -948,7 +960,6 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
       final response = await http.post(
         Uri.parse('https://api.imgbb.com/1/upload'),
         body: {
-          // same key used elsewhere in app
           'key': '0b411c63631d14df85c76a6cdbcf1667',
           'image': base64Image,
           'name':
@@ -958,22 +969,14 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        final imageUrl = data['data']['url'] as String;
-        debugPrint('✅ Community image upload success: $imageUrl');
-        return imageUrl;
+        return data['data']['url'] as String;
       } else {
-        debugPrint(
-          '❌ Community image upload failed: '
-          '${response.statusCode} ${response.body}',
-        );
         throw Exception('Upload failed with status: ${response.statusCode}');
       }
     } catch (e) {
-      debugPrint('❌ Error uploading community image: $e');
+      debugPrint('Error uploading community image: $e');
       if (mounted) {
-        _showSheetSnack(
-          'Failed to upload image. Please check your internet connection.',
-        );
+        _showSheetSnack('Failed to upload image. Please check your internet connection.');
       }
       rethrow;
     }
@@ -981,9 +984,7 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
 
   Future<void> _submit() async {
     if (_isSubmitting) return;
-    if (!(_formKey.currentState?.validate() ?? false)) {
-      return;
-    }
+    if (!(_formKey.currentState?.validate() ?? false)) return;
     if (_photoFieldKey.currentState?.validate() == false) return;
 
     setState(() => _isSubmitting = true);
@@ -1013,9 +1014,7 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
       if (!mounted) return;
       _showSheetSnack('Could not publish post. Please try again.');
     } finally {
-      if (mounted) {
-        setState(() => _isSubmitting = false);
-      }
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
@@ -1161,8 +1160,7 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
                             color: hasError
                                 ? Theme.of(context).colorScheme.error
                                 : null,
-                            fontWeight:
-                                hasError ? FontWeight.w600 : null,
+                            fontWeight: hasError ? FontWeight.w600 : null,
                           ),
                         ),
                       ),
@@ -1221,37 +1219,14 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
                 },
               ),
               const SizedBox(height: 16),
+              // ── REFACTORED: validator now calls _validateResourceLink ──
               TextFormField(
                 controller: _linkController,
                 keyboardType: TextInputType.url,
-                validator: (value) {
-                  final text = value?.trim() ?? '';
-                  if (text.isEmpty) return null;
-                  if (text.length < 5 || text.length > 2000) {
-                    return 'Link must be between 5 and 2000 characters.';
-                  }
-                  if (text.contains(RegExp(r'\s'))) {
-                    return 'Link cannot contain spaces.';
-                  }
-                  String? scheme;
-                  if (text.startsWith('https://')) {
-                    scheme = 'https://';
-                  } else if (text.startsWith('http://')) {
-                    scheme = 'http://';
-                  }
-                  if (scheme == null) {
-                    return 'Link must start with http:// or https://';
-                  }
-                  final remainder = text.substring(scheme.length);
-                  if (remainder.startsWith('/')) {
-                    return 'Use only two slashes after the scheme (e.g., https://example.com).';
-                  }
-                  return null;
-                },
+                validator: _validateResourceLink,
                 decoration: const InputDecoration(
                   labelText: 'Resource link (optional)',
-                  hintText:
-                      'Share a form, slides, link.',
+                  hintText: 'Share a form, slides, link.',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.link_outlined),
                 ),
@@ -1271,9 +1246,7 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
                           ),
                         )
                       : const Icon(Icons.send),
-                  label: Text(
-                    _isSubmitting ? 'Sharing...' : 'Share update',
-                  ),
+                  label: Text(_isSubmitting ? 'Sharing...' : 'Share update'),
                   onPressed: _isSubmitting ? null : _submit,
                 ),
               ),
@@ -1485,11 +1458,7 @@ class _ProfileEmptyState extends StatelessWidget {
           children: [
             Icon(icon, size: 46, color: Colors.grey.shade400),
             const SizedBox(height: 14),
-            Text(
-              title,
-              style: textTheme.titleMedium,
-              textAlign: TextAlign.center,
-            ),
+            Text(title, style: textTheme.titleMedium, textAlign: TextAlign.center),
             const SizedBox(height: 8),
             Text(
               description,
@@ -1539,9 +1508,7 @@ class CommunityPost {
   int get likesCount => likedBy.length;
   int get savesCount => savedBy.length;
 
-  factory CommunityPost.fromDoc(
-    DocumentSnapshot<Map<String, dynamic>> doc,
-  ) {
+  factory CommunityPost.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data() ?? {};
     final timestamp = data['createdAt'];
     return CommunityPost(
@@ -1589,23 +1556,13 @@ class _EmptyCategoryState extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.forum_outlined,
-            size: 48,
-            color: Colors.grey.shade400,
-          ),
+          Icon(Icons.forum_outlined, size: 48, color: Colors.grey.shade400),
           const SizedBox(height: 12),
-          Text(
-            'No $category posts yet',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
+          Text('No $category posts yet', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           Text(
             'Be the first to share a $category update with everyone.',
-            style: Theme.of(context)
-                .textTheme
-                .bodyMedium
-                ?.copyWith(color: Colors.grey[600]),
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
             textAlign: TextAlign.center,
           ),
         ],
@@ -1629,18 +1586,12 @@ class _ErrorState extends StatelessWidget {
           children: [
             Icon(Icons.error_outline, color: Colors.red[400], size: 42),
             const SizedBox(height: 12),
-            Text(
-              'Something went wrong',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
+            Text('Something went wrong', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(color: Colors.grey[700]),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey[700]),
             ),
           ],
         ),
