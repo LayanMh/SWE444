@@ -35,7 +35,18 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
     _fetchAndSortMatches();
   }
 
-  /// 🔹 Fetch and intelligently sort matching swap requests
+  ///  Extracted Method — replaces 5 duplicated inline list-parsing expressions
+  List<Map<String, dynamic>> _parseCourseList(
+    Map<String, dynamic> specialRequests,
+    String key,
+  ) {
+    return (specialRequests[key] as List?)
+            ?.map((item) => Map<String, dynamic>.from(item as Map))
+            .toList() ??
+        [];
+  }
+
+  ///  Fetch and intelligently sort matching swap requests
   Future<void> _fetchAndSortMatches() async {
     try {
       final userData = widget.userRequestData;
@@ -47,7 +58,7 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
 
       // Extract user's additional course preferences
       final specialRequests = userData["specialRequests"] ?? {};
-      final myWantCourses = (specialRequests["want"] as List?)?.map((item) => Map<String, dynamic>.from(item as Map)).toList() ?? [];
+      final myWantCourses = _parseCourseList(specialRequests, "want");
 
       // Step 1: Fetch base matches (gender, major, level, reverse groups, open status)
       final snapshot = await FirebaseFirestore.instance
@@ -107,7 +118,7 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
     }
   }
 
-  /// 🔹 Calculate match score based on additional courses
+  /// Calculate match score based on additional courses
   Map<String, dynamic> _calculateMatchScore(
     Map<String, dynamic> match,
     List<Map<String, dynamic>> myWantCourses,
@@ -118,12 +129,12 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
     int mutualBenefitScore = 0;
 
     final matchSpecialRequests = match["specialRequests"] ?? {};
-    final matchHaveCourses = (matchSpecialRequests["have"] as List?)?.map((item) => Map<String, dynamic>.from(item as Map)).toList() ?? [];
-    final matchWantCourses = (matchSpecialRequests["want"] as List?)?.map((item) => Map<String, dynamic>.from(item as Map)).toList() ?? [];
-    
+    final matchHaveCourses = _parseCourseList(matchSpecialRequests, "have");
+    final matchWantCourses = _parseCourseList(matchSpecialRequests, "want");
+
     // Get my courses from widget data
     final mySpecialRequests = widget.userRequestData["specialRequests"] ?? {};
-    final myHaveCourses = (mySpecialRequests["have"] as List?)?.map((item) => Map<String, dynamic>.from(item as Map)).toList() ?? [];
+    final myHaveCourses = _parseCourseList(mySpecialRequests, "have");
 
     // DIRECTION 1: Check if THEY HAVE what I WANT
     for (final wantCourse in myWantCourses) {
@@ -174,7 +185,7 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
     };
   }
 
-  /// 🔹 Check if any match satisfies all "Must" priority courses
+  /// Check if any match satisfies all "Must" priority courses
   bool _checkMustPriorityMatch(
     List<Map<String, dynamic>> matches,
     List<Map<String, dynamic>> myWantCourses,
@@ -188,7 +199,7 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
     });
   }
 
-  /// 🔹 Send confirmation and reserve both requests
+  /// Send confirmation and reserve both requests
   Future<void> _sendConfirmation(Map<String, dynamic> match) async {
     try {
       final senderId = widget.userId;
@@ -609,8 +620,8 @@ class _SwapMatchesPageState extends State<SwapMatchesPage> {
 
   void _viewMatchDetails(Map<String, dynamic> match) {
     final specialRequests = match["specialRequests"] ?? {};
-    final haveCourses = (specialRequests["have"] as List?)?.map((item) => Map<String, dynamic>.from(item as Map)).toList() ?? [];
-    final wantCourses = (specialRequests["want"] as List?)?.map((item) => Map<String, dynamic>.from(item as Map)).toList() ?? [];
+    final haveCourses = _parseCourseList(specialRequests, "have");
+    final wantCourses = _parseCourseList(specialRequests, "want");
 
     showModalBottomSheet(
       context: context,

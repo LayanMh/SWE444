@@ -40,6 +40,7 @@ class CalendarScreen extends StatefulWidget {
 }
 
 class _CalendarScreenState extends State<CalendarScreen> {
+  
   static const Duration _calendarWindowRange = Duration(days: 210);
 
   late final DateTime _calendarWindowStart =
@@ -93,7 +94,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 
 
-
   @override
   void dispose() {
     _pageController?.dispose();
@@ -104,6 +104,29 @@ class _CalendarScreenState extends State<CalendarScreen> {
     bool interactive = false,
     bool showSpinner = true,
   }) async {
+    _setCalendarLoadingState(showSpinner);
+
+    try {
+      final account = await _getCalendarAccount(interactive);
+
+      if (!mounted) return;
+
+      if (account == null) {
+        _clearCalendarData();
+        return;
+      }
+
+      final events = await _fetchSortedEvents(account);
+
+      if (!mounted) return;
+
+      _updateCalendarState(account, events);
+    } catch (error) {
+      _handleCalendarLoadError(error);
+    }
+  }
+
+  void _setCalendarLoadingState(bool showSpinner) {
     if (showSpinner) {
       setState(() {
         _isLoading = true;
@@ -114,86 +137,84 @@ class _CalendarScreenState extends State<CalendarScreen> {
         _error = null;
       });
     }
+  }
 
-    try {
-      final account =
-          MicrosoftAuthService.currentAccount ??
-          await MicrosoftAuthService.ensureSignedIn(interactive: interactive);
-
-      if (!mounted) return;
-
-      if (account == null) {
-        final previousController = _pageController;
-        setState(() {
-          _account = null;
-          _events = <MicrosoftCalendarEvent>[];
-          _dayKeys = <DateTime>[];
-          _currentPage = 0;
-          _pageController = null;
-          _isLoading = false;
-        });
-        previousController?.dispose();
-        AttendanceTotals.instance.clear();
-        return;
-      }
-
-      final fetchedEvents = await MicrosoftCalendarService.fetchUpcomingEvents(
-        account,
-        start: _calendarWindowStart,
-        range: _calendarWindowRange,
-      );
-
-      if (!mounted) return;
-
-      final events = List<MicrosoftCalendarEvent>.from(fetchedEvents);
-      events.sort((a, b) {
-        final aStart = a.start ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final bStart = b.start ?? DateTime.fromMillisecondsSinceEpoch(0);
-        return aStart.compareTo(bStart);
-      });
-
-      final dayKeys = _extractDayKeys(
-        events,
-        windowStart: _calendarWindowStart,
-        windowRange: _calendarWindowRange,
-      );
-      final initialIndex = dayKeys.isEmpty ? 0 : _resolveInitialPage(dayKeys);
-      final previousController = _pageController;
-      final newController = dayKeys.isEmpty
-          ? null
-          : PageController(initialPage: initialIndex);
-
-      setState(() {
-        _account = account;
-        _events = events;
-        _dayKeys = dayKeys;
-        _currentPage = dayKeys.isEmpty ? 0 : initialIndex;
-        _pageController = newController;
-        _isLoading = false;
-      });
-
-      previousController?.dispose();
-      _publishTotals();
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _error = error.toString();
-        _isLoading = false;
-      });
-    }
-    //  Use existing session
-    final account =
-        MicrosoftAuthService.currentAccount ??
+  Future<MicrosoftAccount?> _getCalendarAccount(bool interactive) async {
+    return MicrosoftAuthService.currentAccount ??
         await MicrosoftAuthService.ensureSignedIn(interactive: interactive);
+  }
 
-    if (account == null) {
-      setState(() {
-        _account = null;
-        _events = <MicrosoftCalendarEvent>[];
-        _isLoading = false;
-      });
-      return;
-    }
+  void _clearCalendarData() {
+    final previousController = _pageController;
+
+    setState(() {
+      _account = null;
+      _events = <MicrosoftCalendarEvent>[];
+      _dayKeys = <DateTime>[];
+      _currentPage = 0;
+      _pageController = null;
+      _isLoading = false;
+    });
+
+    previousController?.dispose();
+    AttendanceTotals.instance.clear();
+  }
+
+  Future<List<MicrosoftCalendarEvent>> _fetchSortedEvents(
+    MicrosoftAccount account,
+  ) async {
+    final fetchedEvents = await MicrosoftCalendarService.fetchUpcomingEvents(
+      account,
+      start: _calendarWindowStart,
+      range: _calendarWindowRange,
+    );
+
+    final events = List<MicrosoftCalendarEvent>.from(fetchedEvents);
+    events.sort((a, b) {
+      final aStart = a.start ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final bStart = b.start ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return aStart.compareTo(bStart);
+    });
+
+    return events;
+  }
+
+  void _updateCalendarState(
+    MicrosoftAccount account,
+    List<MicrosoftCalendarEvent> events,
+  ) {
+    final dayKeys = _extractDayKeys(
+      events,
+      windowStart: _calendarWindowStart,
+      windowRange: _calendarWindowRange,
+    );
+
+    final initialIndex = dayKeys.isEmpty ? 0 : _resolveInitialPage(dayKeys);
+    final previousController = _pageController;
+    final newController = dayKeys.isEmpty
+        ? null
+        : PageController(initialPage: initialIndex);
+
+    setState(() {
+      _account = account;
+      _events = events;
+      _dayKeys = dayKeys;
+      _currentPage = dayKeys.isEmpty ? 0 : initialIndex;
+      _pageController = newController;
+      _isLoading = false;
+    });
+
+    previousController?.dispose();
+    _publishTotals();
+  }
+
+  void _handleCalendarLoadError(Object error) {
+    if (!mounted) return;
+
+    setState(() {
+      _error = error.toString();
+      _isLoading = false;
+    });
   }
 
   Future<void> _handleRefresh() {
@@ -477,7 +498,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          if (hasToday && !isToday)
+                          if (hasToday)
                             _chip(
                               label: 'Jump to today',
                               onTap: _jumpToToday,
