@@ -1,4 +1,3 @@
-// lib/screens/absence_page.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -9,18 +8,18 @@ import 'package:absherk/services/absence_calculator.dart';
 import 'package:absherk/services/noti_service.dart';
 import 'package:absherk/services/schedule_service.dart';
 import 'home_page.dart';
+import 'app_screen.dart'; 
 
 const _kTopBarColor = Color(0xFF0D4F94);
 
-class AbsencePage extends StatefulWidget {
+class AbsencePage extends AppScreen {
   const AbsencePage({super.key});
   @override
   State<AbsencePage> createState() => _AbsencePageState();
 }
 
-class _AbsencePageState extends State<AbsencePage> {
-  // Load course codes from the user's Firebase schedule so courses with
-  // zero absences still appear.
+class _AbsencePageState extends AppScreenState<AbsencePage> {
+
   Future<Set<String>> _loadScheduleCourseCodes() async {
     try {
       final entries = await ScheduleService.fetchScheduleOnce();
@@ -80,28 +79,23 @@ class _AbsencePageState extends State<AbsencePage> {
 
           var docs = snap.data?.docs ?? [];
 
-          // 2) Group by course
           final Map<String, List<Map<String, dynamic>>> grouped = {};
           for (final d in docs) {
             final data = d.data();
             final code = _normalize((data['courseCode'] ?? '').toString());
-            final key = code.isEmpty ? 'UNKNOWN' : code;
+            final key  = code.isEmpty ? 'UNKNOWN' : code;
             grouped.putIfAbsent(key, () => []).add({'id': d.id, ...data});
           }
 
-          // Show courses from user's Firestore schedule, plus any that have
-          // actual absence records. This ensures deleted courses disappear
-          // without needing a calendar refresh.
           return StreamBuilder<List<ScheduleEntry>>(
             stream: ScheduleService.watchSchedule(),
             builder: (context, scheduleSnap) {
               final scheduleEntries = scheduleSnap.data ?? const <ScheduleEntry>[];
-              final scheduleCodes = scheduleEntries
+              final scheduleCodes   = scheduleEntries
                   .map((e) => _normalize(e.courseCode))
                   .where((c) => c.isNotEmpty)
                   .toSet();
 
-              // Only list codes that are in the schedule OR have recorded absences.
               final allCodes = <String>{
                 ...scheduleCodes,
                 ...grouped.keys,
@@ -141,105 +135,19 @@ class _AbsencePageState extends State<AbsencePage> {
           );
         },
       ),
-      bottomNavigationBar: _buildNavBar(currentIndex: 2),
+      bottomNavigationBar: buildNavBar(currentIndex: 2),
     );
   }
 
-  void _onNavTap(int index) {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => HomePage(initialIndex: index)),
-    );
-  }
-
-  Widget _buildNavBar({required int currentIndex}) {
-    const inactiveColor = Color(0xFF7A8DA8);
-    const activeColor = Color(0xFF2E5D9F);
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xF2EAF3FF),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x22000000),
-            blurRadius: 10,
-            offset: Offset(0, -2),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        top: false,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            _navItem(Icons.person_outline, 'Profile', currentIndex == 0, () => _onNavTap(0), activeColor, inactiveColor),
-            _navItem(Icons.event_available_outlined, 'Schedule', currentIndex == 1, () => _onNavTap(1), activeColor, inactiveColor),
-            _navItem(Icons.home_outlined, 'Home', currentIndex == 2, () => _onNavTap(2), activeColor, inactiveColor),
-            _navItem(Icons.school_outlined, 'Experience', currentIndex == 3, () => _onNavTap(3), activeColor, inactiveColor),
-            _navItem(Icons.people_outline, 'Community', currentIndex == 4, () => _onNavTap(4), activeColor, inactiveColor),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _navItem(IconData icon, String label, bool active, VoidCallback onTap,
-      Color activeColor, Color inactiveColor) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: active ? activeColor : inactiveColor, size: 24),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  color: active ? activeColor : inactiveColor,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 4),
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                height: 3,
-                width: active ? 26 : 0,
-                decoration: BoxDecoration(
-                  color: active ? activeColor : Colors.transparent,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class _CourseItem {
-  _CourseItem({
-    required this.code,
-    required this.records,
-    required this.latest,
-  });
-
+  _CourseItem({required this.code, required this.records, required this.latest});
   final String code;
-  final List<Map<String, dynamic>> records; // only 'absent' rows
+  final List<Map<String, dynamic>> records;
   final DateTime? latest;
-
   int get absentCount => records.length;
 }
-
-/* =========================== UI: Course Card ============================ */
 
 class _CourseCard extends StatelessWidget {
   const _CourseCard({required this.item});
@@ -248,7 +156,7 @@ class _CourseCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final courseCode = item.code == 'UNKNOWN' ? 'Unknown course' : item.code;
-    final latestStr = item.latest == null
+    final latestStr  = item.latest == null
         ? null
         : DateFormat('MMM d, yyyy • hh:mm a').format(item.latest!);
 
@@ -256,29 +164,17 @@ class _CourseCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ExpansionTile(
-        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        tilePadding:    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         childrenPadding: const EdgeInsets.only(bottom: 8),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              courseCode,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w800),
-            ),
+            Text(courseCode,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
             const SizedBox(height: 6),
-            _AbsenceBadge(
-              courseCode: item.code,
-              records: item.records,
-              count: item.absentCount,
-            ),
+            _AbsenceBadge(courseCode: item.code, records: item.records, count: item.absentCount),
             const SizedBox(height: 8),
-
-            // Compute duration-weighted %, show counts in the label.
             _PercentBar(courseCode: item.code, records: item.records),
-
             const SizedBox(height: 4),
             if (latestStr != null) Text('Latest: $latestStr'),
           ],
@@ -293,18 +189,13 @@ class _CourseCard extends StatelessWidget {
   }
 }
 
-/* =========================== % Bar (denominator from lectures) ============================ */
-
 class _PercentBar extends StatelessWidget {
   const _PercentBar({required this.courseCode, required this.records});
-
-  final String courseCode; // normalized
-  final List<Map<String, dynamic>> records; // only 'absent' rows
+  final String courseCode;
+  final List<Map<String, dynamic>> records;
 
   @override
   Widget build(BuildContext context) {
-    // Prefer CalendarScreen-provided total minutes; otherwise, fall back
-    // to computing minutes from Firestore lectures via _computeDenominatorMinutes.
     return ValueListenableBuilder<Map<String, int>>(
       valueListenable: AttendanceTotals.instance.totalMinutesByCourse,
       builder: (context, totals, _) {
@@ -315,13 +206,9 @@ class _PercentBar extends StatelessWidget {
         return FutureBuilder<_Denom>(
           future: _computeDenominatorMinutes(courseCode),
           builder: (context, snap) {
-            if (snap.connectionState == ConnectionState.waiting) {
-              return _placeholderBar();
-            }
-            final denom = snap.data ?? const _Denom(totalEvents: 0, totalMinutes: 0);
-            final totalMinutes = denom.totalMinutes > 0
-                ? denom.totalMinutes
-                : _sumAbsentMinutes(records);
+            if (snap.connectionState == ConnectionState.waiting) return _placeholderBar();
+            final denom       = snap.data ?? const _Denom(totalEvents: 0, totalMinutes: 0);
+            final totalMinutes = denom.totalMinutes > 0 ? denom.totalMinutes : _sumAbsentMinutes(records);
             return _renderBar(totalMinutes: totalMinutes);
           },
         );
@@ -330,14 +217,11 @@ class _PercentBar extends StatelessWidget {
   }
 
   Widget _renderBar({required int totalMinutes}) {
-    final absentEvents = records.length;
+    final absentEvents  = records.length;
     final absentMinutes = _sumAbsentMinutes(records);
-    final pct = totalMinutes == 0 ? 0.0 : (absentMinutes * 100.0 / totalMinutes);
+    final pct   = totalMinutes == 0 ? 0.0 : (absentMinutes * 100.0 / totalMinutes);
     final level = (pct / 25).clamp(0, 1).toDouble();
-
     final Color barColor = _colorForPct(pct);
-
-    // UI should be pure: no side effects during build.
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -349,9 +233,7 @@ class _PercentBar extends StatelessWidget {
             duration: const Duration(milliseconds: 350),
             curve: Curves.easeInOut,
             builder: (context, value, _) => LinearProgressIndicator(
-              value: value,
-              minHeight: 8,
-              color: barColor,
+              value: value, minHeight: 8, color: barColor,
               backgroundColor: Colors.grey.shade200,
             ),
           ),
@@ -360,44 +242,28 @@ class _PercentBar extends StatelessWidget {
         Text(
           'Absence: ${pct.toStringAsFixed(1)}% (absent $absentEvents of '
           '${_totalClassesFor(courseCode)} classes)',
-          style: TextStyle(
-            fontSize: 12,
-            color: barColor,
-            fontWeight: FontWeight.w600,
-          ),
+          style: TextStyle(fontSize: 12, color: barColor, fontWeight: FontWeight.w600),
         ),
       ],
     );
   }
 
   Widget _placeholderBar() => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: LinearProgressIndicator(
-              value: 0.15,
-              minHeight: 8,
-              color: Colors.grey.shade400,
-              backgroundColor: Colors.grey.shade200,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Absence: …',
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey.shade600,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      );
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: LinearProgressIndicator(value: 0.15, minHeight: 8,
+            color: Colors.grey.shade400, backgroundColor: Colors.grey.shade200),
+      ),
+      const SizedBox(height: 4),
+      Text('Absence: …',
+          style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
+    ],
+  );
 
-  int _totalClassesFor(String courseCode) {
-    final counts = AttendanceTotals.instance.totalsByCourse.value;
-    return counts[courseCode] ?? 0;
-  }
+  int _totalClassesFor(String courseCode) =>
+      AttendanceTotals.instance.totalsByCourse.value[courseCode] ?? 0;
 
   int _sumAbsentMinutes(List<Map<String, dynamic>> recs) {
     int total = 0;
@@ -412,7 +278,6 @@ class _PercentBar extends StatelessWidget {
   }
 }
 
-// Denominator = totals up to now (events and minutes)
 class _Denom {
   const _Denom({required this.totalEvents, required this.totalMinutes});
   final int totalEvents;
@@ -422,27 +287,22 @@ class _Denom {
 Future<_Denom> _computeDenominatorMinutes(String normalizedCourseCode) async {
   try {
     final schedule = await ScheduleService.fetchScheduleOnce();
-    final entries = schedule
+    final entries  = schedule
         .where((e) => _normalize(e.courseCode) == normalizedCourseCode)
         .toList(growable: false);
-    if (entries.isEmpty) {
-      return const _Denom(totalEvents: 0, totalMinutes: 0);
-    }
+    if (entries.isEmpty) return const _Denom(totalEvents: 0, totalMinutes: 0);
 
-    final now = DateTime.now();
-    final startOfYear = DateTime(now.year, 9, 1); // simple default
-    int totalEvents = 0;
-    int totalMinutes = 0;
+    final now          = DateTime.now();
+    final startOfYear  = DateTime(now.year, 9, 1);
+    int totalEvents    = 0;
+    int totalMinutes   = 0;
 
     for (final e in entries) {
-      final int lectMins = (e.endTime - e.startTime) > 0
-          ? (e.endTime - e.startTime)
-          : 1;
+      final int lectMins = (e.endTime - e.startTime) > 0 ? (e.endTime - e.startTime) : 1;
       final occ = _countWeekdayOccurrences(startOfYear, now, e.dayOfWeek);
-      totalEvents += occ;
+      totalEvents  += occ;
       totalMinutes += occ * lectMins;
     }
-
     return _Denom(totalEvents: totalEvents, totalMinutes: totalMinutes);
   } catch (_) {
     return const _Denom(totalEvents: 0, totalMinutes: 0);
@@ -453,68 +313,44 @@ Future<_Denom> _computeDenominator(String normalizedCourseCode) async {
   final uid = FirebaseAuth.instance.currentUser?.uid;
   if (uid == null) return const _Denom(totalEvents: 0, totalMinutes: 0);
 
-  // 1) Read user's lectures for this course.
-  //    Expected doc fields (based on your Lecture model):
-  //    courseCode (String), dayOfWeek (0..6, Mon=1? adjust below), startTime/endTime (minutes)
   final userLects = await FirebaseFirestore.instance
-      .collection('users')
-      .doc(uid)
-      .collection('lectures')
-      .where('courseCode', isEqualTo: normalizedCourseCode)
-      .get();
+      .collection('users').doc(uid).collection('lectures')
+      .where('courseCode', isEqualTo: normalizedCourseCode).get();
 
-  // If nothing in users/{uid}/lectures, try a fallback root collection (optional).
   var lectDocs = userLects.docs;
   if (lectDocs.isEmpty) {
     final root = await FirebaseFirestore.instance
-        .collection('lectures')
-        .where('courseCode', isEqualTo: normalizedCourseCode)
-        .get();
+        .collection('lectures').where('courseCode', isEqualTo: normalizedCourseCode).get();
     lectDocs = root.docs;
   }
+  if (lectDocs.isEmpty) return const _Denom(totalEvents: 0, totalMinutes: 0);
 
-  if (lectDocs.isEmpty) {
-    // No schedule → we can’t know total; fall back to absences-only elsewhere.
-    return const _Denom(totalEvents: 0, totalMinutes: 0);
-  }
-
-  // 2) Generate occurrences from semester start to today.
-  //    We’ll assume semester started on Sep 1 of the current academic year,
-  //    change if you already store semesterStart in lecture docs.
-  final now = DateTime.now();
-  final startOfYear = DateTime(now.year, 9, 1); // simple default
-  int totalEvents = 0;
-  int totalMinutes = 0;
+  final now         = DateTime.now();
+  final startOfYear = DateTime(now.year, 9, 1);
+  int totalEvents   = 0;
+  int totalMinutes  = 0;
 
   for (final d in lectDocs) {
-    final data = d.data();
-    final int dayOfWeek = (data['dayOfWeek'] as num).toInt(); // 0..6
-    // count each week’s occurrence from startOfYear..today for that weekday
-    final int startTime = (data['startTime'] as num?)?.toInt() ?? 0;
-    final int endTime = (data['endTime'] as num?)?.toInt() ?? 0;
-    final int lectMins = (endTime - startTime) > 0 ? (endTime - startTime) : 1;
+    final data       = d.data();
+    final int dayOfWeek  = (data['dayOfWeek'] as num).toInt();
+    final int startTime  = (data['startTime'] as num?)?.toInt() ?? 0;
+    final int endTime    = (data['endTime']   as num?)?.toInt() ?? 0;
+    final int lectMins   = (endTime - startTime) > 0 ? (endTime - startTime) : 1;
     final occ = _countWeekdayOccurrences(startOfYear, now, dayOfWeek);
-    totalEvents += occ;
+    totalEvents  += occ;
     totalMinutes += occ * lectMins;
   }
-
   return _Denom(totalEvents: totalEvents, totalMinutes: totalMinutes);
 }
 
 int _countWeekdayOccurrences(DateTime from, DateTime to, int weekdayZeroBased) {
-  // Convert to DateTime.weekday (1=Mon..7=Sun). Your model is 0..6.
   final target = ((weekdayZeroBased % 7) + 1);
-  // Find first target weekday >= from
   var first = from;
-  while (first.weekday != target) {
-    first = first.add(const Duration(days: 1));
-  }
+  while (first.weekday != target) { first = first.add(const Duration(days: 1)); }
   if (first.isAfter(to)) return 0;
   final days = to.difference(first).inDays;
   return (days ~/ 7) + 1;
 }
-
-/* =========================== Absence Row (with delete) ============================ */
 
 class _AbsenceRow extends StatelessWidget {
   const _AbsenceRow({required this.record});
@@ -522,17 +358,10 @@ class _AbsenceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final start = _asDateTime(record['start']);
-    final title = (record['eventSummary'] ??
-            record['title'] ??
-            record['courseName'] ??
-            record['course'] ??
-            record['courseCode'] ??
-            'Unknown class')
-        .toString();
-    final when = start != null
-        ? DateFormat('EEE, MMM d • hh:mm a').format(start)
-        : 'No date';
+    final start   = _asDateTime(record['start']);
+    final title   = (record['eventSummary'] ?? record['title'] ?? record['courseName'] ??
+                     record['course'] ?? record['courseCode'] ?? 'Unknown class').toString();
+    final when    = start != null ? DateFormat('EEE, MMM d • hh:mm a').format(start) : 'No date';
     final eventId = (record['id'] ?? '').toString();
 
     return Dismissible(
@@ -547,17 +376,12 @@ class _AbsenceRow extends StatelessWidget {
       confirmDismiss: (_) async => await _confirmDelete(context, title),
       onDismissed: (_) async {
         await AttendanceService.clearEvent(eventId);
-        // Recompute for this course and notify if still above threshold
         final code = (record['courseCode'] ?? '').toString();
         if (code.isNotEmpty) {
           try {
-            // Sum remaining absence minutes
             final absSnap = await FirebaseFirestore.instance
-                .collection('users')
-                .doc(FirebaseAuth.instance.currentUser?.uid)
-                .collection('absences')
-                .where('courseCode', isEqualTo: code)
-                .get();
+                .collection('users').doc(FirebaseAuth.instance.currentUser?.uid)
+                .collection('absences').where('courseCode', isEqualTo: code).get();
             int absentMinutes = 0;
             for (final d in absSnap.docs) {
               final data = d.data();
@@ -567,7 +391,6 @@ class _AbsenceRow extends StatelessWidget {
               final mins = (e != null && e.isAfter(s)) ? e.difference(s).inMinutes : 1;
               absentMinutes += mins <= 0 ? 1 : mins;
             }
-
             final tm = AttendanceTotals.instance.totalMinutesByCourse.value[code] ?? 0;
             double pct;
             if (tm > 0) {
@@ -576,17 +399,11 @@ class _AbsenceRow extends StatelessWidget {
               final denom = await _computeDenominatorMinutes(code);
               pct = denom.totalMinutes > 0 ? (absentMinutes * 100.0 / denom.totalMinutes) : 0.0;
             }
-            if (pct > 20) {
-              // ignore: unawaited_futures
-              NotiService.showAbsenceAlert(code, pct);
-            }
+            if (pct > 20) NotiService.showAbsenceAlert(code, pct);
           } catch (_) {}
         }
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Removed: $title'),
-            behavior: SnackBarBehavior.floating,
-          ),
+          SnackBar(content: Text('Removed: $title'), behavior: SnackBarBehavior.floating),
         );
       },
       child: ListTile(
@@ -602,16 +419,12 @@ class _AbsenceRow extends StatelessWidget {
             final ok = await _confirmDelete(context, title);
             if (ok) {
               await AttendanceService.clearEvent(eventId);
-              // Recompute for this course and notify if still above threshold
               final code = (record['courseCode'] ?? '').toString();
               if (code.isNotEmpty) {
                 try {
                   final absSnap = await FirebaseFirestore.instance
-                      .collection('users')
-                      .doc(FirebaseAuth.instance.currentUser?.uid)
-                      .collection('absences')
-                      .where('courseCode', isEqualTo: code)
-                      .get();
+                      .collection('users').doc(FirebaseAuth.instance.currentUser?.uid)
+                      .collection('absences').where('courseCode', isEqualTo: code).get();
                   int absentMinutes = 0;
                   for (final d in absSnap.docs) {
                     final data = d.data();
@@ -629,18 +442,12 @@ class _AbsenceRow extends StatelessWidget {
                     final denom = await _computeDenominatorMinutes(code);
                     pct = denom.totalMinutes > 0 ? (absentMinutes * 100.0 / denom.totalMinutes) : 0.0;
                   }
-                  if (pct > 20) {
-                    // ignore: unawaited_futures
-                    NotiService.showAbsenceAlert(code, pct);
-                  }
+                  if (pct > 20) NotiService.showAbsenceAlert(code, pct);
                 } catch (_) {}
               }
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Removed: $title'),
-                    behavior: SnackBarBehavior.floating,
-                  ),
+                  SnackBar(content: Text('Removed: $title'), behavior: SnackBarBehavior.floating),
                 );
               }
             }
@@ -657,59 +464,37 @@ class _AbsenceRow extends StatelessWidget {
             title: const Text('Delete record?'),
             content: Text('This will remove:\n$title'),
             actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Delete'),
-              ),
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+              FilledButton(onPressed: () => Navigator.pop(ctx, true),  child: const Text('Delete')),
             ],
           ),
-        ) ??
-        false;
+        ) ?? false;
   }
 }
-
-/* =========================== Small helpers ============================ */
 
 class _Badge extends StatelessWidget {
   const _Badge({required this.label, required this.color, this.textColor});
   final String label;
-  final Color color;
+  final Color  color;
   final Color? textColor;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 12,
-          color: textColor ?? Theme.of(context).colorScheme.onSurface,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
+      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(999)),
+      child: Text(label,
+          style: TextStyle(fontSize: 12,
+              color: textColor ?? Theme.of(context).colorScheme.onSurface,
+              fontWeight: FontWeight.w600)),
     );
   }
 }
 
-// Shows the "Absent N" badge whose color matches the percentage bar.
 class _AbsenceBadge extends StatelessWidget {
-  const _AbsenceBadge({
-    required this.courseCode,
-    required this.records,
-    required this.count,
-  });
-
-  final String courseCode; // normalized
-  final List<Map<String, dynamic>> records; // only 'absent' rows
+  const _AbsenceBadge({required this.courseCode, required this.records, required this.count});
+  final String courseCode;
+  final List<Map<String, dynamic>> records;
   final int count;
 
   @override
@@ -718,19 +503,12 @@ class _AbsenceBadge extends StatelessWidget {
       valueListenable: AttendanceTotals.instance.totalMinutesByCourse,
       builder: (context, totals, _) {
         final providedMinutes = totals[courseCode];
-        if (providedMinutes != null && providedMinutes > 0) {
-          return _buildForTotal(providedMinutes);
-        }
-        // Fallback to computing denominator minutes asynchronously.
+        if (providedMinutes != null && providedMinutes > 0) return _buildForTotal(providedMinutes);
         return FutureBuilder<_Denom>(
           future: _computeDenominatorMinutes(courseCode),
           builder: (context, snap) {
             if (snap.connectionState == ConnectionState.waiting) {
-              return _Badge(
-                label: 'Absent $count',
-                color: Colors.grey.withOpacity(0.12),
-                textColor: Colors.grey,
-              );
+              return _Badge(label: 'Absent $count', color: Colors.grey.withOpacity(0.12), textColor: Colors.grey);
             }
             final denom = snap.data ?? const _Denom(totalEvents: 0, totalMinutes: 0);
             return _buildForTotal(denom.totalMinutes);
@@ -749,17 +527,12 @@ class _AbsenceBadge extends StatelessWidget {
       final mins = (e != null && e.isAfter(s)) ? e.difference(s).inMinutes : 1;
       absentMinutes += mins <= 0 ? 1 : mins;
     }
-    final pct = totalMinutes == 0 ? 0.0 : (absentMinutes * 100.0 / totalMinutes);
+    final pct   = totalMinutes == 0 ? 0.0 : (absentMinutes * 100.0 / totalMinutes);
     final color = _colorForPct(pct);
-    return _Badge(
-      label: 'Absent $count',
-      color: color.withOpacity(0.12),
-      textColor: color,
-    );
+    return _Badge(label: 'Absent $count', color: color.withOpacity(0.12), textColor: color);
   }
 }
 
-// Shared color logic for percentage thresholds used by both bar and badge.
 Color _colorForPct(double pct) {
   final level = (pct / 25).clamp(0, 1).toDouble();
   if (level >= 1.0) return Colors.red;
@@ -773,13 +546,11 @@ DateTime? _asDateTime(dynamic v) {
   if (v is int) return DateTime.fromMillisecondsSinceEpoch(v);
   if (v is String) return DateTime.tryParse(v);
   if (v is Map && v['_seconds'] != null) {
-    final secs = (v['_seconds'] as num).toInt();
-    return DateTime.fromMillisecondsSinceEpoch(secs * 1000);
+    return DateTime.fromMillisecondsSinceEpoch((v['_seconds'] as num).toInt() * 1000);
   }
   return null;
 }
 
 String _normalize(String s) => s.toUpperCase().replaceAll(' ', '');
 DateTime _atStartOfDay(DateTime d) => DateTime(d.year, d.month, d.day);
-DateTime _atEndOfDay(DateTime d) =>
-    DateTime(d.year, d.month, d.day, 23, 59, 59);
+DateTime _atEndOfDay(DateTime d)   => DateTime(d.year, d.month, d.day, 23, 59, 59);
