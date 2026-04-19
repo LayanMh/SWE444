@@ -16,6 +16,7 @@ const _kTopBarColor = Color(0xFF0D4F94);
 const _kAccentColor = Color(0xFF4A98E9);
 const _kCardColor = Color(0xFFFFFFFF);
 
+
 Future<void> linkMicrosoftAccount({
   required String microsoftAccessToken,
   required String microsoftIdToken,
@@ -366,38 +367,47 @@ Future<Map<String, dynamic>?> _findExistingUserByEmail(String email) async {
   }
 
   Future<void> _handleSignIn() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() => _isLoading = true);
-
-    try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
-
-      // Save credentials if remember me is checked
-      await _saveCredentials();
-      await _clearMicrosoftSessionForEmailLogin();
-
-      if (mounted) {
-        _showSuccessMessage('Welcome back to ABSHERK!');
-        _goToHome();
-      }
-    } on FirebaseAuthException catch (e) {
-      if (mounted) {
-        _showErrorMessage(_getErrorMessage(e.code));
-      }
-    } catch (e, stackTrace) {
-      debugPrint('Sign in error: $e');
-      debugPrintStack(stackTrace: stackTrace);
-      if (mounted) {
-        _showErrorMessage('An unexpected error occurred. Please try again.');
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+  if (!_isFormValid()) return;
+  _setLoading(true);
+  try {
+    await _performEmailSignIn();
+    await _handlePostLoginSuccess();
+  } on FirebaseAuthException catch (e) {
+    _handleLoginError(e.code);
+  } finally {
+    _setLoading(false);
   }
+}
+
+bool _isFormValid() {
+  return _formKey.currentState!.validate();
+}
+
+void _setLoading(bool value) {
+  if (mounted) setState(() => _isLoading = value);
+}
+
+Future<void> _performEmailSignIn() async {
+  await FirebaseAuth.instance.signInWithEmailAndPassword(
+    email: _emailController.text.trim(),
+    password: _passwordController.text.trim(),
+  );
+}
+
+Future<void> _handlePostLoginSuccess() async {
+  await _saveCredentials();
+  await _clearMicrosoftSessionForEmailLogin();
+  if (mounted) {
+    _showSuccessMessage('Welcome back to ABSHERK!');
+    _goToHome();
+  }
+}
+
+void _handleLoginError(String code) {
+  if (mounted) {
+    _showErrorMessage(_getErrorMessage(code));
+  }
+}
 
   void _goToHome() {
     if (!mounted) {
@@ -1197,6 +1207,7 @@ class _SignInCard extends StatelessWidget {
               _buildSocialSignIn(),
               const SizedBox(height: 24),
               const _SignUpPrompt(),
+              
             ],
           ),
         ),
@@ -1753,3 +1764,5 @@ class _Validators {
 class _AppTheme {
   static const gradientBackground = BoxDecoration(color: _kBgColor);
 }
+
+
